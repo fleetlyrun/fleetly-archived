@@ -182,6 +182,8 @@ type EngineAdapter interface {
 | 调度 | 复用 E5 调度核（备份 ticker 演进，同一调度器），per 实例计划（缺省每日 03:00 UTC，保留 7 份，prune 沿用台账保留期删除语义） | 自建定时器 |
 | 诚实口径 | 同节点 RustFS 目标上的库备份 = **便捷层非灾备**（V2-2 口径延伸），Console 与文档同标注 | — |
 
+**工具面版本纪律（IMPL-DB-0 增补，2026-09-27）**：dbtools 执行体与实例数据目录**同 major**——PG 的 `pg_dump`/`pg_restore`/`postgres`（及消费链 `psql`/`pg_isready`/`pg_ctl`）跨大版本有硬语义边界（`pg_dump` 拒更高 major 服务器、`pg_restore` 拒更高 major 归档、临时恢复实例拒异 major 数据目录），job 脚本按模板 `Major` 取 `/usr/lib/postgresql/<major>/bin` 显式绝对路径（两代工具面并存后裸名会被 postgresql-common `pg_wrapper` 解析为最新 major）。单镜像双工具面的机制裁决与实证见 `docs/plan/2026-09-26-torchwood-line-impl.md` §4「IMPL-DB-0 方案可行性审查」；大版本升级不做，升 major = dump/restore 新实例（§7）。
+
 ### 2.7 平台密钥库与 compose secrets 开放
 
 **开放面 = 所有 app**（含库实例自身），机制统一；仅对库实例开放会造出第二套 secret 语义。

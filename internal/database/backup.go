@@ -352,7 +352,12 @@ func (m *Manager) backupFailed(ctx context.Context, inst *state.DatabaseInstance
 // 几份无害，下一备份自然重对齐（statebackup forget 尾部同口径）。
 func (m *Manager) pruneBackups(ctx context.Context, inst *state.DatabaseInstance, out dbtemplate.BackupOutcome) {
 	keep := backupKeepOf(inst)
-	script, err := pruneJobScript(out, keep)
+	tpl, err := dbtemplate.Get(inst.Template)
+	if err != nil {
+		m.log.Warn("database: prune skipped (template lookup)", "instance", inst.Name, "error", err)
+		return
+	}
+	script, err := pruneJobScript(tpl, out, keep)
 	if err != nil {
 		m.log.Warn("database: prune skipped (script build)", "instance", inst.Name, "error", err)
 		return

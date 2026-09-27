@@ -41,6 +41,7 @@ fork 镜像 + `canary` 可变 tag——供应链反面教材（docs/research/
 | 19 | `mysql:8.4` | `0744ee5e…fb8d` | 库引擎镜像（模板 mysql-8.4，MySQL 8.4 LTS，v0.3 W4 D-W4-1；库服务收敛按需拉取，预拉可选；多架构 OCI index amd64/arm64） | internal/dbtemplate/dbtemplate.go `DefaultMySQLImage`（Go 常量字面，同上双锚口径，改动须同步；2026-09-24 解析：8.4 为当前 LTS 最新 minor 的 8.4.x 系 tag 所指；digest 双验 = tag 拉取 RepoDigest 一致 + 按 digest 以 arm64 平台独立拉取交付 arm64 镜像〔index 摘要判定〕）。备份/恢复工具面依赖 S2 的 dbtools 镜像扩展（设计 managed-databases §8 D-W4-3） |
 | 20 | `mongo:8.0` | `4968f22d…5efc2` | 库引擎镜像（模板 mongodb-8.0，MongoDB 8.0 Community，v0.3 W4 D-W4-2；按需拉取同上；多架构 OCI index amd64/arm64） | internal/dbtemplate/dbtemplate.go `DefaultMongoImage`（同上双锚口径；2026-09-24 解析：8.0 为当前 LTS 最新 minor 的 8.0.x 系 tag 所指；digest 双验同 #19 方法）。凭据边界注记：官方入口把 initdb root 恒建于 admin 库 → 连接串投影带 `?authSource=admin`（设计 §8.1） |
 | 21 | `victoriametrics/vmalert:v1.152.0` | `ba005663…96b2` | 托管 vmalert 规则评估器（metrics 栈第四组件，D-V3W5-1；alerts.mode=on 且 metrics.mode=on 时 duty 按需拉取，预拉可选；多架构 OCI index amd64/arm64 等） | internal/metrics/spec.go `DefaultVMAlertImage`（Go 常量字面，同上双锚口径；e2e/metrics.sh 同 digest 预拉行。2026-09-25 解析：组件与单机版同发同版号，v1.152.0 为实现时点最新 stable〔GitHub releases 2026-09-14，与 #15 同日核实，rc/enterprise 变体不取〕；digest = `docker buildx imagetools inspect` 多架构 index 实测）。flag 取证注记：notifier 认证 flag 实际形态为 `-notifier.basicAuth.username/-notifier.basicAuth.password`〔及 `*File` 变体〕，设计 §2.1 字面 `-notifier.basicAuthUsername/Password` 为笔误缩写——实现取 passwordFile 形态（凭据材料不进服务 spec，ingress token 文件复用） |
+| 22 | `ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1`（**待 CI 发布，tag 建议值**） | **待回填**（多架构 index digest，`buildx --push` 输出） | 库备份/恢复/校验一次性 job 的执行体（**IMPL-DB-0 单镜像双 PG 大版本工具面**：postgres:16 基底 + postgres:18 版本分区 COPY〔`/usr/lib/postgresql/18` + `/usr/share/postgresql/18` + libnuma/liburing 补集〕；工具面版本纪律 = 与实例数据目录同 major，job 脚本按模板 `Major` 取 `/usr/lib/postgresql/<major>/bin` 显式绝对路径；mysql/mongo/redis/restic 面不变） | internal/database/adapters.go `DefaultDatabaseToolsImage`（Go 常量字面，同上双锚口径，改动须同步 e2e/databases.sh `DBTOOLS_IMG`；发布 = .github/workflows/dbtools.yml——单镜像形态不变，dispatch/随 release 调用）。**本票发布挂账（不 commit/push 纪律下 CI 无法构建新内容）**：发布命令 + digest 回填三锚清单见 docs/plan/2026-09-26-torchwood-line-impl.md §4「IMPL-DB-0 实施记录」；本地 amd64 构建实证可构建（`docker buildx build --load`，size 1.133GB = 现行 +48.8MB，机制/体积证据见同节审查记录）。**回填前 PG18 模板的 job 以「镜像缺该 major 工具面」显式失败**（fail-loud，不静默降级） |
 
 台账与实际引用集的一致性以门禁扫描为准：
 
@@ -128,6 +129,13 @@ sh deploy/check-image-pins.sh FILE...      # 只扫指定文件（负路径自�
   `docker pull traefik:v3.5` 的临时文件 → 退出 1 并逐条标注 file:line；
   豁免清单（`-a` 换临时清单）命中一条后仍对未豁免引用退出 1；全部豁免
   则退出 0。
+- **2026-09-27 IMPL-DB-0 盲区修复**：FROM 行不再套用「tag 非纯数字」噪声
+  过滤——`postgres:16`/`redis:7` 这类纯数字 tag 是真实镜像引用（FROM 上下
+  文不可能是时刻/端口映射噪声），修复前列表模式**零计数**、未钉也不报错。
+  复验（本机实跑）：未钉 `FROM postgres:18` → 退出 1 逐条点名；仓库正路径
+  计数 28 → **31**（补回 `Dockerfile.dbtools` 的 redis:7/postgres:16 + 新增
+  postgres:18 FROM）。`COPY --from=<外部镜像>` 仍不在候选上下文——外部镜像
+  引用请以 **FROM stage** 声明（IMPL-DB-0 先例：`AS postgres-engine-18`）。
 - 豁免清单：`deploy/image-pin-allowlist.txt`，每行固定子串命中
   `<路径>:<引用>` 即豁免，**必须同行注释理由**（如故意验证「可变 tag
   被拒」的负路径用例）。当前条目：无。

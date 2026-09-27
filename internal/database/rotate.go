@@ -136,9 +136,10 @@ func (m *Manager) RotateCredentials(ctx context.Context, name string) ([]string,
 		return nil, &RotationStageError{Stage: "encrypt", Err: err}
 	}
 
-	// ── 引擎侧（按引擎）——成功后权威态才切换 ──
-	switch inst.Template {
-	case dbtemplate.TemplatePostgres16:
+	// ── 引擎侧（按引擎族分派——IMPL-DB-0 起轴 = tpl.Engine，同族发行版/
+	// 大版本共享）——成功后权威态才切换 ──
+	switch tpl.Engine {
+	case dbtemplate.EnginePostgres:
 		// PG 暂停拒绝（引擎级边界，见文件头）：诚实 409 族，不受理假轮换。
 		if inst.State == state.DatabasePaused {
 			return nil, ErrPGRotationPaused
@@ -146,7 +147,7 @@ func (m *Manager) RotateCredentials(ctx context.Context, name string) ([]string,
 		if err := m.rotatePostgresCredential(ctx, &inst, tpl.Image, old, new); err != nil {
 			return nil, &RotationStageError{Stage: "engine", Err: err}
 		}
-	case dbtemplate.TemplateMySQL84:
+	case dbtemplate.EngineMySQL:
 		// MySQL 暂停拒绝（PG 同款引擎级边界，v0.3 W4）：mysqld 停摆时
 		// ALTER USER 无从执行——如实拒绝提示先 resume，不受理假轮换。
 		if inst.State == state.DatabasePaused {
@@ -155,7 +156,7 @@ func (m *Manager) RotateCredentials(ctx context.Context, name string) ([]string,
 		if err := m.rotateMySQLCredential(ctx, &inst, tpl.Image, old, new); err != nil {
 			return nil, &RotationStageError{Stage: "engine", Err: err}
 		}
-	case dbtemplate.TemplateMongoDB80:
+	case dbtemplate.EngineMongo:
 		// MongoDB 暂停拒绝（PG 同款引擎级边界，v0.3 W4）：mongod 停摆时
 		// updateUser 无从执行——如实拒绝提示先 resume，不受理假轮换。
 		if inst.State == state.DatabasePaused {
@@ -164,7 +165,7 @@ func (m *Manager) RotateCredentials(ctx context.Context, name string) ([]string,
 		if err := m.rotateMongoCredential(ctx, &inst, tpl.Image, old, new); err != nil {
 			return nil, &RotationStageError{Stage: "engine", Err: err}
 		}
-	case dbtemplate.TemplateRedis7:
+	case dbtemplate.EngineRedis:
 		// Redis 无引擎侧动作（凭据 = spec 启动参数；收敛 duty 按 hash 差异
 		// 重建任务）——落库即引擎侧完成。
 	default:

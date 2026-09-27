@@ -26,17 +26,20 @@
 # 范围外（本票禁改/不属平台脚本面）：e2e/**、console/**、docs/**。
 #
 # 识别口径（行级上下文锚定，尽力而为的文本门禁）：
-#   - Dockerfile 的 FROM 行（scratch 跳过）
+#   - Dockerfile 的 FROM 行（scratch 跳过；**FROM 行不套用「tag 非纯数字」
+#     噪声过滤**——postgres:16/redis:7 这类纯数字 tag 是真实镜像引用，
+#     FROM 上下文不可能是时刻/端口映射噪声；2026-09-27 IMPL-DB-0 盲区修复）
 #   - 含 `docker pull|run|create|build|push|service|compose` 的命令行
 #   - 变量赋值：名含 IMAGE/IMG/TAG 的 `X=…`（sh）与 `X: …`（workflow env/key）
 #   - workflow YAML 列表项整项为一个 name:tag[@sha256:…] 字面量（engine 矩阵）
 #   - `image:` 键（compose/service 风格预留）
 #   - 注释行（含行内 ` #` 注释尾）不参与
 # 引用正则要求 name 含字母（排除 127.0.0.1:8080 host:port）、tag 非纯数字
-# （排除 16:23 时刻/端口映射噪声）。
+# （排除 16:23 时刻/端口映射噪声；FROM 行豁免——见上）。
 # 已知盲区（记录于 runbook，不视为阻断缺陷）：经间接拼装的引用（如
 # "${REGISTRY}/${NAME}:${TAG}" 组件化写法）、printf 动态生成的 Dockerfile、
-# 不含 IMAGE/IMG/TAG 字样的赋值变量名。
+# `COPY --from=<外部镜像>` 行（外部镜像引用请以 FROM stage 声明，落进本
+# 扫描口径——IMPL-DB-0 先例）、不含 IMAGE/IMG/TAG 字样的赋值变量名。
 #
 # 豁免清单：deploy/image-pin-allowlist.txt——非 `#` 开头、非空的每行是一个
 # 固定子串（grep -F 语义），命中 `<路径>:<引用>` 即豁免；只收「确需可变
@@ -168,10 +171,15 @@ while IFS= read -r cand; do
             esac
         fi
         # 噪声过滤：name 须含字母（排 host:port/IP）且长度 >=2（排卷挂载
-        # 规格尾部 `-v vol:/c:ro` 剥出的 `c:ro`）；tag 非纯数字（排时刻/端口）。
+        # 规格尾部 `-v vol:/c:ro` 剥出的 `c:ro`）；tag 非纯数字（排时刻/端口）
+        # ——**FROM 行豁免纯数字 tag 过滤**：postgres:16/redis:7 等是真实
+        # 镜像引用（IMPL-DB-0 盲区修复；负路径自证 = 未钉 FROM postgres:18）。
         nb=${base%:*}
         tg=${base##*:}
-        case "$tg" in ''|*[!0-9]*) : ;; *) continue ;; esac
+        case "$trimmed" in
+            FROM[[:space:]]*) : ;;
+            *) case "$tg" in ''|*[!0-9]*) : ;; *) continue ;; esac ;;
+        esac
         case "$nb" in *[A-Za-z]*) : ;; *) continue ;; esac
         [ "${#nb}" -ge 2 ] || continue
         # scratch 非 registry 引用。

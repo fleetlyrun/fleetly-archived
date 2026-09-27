@@ -140,6 +140,91 @@ func TestMySQLAndMongoTemplates(t *testing.T) {
 	}
 }
 
+// TestTemplateIdentityFields 身份字段（IMPL-DB-0 冻结的最小设计）：注册表
+// 全条目 Engine/Distribution/Major 齐备（新增条目漏填即红）；既有四条目的
+// 身份值逐字钉定（行为零变化的锚）。
+func TestTemplateIdentityFields(t *testing.T) {
+	want := map[string]struct {
+		engine       Engine
+		distribution Distribution
+		major        int
+	}{
+		TemplatePostgres16: {EnginePostgres, DistributionVanilla, 16},
+		TemplateRedis7:     {EngineRedis, DistributionVanilla, 7},
+		TemplateMySQL84:    {EngineMySQL, DistributionVanilla, 8},
+		TemplateMongoDB80:  {EngineMongo, DistributionVanilla, 8},
+	}
+	list := List()
+	if len(list) != len(want) {
+		t.Fatalf("registry list = %d entries, want %d", len(list), len(want))
+	}
+	for _, tpl := range list {
+		w, ok := want[tpl.ID]
+		if !ok {
+			t.Fatalf("unexpected template %q in the registry", tpl.ID)
+		}
+		if tpl.Engine != w.engine || tpl.Distribution != w.distribution || tpl.Major != w.major {
+			t.Fatalf("%s identity = (%s, %s, %d), want (%s, %s, %d)",
+				tpl.ID, tpl.Engine, tpl.Distribution, tpl.Major, w.engine, w.distribution, w.major)
+		}
+	}
+}
+
+// TestRenderEnvPGDataFollowsTemplateMountPath（IMPL-DB-0 参数化）：PGDATA 由
+// 模板 VolumeMountPath 派生（挂载点 + /pgdata 子目录约定）——PG16 现值逐字
+// 不变；发行版按条目携带的原生挂载点自然成立（percona /data/db）。
+func TestRenderEnvPGDataFollowsTemplateMountPath(t *testing.T) {
+	in := renderInput(TemplatePostgres16)
+	pg16, err := Get(TemplatePostgres16)
+	if err != nil {
+		t.Fatalf("get postgres-16: %v", err)
+	}
+	if got, want := pgDataDirectory(pg16), "/var/lib/postgresql/data/pgdata"; got != want {
+		t.Fatalf("postgres-16 PGDATA = %q, want %q (现值逐字不变)", got, want)
+	}
+	if env := renderEnv(pg16, in); !containsString(env, "PGDATA=/var/lib/postgresql/data/pgdata") {
+		t.Fatalf("postgres-16 env = %v, want the unchanged PGDATA value", env)
+	}
+
+	// 合成 percona 条目（DB-1 词表就绪前的参数化钉）：原生挂载点 /data/db。
+	percona := Template{
+		ID:                 "percona-postgresql-18",
+		Engine:             EnginePostgres,
+		Distribution:       DistributionPercona,
+		Major:              18,
+		ServiceName:        "postgres",
+		EnginePort:         5432,
+		VolumeKey:          "data",
+		VolumeMountPath:    "/data/db",
+		CredentialDelivery: CredentialSecretFile,
+	}
+	if got, want := pgDataDirectory(percona), "/data/db/pgdata"; got != want {
+		t.Fatalf("percona PGDATA = %q, want %q", got, want)
+	}
+	if env := renderEnv(percona, in); !containsString(env, "PGDATA=/data/db/pgdata") {
+		t.Fatalf("percona env = %v, want PGDATA=/data/db/pgdata", env)
+	}
+
+	// 连接串投影按引擎族分派（PG 家族 URL 形态对新条目零新增代码）。
+	vars, err := ConnectionVars(TemplatePostgres16, testInstance, testPassword)
+	if err != nil {
+		t.Fatalf("ConnectionVars: %v", err)
+	}
+	if got, want := vars[EnvPrefix(testInstance)+"_URL"], "postgres://fleetly:"+testPassword+"@"+testInstance+":5432/pg_prod"; got != want {
+		t.Fatalf("postgres URL = %q, want %q", got, want)
+	}
+}
+
+// containsString 是测试内的字面包含判定（env 集为 []string）。
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestRenderMySQLAndMongo 新模板渲染 golden：secret 文件投递（官方入口
 // _FILE 变体 env）+ 挂载点 + 健康门 + 确定性（同输入同投影同 desired-hash）。
 func TestRenderMySQLAndMongo(t *testing.T) {

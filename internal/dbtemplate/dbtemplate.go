@@ -46,6 +46,33 @@ const (
 	TemplateMongoDB80 = "mongodb-8.0"
 )
 
+// Engine 是模板引擎族词表（身份字段，IMPL-DB-0 冻结的最小设计）：适配器/
+// 渲染器/工具面的分派轴 = 引擎族而非模板 ID——同族发行版与大版本共享实现
+// （postgres-16 与 percona-postgresql-18 同属 postgres 家族）。
+type Engine string
+
+const (
+	// EnginePostgres 是 PostgreSQL 家族（线协议与工具面同族）。
+	EnginePostgres Engine = "postgres"
+	// EngineRedis 是 Redis 家族。
+	EngineRedis Engine = "redis"
+	// EngineMySQL 是 MySQL 家族。
+	EngineMySQL Engine = "mysql"
+	// EngineMongo 是 MongoDB 家族。
+	EngineMongo Engine = "mongo"
+)
+
+// Distribution 是模板发行版词表（身份字段）：vanilla = 上游/官方镜像，
+// percona = Percona 发行版（同引擎线协议；卷路径/扩展面按发行版携带）。
+type Distribution string
+
+const (
+	// DistributionVanilla 是上游官方发行版。
+	DistributionVanilla Distribution = "vanilla"
+	// DistributionPercona 是 Percona 发行版。
+	DistributionPercona Distribution = "percona"
+)
+
 // ErrUnknownTemplate 表示模板 ID 不在注册表（S2 映射 E_DB_TEMPLATE_
 // UNSUPPORTED——400，违规即设置面错误而非资源缺失）。
 var ErrUnknownTemplate = errors.New("dbtemplate: unknown template id")
@@ -85,6 +112,16 @@ type HealthGate struct {
 type Template struct {
 	// ID 是注册表键（"postgres-16"）。
 	ID string
+	// Engine 是引擎族（分派轴：适配器/渲染器/工具面按此选择；IMPL-DB-0
+	// 起替代「按 ID switch」——同族发行版/大版本共享实现）。
+	Engine Engine
+	// Distribution 是发行版（vanilla/percona；同引擎族内的差异面按条目
+	// 携带——卷路径/扩展面；备份/健康门适配器仍单实现）。
+	Distribution Distribution
+	// Major 是引擎大版本号（int）。**工具面版本纪律：与实例数据目录同
+	// major**——PG 的 pg_dump/pg_restore/postgres 全随此选二进制目录
+	// （跨 major 硬语义边界见 internal/database pgToolDir 注）。
+	Major int
 	// Image 是模板镜像钉定引用（`repo:tag@sha256:...`——tag 保留可读性，
 	// digest 为准）。
 	Image string
@@ -171,10 +208,13 @@ func mongoHealthGate() HealthGate {
 // 一个 EngineAdapter + 备份镜像工具，§2.2）。
 var registry = map[string]Template{
 	TemplatePostgres16: {
-		ID:          TemplatePostgres16,
-		Image:       DefaultPostgresImage,
-		ServiceName: "postgres",
-		EnginePort:  5432,
+		ID:           TemplatePostgres16,
+		Engine:       EnginePostgres,
+		Distribution: DistributionVanilla,
+		Major:        16,
+		Image:        DefaultPostgresImage,
+		ServiceName:  "postgres",
+		EnginePort:   5432,
 		// 卷 key=data，挂 /var/lib/postgresql/data；PGDATA 子目录约定
 		// （/var/lib/postgresql/data/pgdata）由渲染器以 env 承载——官方
 		// 镜像 initdb 在挂载点根目录会撞 lost+found（挂载卷根非空目录
@@ -188,6 +228,9 @@ var registry = map[string]Template{
 	},
 	TemplateRedis7: {
 		ID:                 TemplateRedis7,
+		Engine:             EngineRedis,
+		Distribution:       DistributionVanilla,
+		Major:              7,
 		Image:              DefaultRedisImage,
 		ServiceName:        "redis",
 		EnginePort:         6379,
@@ -198,10 +241,13 @@ var registry = map[string]Template{
 		DefaultLimits:      Limits{CPUSeconds: 0.5, MemoryBytes: 256 << 20}, // 256MiB
 	},
 	TemplateMySQL84: {
-		ID:          TemplateMySQL84,
-		Image:       DefaultMySQLImage,
-		ServiceName: "mysql",
-		EnginePort:  3306,
+		ID:           TemplateMySQL84,
+		Engine:       EngineMySQL,
+		Distribution: DistributionVanilla,
+		Major:        8,
+		Image:        DefaultMySQLImage,
+		ServiceName:  "mysql",
+		EnginePort:   3306,
 		// 卷 key=data 挂 /var/lib/mysql（官方镜像 DATADIR）；凭据经
 		// MYSQL_*_FILE secret 文件投递（入口 file_env 原生支持——D-W4-1，
 		// 设计 managed-databases §8.2 表）；root 密码 = 同一凭据值（root
@@ -214,10 +260,13 @@ var registry = map[string]Template{
 		DefaultLimits:      Limits{CPUSeconds: 1.0, MemoryBytes: 1 << 30}, // 1GiB
 	},
 	TemplateMongoDB80: {
-		ID:          TemplateMongoDB80,
-		Image:       DefaultMongoImage,
-		ServiceName: "mongo",
-		EnginePort:  27017,
+		ID:           TemplateMongoDB80,
+		Engine:       EngineMongo,
+		Distribution: DistributionVanilla,
+		Major:        8,
+		Image:        DefaultMongoImage,
+		ServiceName:  "mongo",
+		EnginePort:   27017,
 		// 卷 key=data 挂 /data/db（官方镜像 dbpath）；凭据经
 		// MONGO_INITDB_ROOT_PASSWORD_FILE secret 文件投递（D-W4-2，设计
 		// managed-databases §8.2 表）；root 用户由官方入口恒建于 admin 库

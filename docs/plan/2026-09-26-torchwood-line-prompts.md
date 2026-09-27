@@ -78,6 +78,20 @@
 【完成标准】票内五条守卫逐条落回归测试——尤其「孤儿网注入一个对账周期内暴露」（机制验收）与「短名跨 app 不混流」；全量 go test ./... 绿；console 按实际脚本跑。输出/禁 commit 等同 T1-1。
 ```
 
+## PROMPT · IMPL-DB-0（dbtools 多 PG 大版本工具面，DB-1 前置）
+
+```
+【仓库与背景】你在 D:/Codes/qiulin/fleetly 工作：fleetly 是 Go 自托管 PaaS（swarm 底座 + SQLite 单写点 + React Console）。本票是 IMPL-DB-1 的前置票（2026-09-27 用户裁决，阻塞证据见 docs/plan/2026-09-26-torchwood-line-impl.md §4「IMPL-DB-1 方案可行性审查」）：dbtools 备份/恢复执行体仍是 PG 16.15 单一大版本，PG 18 实例 backup（pg_dump 拒对更高大版本服务器）与 restore（16 的 postgres 起 18 数据目录即 incompat）结构性不可达。先读：AGENTS.md、DB-1 审查记录（§4 全文）、docs/design/2026-09-26-torchwood-line.md 的 DT-9 节、docs/design/2026-09-20-managed-databases.md §2.6（执行体/恢复契约）、deploy/Dockerfile.dbtools、internal/database/adapters.go、.github/workflows/dbtools.yml、docs/runbooks/image-prepull.md（台账与 #19/#20 先例）。
+
+【第 0 步：方案可行性审查（强制）】核实现状锚点（Dockerfile.dbtools 基底与工具面、adapters.go 的 DefaultDatabaseToolsImage 与五处 ID switch、restorePostgresJobScript 的 PGDATA 硬编码、dbtools.yml 发布链——gh 已登录 fleetlyrun/fleetly 且具 workflow scope，dispatch 可用）；**机制必查项（实证裁决并给证据）**：①单镜像双工具面（versioned prefix + 每 job PATH/LD_LIBRARY_PATH；官方 postgres 产物为编译期 prefix，share 目录冲突面须实证）vs ②双镜像（Dockerfile.dbtools 双 final target/新文件，同构 COPY，job 按实例 PG major 选镜像）——选可行且改动面最小者，写清否定项证据；③pg_dump/pg_restore/postgres 的跨版本语义实证（哪些工具可共版、哪些必须与数据目录同 major）；④恢复临时实例启动形态（gosu 降权、PGDATA、share 可达性）在所选机制逐项可满足；⑤check-image-pins 对多 FROM/双文件扫描行为（全 FROM 必须 digest 钉定）。通过 → 记录后实现；矛盾 → 停，输出审查报告等人工裁决。偏离记入实施记录。
+
+【硬约束】（同 T1-1）镜像纪律：纯 COPY 无 RUN（新 target 同守；机制确需 RUN 则停并报告）；全 FROM digest 钉定 + deploy/check-image-pins.sh 过；错误码/事件只增；bash 过 sh -n、禁 2>/dev/null；**不 commit/push**；全量 go test ./... 绿。
+
+【本票要点】dbtools 支持 PG16+PG18 工具面（pg_dump/pg_restore/psql/postgres/pg_ctl/gosu；mysql/mongo/redis/restic 面两镜像同构）；`dbtemplate.Template` 增身份字段（Engine/Distribution/Major——DB-1 审查冻结的最小设计），既有四模板 ID/Image/字段值逐字不变；render/adapters 分派轴 ID→Engine 迁移（行为零变化）；job 镜像按实例 PG major 选择（新常量 digest 钉定）；恢复 PGDATA 自模板条目/`RestoreInput.VolumeTarget` 参数化（PG16 现值不变）；dbtools.yml 扩双镜像构建 + cosign 签名；新 digest 台账登记（顺延 #22/#23）；文档（工具面版本纪律：与实例数据目录同 major）。
+
+【完成标准】①PG18 真机探针：真实 PG18 实例（官方镜像容器/swarm 服务均可；不依赖 DB-1 词表，走 adapter 原语级 job 脚本或等价命令）跑通 dump→verify（pg_restore --list）→restore 重放全链，原始输出入记录；②PG16 全链零回归（全量 go test + 本地等价探针）；③镜像发布：CI 新 digest + cosign 签名（不可行则如实挂账不虚构）；④redis/mysql/mongo 零回归。输出/禁 commit 等同 T1-1；审查与实施记录写入实施方案 §4「IMPL-DB-0 方案可行性审查/实施记录」。
+```
+
 ## PROMPT · IMPL-DB-1（PG 模板目录化）
 
 ```

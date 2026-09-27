@@ -20,7 +20,7 @@ IMPL-T1-3(init job) ─┤      └──────────────→
 IMPL-T1-4(Config)   ─┘
 IMPL-T15-1(项目网+recon扩面) ─┐
 IMPL-T2-0(spike×4) ──────────┼─→ IMPL-T2-1(Tasks API) ─┐
-IMPL-DB-1(PG目录化,可先行) ──┼─→ (T2 割接前置)          ├─→ IMPL-T2-3(dispatcher改造)
+IMPL-DB-0(dbtools多PG版本) ──→ IMPL-DB-1(PG目录化) ─────┼─→ (T2 割接前置)          ├─→ IMPL-T2-3(dispatcher改造)
 IMPL-T2-2(build-upload) ─────┘                         ─┴─→ IMPL-T2-4(torchwood割接) [T2 出口]
 IMPL-T1-6(SDK TLS,独立)   IMPL-T3-*(P2,后置)
 ```
@@ -29,7 +29,7 @@ IMPL-T1-6(SDK TLS,独立)   IMPL-T3-*(P2,后置)
 |---|---|---|
 | T1 | T1-1 / T1-2 / T1-3 / T1-4（可并行）→ T1-5、T1-6 | 10-18d |
 | T1.5（可并行 T1） | T15-1 | 3-5d |
-| 独立先行 | DB-1 | 2-3d |
+| 独立先行 | DB-0（DB-1 前置）→ DB-1 | 2-4d + 2-3d |
 | T2 | T2-0 → T2-1、T2-2 → T2-3 → T2-4 | 16-26d |
 | T3（P2） | T3-1 / T3-2 / T3-3（简票，启动前再细化） | 3-5d |
 
@@ -93,13 +93,22 @@ IMPL-T1-6(SDK TLS,独立)   IMPL-T3-*(P2,后置)
 - **必查项**：**service update 增/摘网络的任务重启语义**（swarm 会重建任务——Console 与 runbook 诚实标注，或评估滚动窗口）；别名与 naming 契约评审记录；staging UDP 未放行期跨节点项目网的 placement 同节点指引。
 - **依赖**：无（可并行 T1）。**预估** 3-5d。
 
-### IMPL-DB-1（DT-9）PG 模板目录化（独立可先行）
+### IMPL-DB-0（DB-1 前置）dbtools 多 PG 大版本工具面
+
+- **目标**：dbtools 备份/恢复执行体支持 PG 16 与 PG 18 两代工具面；job 按实例模板的 PG major 选执行镜像/工具；恢复 PGDATA 参数化。解除 DB-1「每个目录条目过 create→backup→restore」的结构性阻塞（DB-1 审查记录 option A，2026-09-27 用户裁决）。
+- **现状锚点**：`deploy/Dockerfile.dbtools:81`（`FROM postgres:16@sha256:a3b7…`，工具面 16.15——W4 「与引擎逐位同版」原则）；`internal/database/adapters.go:46`（`DefaultDatabaseToolsImage`）与五处 ID switch、`restorePostgresJobScript` 硬编码 `PGDATA=/var/lib/postgresql/data/pgdata`；`.github/workflows/dbtools.yml`（单镜像 build-push + cosign）；台账 `docs/runbooks/image-prepull.md`（末行 #21）。
+- **改动点**：Dockerfile.dbtools 双 PG 工具面（双 final target 或新文件，**纯 COPY、全 FROM digest 钉定**）；`dbtemplate.Template` 增身份字段（Engine/Distribution/Major，既有四条目 ID/Image/字段值逐字不变）；render/adapters 分派轴 ID→Engine 迁移（行为零变化）；job 镜像按 PG major 选择（新常量钉定）；恢复 PGDATA 自模板条目/`RestoreInput.VolumeTarget` 参数化（PG16 现值不变）；dbtools.yml 扩双镜像构建 + cosign；新 digest 台账（顺延 #22/#23）+ Go 常量 + check-image-pins 三锚一致；文档（工具面版本纪律：与实例数据目录同 major）。
+- **守卫与验收**：①PG18 真机探针：真实 PG18 实例跑通 dump→verify（`pg_restore --list`）→restore 重放全链（原始输出；不依赖 DB-1 词表，adapter 原语级）；②PG16 全链零回归（全量 go test + 本地等价探针）；③镜像发布：CI 新 digest + cosign 签名（dispatch 可用；不可用则如实挂账不虚构）；④redis/mysql/mongo 零回归。
+- **依赖**：无（DB-1 前置）。**预估** 2-4d。
+
+### IMPL-DB-1（DT-9）PG 模板目录化（DB-0 后行）
 
 - **目标**：dbtemplate 目录化；词表增 `postgres-18`（vanilla）与 `percona-postgresql-18`（含 pgvector）；发行版零新增适配器；大版本升级不做（创建钉死）。
 - **现状锚点**：`internal/dbtemplate/dbtemplate.go:23-46`（注册表与 `E_DB_TEMPLATE_UNSUPPORTED`）、`internal/dbtemplate/render.go`、`internal/database/adapters.go`、E4 35/35 真机矩阵。
 - **改动点**：注册表目录化重构（engine 通用 descriptor）；两新模板镜像 digest 钉定 + check-image-pins 台账登记；CreateDatabase 校验走既有路径；Console create-database-dialog 增模板选择器；文档（大版本升级 = dump/restore 新实例）。
 - **守卫与验收**：**每个目录条目过 create→backup→restore 回归矩阵**（把「发行版不新增适配器」从断言钉成事实）；percona 镜像与官方镜像 env/entrypoint 兼容性实证（PGDATA/init 语义）；未知模板 4xx 既有错误码不破。
-- **依赖**：无。**预估** 2-3d。
+- **依赖**：IMPL-DB-0（dbtools 多 PG 大版本工具面）。**预估** 2-3d。
+- **2026-09-27 阻塞裁决注**：本票第 0 步审查发现 dbtools 单大版本工具面阻塞（证据与裁决选项见 §4「IMPL-DB-1 方案可行性审查」）；目录化身份字段（Engine/Distribution/Major）与分派轴迁移、job 工具按 major 选择、恢复 PGDATA 参数化移入 DB-0；本票实装面 = 两新条目（含 percona 原生 `/data/db` 路径与 pgvector 说明）+ Console 选择器 + 文档 + 全目录矩阵跑通 + 台账/词表收尾。
 
 ### IMPL-T2-0 Spikes（报告落 docs/reports/）
 
@@ -795,3 +804,224 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构结果；
 - Console 网络卡 staging 走查（attach → 重部署滚动 → 徽标翻转；平台管理员/developer 只读态）。
 - 项目网 + E4 库网/rustfs 牵线多网络叠加形态的真机复核（本票单节点探针为两网叠加，库网/rustfs 组合沿既有投影测试链）。
 - attach/detach 与域名路由收敛的交互走查（网络切换期间 Traefik 路由不依赖项目网——设计上入口只挂 app 网，无需改动；staging 一次真机确认）。
+
+### IMPL-DB-1 方案可行性审查（2026-09-27，实现会话）
+
+**结论：不通过——阻塞前置矛盾，停止实现，等人工裁决。本票未动任何代码/生成物（唯一落盘 = 本节）。**
+
+一句话：**percona 镜像的兼容性前提成立**（env/entrypoint/PGDATA/凭据投递/pgvector 逐项实证通过），但**平台自身的 dbtools 工具面仍是 PG 16.15 单一大版本**——PG 18 实例的 backup 与 restore 都在 job 首步硬失败（一手复现：`pg_dump` 16 对 18 服务器 `aborting because of server version mismatch`；dbtools 内 postgres 16 起在 PG 18 数据目录 `database files are incompatible with server`）。DT-9 的验收「每个目录条目过 create→backup→restore」在本票范围内**结构性不可达**：修复面（新 dbtools 镜像多 PG 大版本工具面 + 按模板 major 选工具 + 恢复脚本路径参数化）需要 CI 发布私有镜像新 digest，超出票面「目录化只动镜像与默认参数层」。另有一处票面字面与实证相左：percona 的 `VolumeMountPath` **不可**与 postgres-16 同款（uid 26 + 空卷 root-owned → `mkdir: Permission denied`），须按条目携带原生路径（见必查项 1.4）。
+
+现状锚点核实（票内 file:line 逐条；全部成立，语义与票面一致）：
+
+- `internal/dbtemplate/dbtemplate.go`：镜像常量（现行 :22-35，四个）、模板 ID 词表（:38-47）、`ErrUnknownTemplate`（:49-51）、`Template` 结构（:85-108）✓。`render.go` 的**替换轴**在 ID：`renderEnv`（:145-180）与 `ConnectionVars`（:240-261）均 `switch tpl.ID`——目录化要换成 engine 轴。
+- `internal/database/adapters.go`：`backupFilename`（:87-100）、`backupJobScript`（:130-161）、`verifyJobScript`（:170-202）、`Restore`（:359-406）、`RotateCredential`（:532-557）全部按 `dbtemplate.TemplateXxx` 常量 switch；`restorePostgresJobScript` **硬编码** `PGDATA=/var/lib/postgresql/data/pgdata`（:240）——percona 路径适配的必改点（`RestoreInput.VolumeTarget` 已承载模板挂载点，:104-115）。
+- `internal/api/databases.go:106-112`：未知模板 → `E_DB_TEMPLATE_UNSUPPORTED` 400 + `templateIDList()`（由 `dbtemplate.List()` 派生，词表自动扩；:792-799）✓；引擎侧防御映射在 `internal/engine/dbinject.go:229-235`（E_RUNTIME_UNAVAILABLE，注释声明理论不可达）✓；既有回归 `internal/api/databases_test.go:122-124`（未知模板 400）✓。
+- E4 矩阵现行组织（运行入口/环境/覆盖点）：`e2e/databases.sh` 单 dind 自足脚本（现行 **1252 行**；票面写 1181 行——撰写后 W4-S4 追加了 M/G 腿，语义覆盖与票面描述一致）；D 腿 = postgres-16 全生命周期（D1-D27：建库/卷放置/rustfs 目标/引用 app 注入/备份/清空/恢复/轮换/密钥库/暂停/删除留卷）、M 腿 = mysql-8.4（M1-M20）、G 腿 = mongodb-8.0（G1-G15）；断言行 97 处（成败成对）。CI 入口 = `.github/workflows/nightly.yml` `databases-e2e` job 直接 `sh e2e/databases.sh`（:505-506），dbtools 私有包在 dind 内登录直拉（:497-499）；本地复跑 = 同一脚本（W4 记录 dind 27/27，v0.3 记录 62/62）。E4 真机面 = v0.2 W4「staging 35/35」（runbook §9）。
+- Console：`create-database-dialog.tsx:32-37` 硬编码四模板、`:53` 缺省 postgres-16、testid `database-template-select`（:136）；`DatabasesPage.tsx:223` 空态 hint 例句；`DatabaseDetailPage` 的 template 展示面（测试夹具 `.test.tsx:21`）✓。
+
+必查项取证：
+
+1. **percona 与官方 postgres:18 兼容性（本地 Docker 29.7.2 + Docker Hub API + 运行实证，2026-09-27）**：
+   1.1 真实仓库路径 = `percona/percona-distribution-postgresql:18`（设计字面 `percona-distribution-postgresql:18` 缺 org 前缀；Docker Hub tags 670 个，`:18` / `:18.6` / `:18-ubi8` / `:18-ubi10` 均在；`:18` 解析 index digest `sha256:dae47360e8137cafc1e8d66f9a1be348f1405e3cf51daa383b94e6c277e6b256`，内含 amd64 `d8741ab9…c904` + arm64 `f4136fb0…a7c1`；镜像 `FULL_PERCONA_VERSION=18.6-1.el9`，`User=26`）。
+   1.2 入口 = docker-library postgres 入口的 fork（`/entrypoint.sh` 源码逐段核对）：`file_env` 支持 `POSTGRES_PASSWORD_FILE`/`POSTGRES_USER_FILE`/`POSTGRES_DB_FILE`；`docker-entrypoint-initdb.d` 处理逻辑与官方同形；`gosu` 在位；`PGDATA` 缺省 `/data/db` 但**显式设置时被尊重**（`if [[ -z "$PGDATA" ]]; then export PGDATA=/data/db; fi`）；`pg_isready`/`pg_dump`/`pg_restore`/`psql`/`initdb` 在 `/usr/pgsql-18/bin`（PATH 已含）。
+   1.3 运行实证（swarm service + 平台投递形态 `File{Name:"/run/secrets/…", UID 0, GID 0, Mode 0444}`）：官方 `postgres:18` 与 percona 均 `running`，`pg_isready -U fleetly` 应答（健康门命令可执行），`POSTGRES_PASSWORD_FILE` 指向的 Swarm secret 密码**可用**（TCP 登录 `select current_user` = fleetly；错密码被拒 `password authentication failed`）；percona 的 `docker-entrypoint-initdb.d` 经 swarm config 挂载实测执行（探针表值 42 在库）；`SELECT pg_available_extensions` → **`vector 0.8.6`**，`CREATE EXTENSION vector` → 0.8.6 ✓（「含 pgvector」成立）。官方镜像同法走平台约定（`PGDATA=/var/lib/postgresql/data/pgdata` + 挂载 `/var/lib/postgresql/data`）工作正常（PG 18.6；卷内 `pgdata/` 子目录；镜像声明 `VOLUME /var/lib/postgresql`，匿名卷无害）。
+   1.4 **票面偏差（实证）**：percona 用 postgres-16 同款挂载路径直接失败——`mkdir: cannot create directory '/var/lib/postgresql/data/pgdata': Permission denied`（进程 uid 26，卷根 root-owned；percona 预启动无 root 分支，不做 chown）。percona 原生路径成立且可沿用子目录约定：挂 `/data/db` + `PGDATA=/data/db/pgdata` → ready、卷内 `pgdata/`。⇒ volume 路径/PGDATA 必须**按条目**（descriptor 字段）承载；恢复脚本的硬编码 PGDATA 同步参数化。
+   1.5 健康门/凭据/线协议面：percona 与官方同为 PG 18 wire protocol；`pg_isready`/`psql` 工具齐备；平台 `CredentialSecretFile`（`POSTGRES_PASSWORD_FILE=/run/secrets/password`）语义两镜像同构——**「发行版不新增适配器」在 18 系内部成立**（前提是工具面问题先解决）。
+
+2. **两个新镜像的 digest 与台账/门禁流程**：
+   2.1 digest 取得（多架构 index）：`postgres:18` → `sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722`（amd64 `0377e72c…`、arm64/v8 `f4fcd2b9…`；PG 18.6 debian trixie）；`percona/percona-distribution-postgresql:18` → `sha256:dae47360…`（见 1.1）。amd64 实拉 `RepoDigests` 与上述 index digest 逐字一致；arm64 存在性经 registry 侧 `docker buildx imagetools inspect` 逐平台 manifest 核对（本地 classic image store 对同 tag 换平台报 `cannot overwrite digest`——这是本地存储限制，非远端缺失，如实记录；CI/dind 与本机 containerd store 可复跑 W4「按 digest 以 arm64 平台独立拉取」形态）。
+   2.2 台账：#19/#20 是 mysql/mongo 行，**现行台账末行已是 #21**（vmalert）——新行顺延为 **#22/#23**；登记位置与「Go 常量字面 + 台账行双锚」口径照 #19/#20 行。
+   2.3 `deploy/check-image-pins.sh` 扫描范围 = `deploy/*.sh`、`deploy/Dockerfile*`、`deploy/testdata/*/Dockerfile*`、`.github/workflows/*.yml`（脚本头 :21-26）；**Go 常量（`internal/dbtemplate`）与 `e2e/**` 不在扫描口径内**——兜底机制 = 台账双锚（runbook 各行「Go 常量字面……改动须同步」），不得虚构门禁覆盖。现状实跑 `OK — 28 image reference(s) digest-pinned, 0 exempt`；负路径自证（临时文件两条未钉引用）rc=1 并逐条点名 file:line；正路径 rc=0。若实现：新常量 + 台账两行 + e2e 新镜像常量（三锚）；若未来 dbtools 扩 PG18 工具面，其 `FROM` 新镜像会进扫描口径（那是工具面票的门禁面）。
+
+3. **dbtools 工具面跨大版本（本审查的阻塞证据，一手）**：
+   3.1 现行 dbtools（`ghcr.io/fleetlyrun/dbtools:v0.3.0-dbtools.1@sha256:2b9288a9…bd96`，匿名可拉）自报 `pg_dump/postgres/pg_restore = 16.15 (Debian)`——基底 = `postgres:16`（`deploy/Dockerfile.dbtools:81`），与 `DefaultPostgresImage` 同一 digest，恢复单 job 的 glibc 同源前提即建立在此。
+   3.2 **backup 腿**（平台命令词表原样）：`pg_dump -h <instance> -U fleetly -d <db> -Fc` → 对 percona 18 与官方 18 均 `pg_dump: error: aborting because of server version mismatch`（`detail: server version: 18.6 …; pg_dump version: 16.15`）。pg_dump 拒对更高大版本服务器导出（硬约束，非告警）。
+   3.3 **restore 腿**（脚本原样降权后起临时服务器）：dbtools 内 `gosu <卷属主 uid> postgres -D <datadir>` 于 PG 18 数据目录 → `FATAL: database files are incompatible with server`（`detail: The data directory was initialized by PostgreSQL version 18, which is not compatible with this version 16.15`）；官方 18 卷与 percona 18 卷同结论（percona 需先按 1.4 修正路径，修正后同结论）。另：PG16 客户端读 PG18 的 `postgresql.conf` 先撞 `unrecognized configuration parameter "autovacuum_worker_slots"`——即使绕开配置解析，数据目录版本检查仍是硬失败。
+   3.4 结论：**PG 18 模板的 backup/verify/restore 全链在当前平台工具面下不可用**；DT-9 验收在当前仓库状态下不可达。修复需要新工具面设计（下述待裁决选项）。
+
+4. **目录化最小设计（供裁决后直接开工的边界，非实现）**：
+   - descriptor 增 engine 通用身份字段：`Engine`（词表 `postgres|redis|mysql|mongo`）+ `Distribution`（`vanilla|percona`，既有四模板留空/vanilla）+ `Major`（int）；`Template` 其余字段与既有四个条目的 `ID/Image/字段值`**逐字不变**（golden/spec 测试零回归）。分发轴替换点 = `render.go` 两处 `switch tpl.ID` + `adapters.go` 五处 `switch`（改按 `tpl.Engine` 分派；percona/vanilla 同属 `postgres` 家族）。
+   - 入目录条目 = 既有四 + `postgres-18`（vanilla）+ `percona-postgresql-18`（Distribution=percona；`VolumeMountPath=/data/db`、PGDATA 子目录、`EnginePort 5432`、`CredentialSecretFile`、`pg_isready` 健康门、1C/1Gi 缺省限额——除 volume 路径外与 postgres-16 同款）；redis/mysql/mongo 目录结构预留、不实现新条目。
+   - 适配器仍单实现（PG 家族一份）；两个必改参数化：(a) 恢复脚本 PGDATA 取 `VolumeTarget`+子目录（去硬编码）；(b) 工具面按 `Major` 选 pg_dump/pg_restore/postgres 二进制（阻塞解除后的工具面票交付物）。
+   - 大版本升级不做（落点：dbtemplate 包注 + `proto/fleetly/server/v1/database.proto` 模板注释 + managed-databases §2.2/§7 一行；不新造机制）。
+   - CreateDatabase 校验/错误码零变化（`E_DB_TEMPLATE_UNSUPPORTED` 词表经 `List()` 自动扩；注意 `internal/errcode/testdata/codes.golden:28` 的 suggestion 文本列了四个模板 ID——词表增须显式再生成该 golden）；Console `TEMPLATES` 增两行 + 测试（`database-template-select` 锚点不破）；e2e 增设参数化 P 段（每新条目 create→backup→restore，D/M/G 不回归）。
+
+**待人工裁决（阻塞解除路径，按代价升序）**：
+
+- **A（建议）**：先立「dbtools 多 PG 大版本工具面」前置票——扩展 `deploy/Dockerfile.dbtools`（PG18 工具链与 16 并存，二进制目录/LD_LIBRARY_PATH 按 major 选择；恢复临时实例须与实例数据目录同 major）+ job 脚本按模板 major 选工具 + 新 digest 经 CI 发布（私有 ghcr）+ 台账 #22/#23；发布后 DB-1 恢复全量实现并跑通矩阵。本票阻塞点即此票的验收面。
+- **B**：DB-1 缩面为「创建/健康门可用，backup/restore 对 18 系显式拒绝并点名工具面缺口」——与 DT-9 验收字面冲突（矩阵钉不死「发行版不新增适配器」），且 T2-4 割接的托管备份前提落空；不建议。
+- **C**：本票只做目录化机制重构（既有四模板零变化），两新条目挂账到工具面就绪——不满足 DT-9 的用户可见目标（torchwood 现役 percona 发行版落位顺延）。
+- **D**：只加 vanilla `postgres-18` 不加 percona——同样被工具面阻塞（3.2/3.3 对官方镜像同样成立），不成立。
+
+**裁决落定（2026-09-27，用户选定 A）**：新增 `IMPL-DB-0` 前置票（dbtools 多 PG 大版本工具面；票文见 §2、prompt 见分发档），DB-1 依赖改为 DB-0 后行（本票实装面相应收敛：两新条目 + Console + 文档 + 矩阵；身份字段与分派轴迁移、工具选择、PGDATA 参数化移入 DB-0）。
+
+**未执行项（停手纪律）**：本票未改任何 Go/Console/proto/脚本/台账文件，未跑 `go test`/console 四脚本/e2e 矩阵（零改动，无回归面）；上述全部结论均有本节记录的一手观测支撑，无推断性「已通过」。
+
+### IMPL-DB-0 方案可行性审查（2026-09-27，实现会话）
+
+**结论：通过（机制裁决 = 单镜像双工具面：`postgres:16` 基底 + `postgres:18` 工具链版本分区 COPY + 缺失 soname 补集；job 工具按实例 major 以显式绝对路径选择）。无阻塞前置矛盾，进入实现。** 两处与票面字面的偏离（无新镜像常量；门禁盲区修复）见文末「审查期裁决与偏离」。
+
+现状锚点核实（票内 file:line 逐条）：
+
+- `deploy/Dockerfile.dbtools:81`（`FROM postgres:16@sha256:a3b7…`）✓；工具面实证修正一处票面记忆：官方镜像为 **pgdg Debian 布局**——二进制在 `/usr/lib/postgresql/16/bin`（`/usr/bin/pg_dump` 等是 postgresql-common `pg_wrapper` 的符号链接）、share 在 `/usr/share/postgresql/16`、pkglib 在 `/usr/lib/postgresql/16/lib`，**不在 `/usr/local/bin`**；`pg_dump/postgres/pg_restore = 16.15 (Debian)` ✓。
+- `internal/database/adapters.go:46`（`DefaultDatabaseToolsImage`）✓ 现行 46 行；五处 ID switch（`backupFilename`/`backupJobScript`/`verifyJobScript`/`Restore`/`RotateCredential`）✓；**第六处** `internal/database/rotate.go:140`（`rotateCredential`）同轴，一并迁移（票面未列，语义同类）。
+- `restorePostgresJobScript` 硬编码 `PGDATA=/var/lib/postgresql/data/pgdata` ✓（现行 :240）；`RestoreInput.VolumeTarget` 已承载模板挂载点 ✓。
+- `.github/workflows/dbtools.yml` 发布链（单镜像 build-push + cosign sign/verify + 飞书；`release.yml` 以 `workflow_call` 同版调用）✓。
+- `gh auth status` = `qiulin@github.com`，scopes 含 `workflow` ✓；`git ls-remote origin` 仅 `refs/heads/main`，本票改动未推送（`不 commit/push` 约束下 dispatch 新内容的可行性见实施记录）。
+
+机制必查项实证（本机 Docker 29.7.2；探针镜像均为临时产物，非仓库文件）：
+
+**1. 单镜像双工具面（选定）——官方镜像的 Debian 布局本就按 major 分区，无 share/prefix 冲突面**
+
+- 布局实测：两代镜像的 `pg_config --bindir/--sharedir/--pkglibdir` = `/usr/lib/postgresql/<major>/bin`、`/usr/share/postgresql/<major>`、`/usr/lib/postgresql/<major>/lib`（pgdg 编译期绝对路径，带 major 段）。票面担心的「share 目录/编译期 prefix 冲突」**不存在**：无需 relocation，两代目录天然并存。
+- 候选镜像（`postgres:16` 基底 + `COPY --from=postgres:18` 两目录 + 两个缺失 soname）实测：
+  - PG18 全部二进制 `ldd` 零 `not found`（缺口仅 `libnuma.so.1`/`liburing.so.2`——基底 `ls` 实测缺；`libpq.so.5` 两镜像逐字节同源 `sha256:9cce9bfa…`）；
+  - `initdb` + 临时服务器在 PG18 数据目录起动成功、`psql`/`pg_dump`/`pg_restore --list` 全可用；
+  - PG18 二进制对 PG16 数据目录 `FATAL: database files are incompatible with server`（major 硬约束复现）。
+- **pg_wrapper 陷阱（关键实证）**：两代并存后，裸名 `pg_dump/psql/pg_restore/pg_isready` 经 `/usr/bin` → `pg_wrapper` 解析为**最新版 18**（wrapper 尾部「if we have no version yet, use the latest version」；psql/pg_isready 恒取最新）；裸名 `postgres/pg_ctl` 仍走 PATH 尾的 16 目录（不在 `/usr/bin`）。⇒ 工具选择必须显式：PG job 脚本一律用 `/usr/lib/postgresql/<major>/bin/<tool>` 绝对路径。PG16 侧该路径**即今日 pg_wrapper 的解析结果**（同一二进制；wrapper 在显式 `-h` 下不注入 cluster 缺省，脚本恒带 `-h`）——行为逐字不变。
+- 体积实测（`docker inspect .Size`，amd64 未压缩）：现行 dbtools `1,084,149,767` B → 候选单镜像 `1,132,959,955` B（**+48.8MB / +4.5%**）。
+
+**2. 双镜像（否定项）——同构第二镜像实测 1.089GB**
+
+- 以 `postgres:18` 为基底、同构 COPY 全工具面（其余四个 stage 不变）的候选实测 `1,089,486,184` B；两镜像合计 ~2.22GB vs 单镜像 1.13GB。
+- 结构性代价：`deploy/Dockerfile.dbtools` 双份维护（或新增文件+同步纪律）、双 tag/digest/cosign/台账行/e2e 锚、每 release 双发；**无能力增益**（单镜像已实证满足全部所需语义）。裁决：否定。
+
+**3. 跨版本工具语义（一手原始输出）**
+
+- `pg_dump` 必须 ≥ 服务器 major：PG18 客户端导 PG16 服务器 `rc=0`（成功）；PG16 客户端导 PG18 服务器 `pg_dump: error: aborting because of server version mismatch`（复现 DB-1 审查）。
+- `pg_restore` 必须 ≥ dump 产出 major：PG18 产 custom 归档 `Dump Version: 1.16-0`，PG16 `pg_restore --list` 报 `pg_restore: error: unsupported version (1.16) in file header`（rc=1）；PG18 `pg_restore --list` 同归档 rc=0（18 条 TOC）。
+- `postgres`（临时恢复实例）必须 = 数据目录 major（双向：18 起 16 目录 `database files are incompatible`；16 起 18 目录同）。
+- ⇒ **无「可共版」工具**：pg_dump/pg_restore/postgres 及消费链 psql/pg_isready/pg_ctl 全部随实例数据目录 major 选取（psql/pg_isready 线协议虽兼容，同 major 选取零成本且免混版面）。
+
+**4. 恢复临时实例启动形态在所选机制下逐项满足（候选镜像内实测）**
+
+- gosu 降权（基底自带 `/usr/local/bin/gosu`）✓；PGDATA 由 `RestoreInput.VolumeTarget + "/pgdata"` 参数化后 **PG16 现值逐字不变**（`/var/lib/postgresql/data/pgdata`）、PG18/percona 形态可承载 ✓；share 可达（绝对路径随 COPY 落位，initdb/起动实测）✓；socket `/var/run/postgresql`（pgdg 编译期缺省；**percona 数据目录实测**：conf 内该行是注释样例、percona 引擎的 `/run/postgresql, /tmp` 来自入口旗标，vanilla 临时服务器 `-C` 解析为 `/var/run/postgresql`——恢复脚本 socket 参数**无需**改）✓；端口 5432 缺省 ✓。
+- **新发现（DB-1 交接项，非本票阻塞）**：vanilla PG18 工具链对 **percona 数据目录的 pgvector 重放不可用**——percona 的 `vector.so/vector.control` 在 `/usr/pgsql-18`（不在 vanilla share/pkglib）。原地重放实测 `pg_restore rc=1`：`ERROR: extension "vector" is not available` → 依赖表 `CREATE TABLE ... public.vector(3)` 与 `COPY` 连锁失败（重放后空库）。本票机制（major 面）不解分布差异；DB-1 需按发行版决策（建议：dbtools PG18 面补 percona vector 控制/库文件，或恢复临时实例改用引擎镜像）。
+
+**5. check-image-pins 扫描行为（一手，正/负路径）**
+
+- 扫描域 `deploy/Dockerfile*` 覆盖新增文件/新增 FROM ✓（通配）。
+- **实测盲区（本票新增引用形态正好命中）**：纯数字 tag 被噪声过滤整条丢弃——`FROM postgres:16@sha256:…`、`FROM redis:7@sha256:…` 现行列表模式**零计数**；未钉的 `FROM postgres:18` 亦不报错（rc=0）。`COPY --from=<外部镜像>` 行不在候选上下文（脚本头注已知盲区）。
+- 处置：①Dockerfile 新增 PG18 引用以 **FROM stage 形态**声明（`FROM postgres:18@sha256:… AS postgres-engine-18`），引用落进扫描口径；②**修门禁**：FROM 行不再套用「tag 非纯数字」噪声过滤（FROM 上下文不可能是时刻/端口噪声），负路径自证 = 未钉 `FROM postgres:18` 必须 rc=1 点名。
+
+**审查期裁决与偏离（相对票面字面）**：
+
+1. **无新镜像常量 / 无 dbtools.yml 双镜像扩展**：票面「新常量如 `DatabaseToolsImagePostgres18`」是双镜像假设下的写法；机制裁决为单镜像后，job 镜像恒为 `DefaultDatabaseToolsImage`（重建后的新 digest），「按 major 选择」落在**工具二进制路径**（`/usr/lib/postgresql/<major>/bin`）而非镜像选择。dbtools.yml 无需改构建形态（仍单镜像 build-push + cosign），仅头注随工具面更新。
+2. **工具面路径显式化**（pg_wrapper 陷阱所致，见必查项 1）：PG16 脚本同步从裸名改绝对路径——同一二进制，行为不变；不显式化则 PG16 会在两代并存后静默切到 18 工具。
+3. **门禁盲区修复**（见必查项 5）：最小改动 + 头注/runbook 记录；负路径自证改为 `FROM postgres:18`。
+4. **PGDATA 参数化扩到渲染面**：除恢复脚本外，`renderEnv` 的 `PGDATA` 一并由模板 `VolumeMountPath` 派生（PG16 输出逐字不变），使 DB-1 的 percona 条目无需再改渲染器（DB-1 审查冻结设计「PGDATA 子目录约定」的落点）。
+5. **发布面挂账**：`不 commit/push` 硬约束使「CI dispatch 构建**新内容**」客观不可行（dispatch 只能跑远端 ref 上的既有内容；新 Dockerfile 不在任何远端 ref）。发布按票面兜底「如实挂账」处理，命令与回填清单见实施记录。
+
+### IMPL-DB-0 实施记录（2026-09-27，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。机制 = 单镜像双工具面（审查裁决）；镜像发布按票面兜底挂账（阻塞证据与回填清单见文末）。**
+
+变更文件清单（每文件一句）：
+
+- `deploy/Dockerfile.dbtools`：新增 `FROM postgres:18@sha256:5a5a… AS postgres-engine-18`（FROM 形态——引用落进 check-image-pins 扫描口径）+ COPY 18 工具链到版本分区路径（`/usr/lib/postgresql/18`、`/usr/share/postgresql/18`）+ libnuma/liburing 补集；头注增「PG 双大版本工具面」纪律段，工具面清单/多架构行同步；纯 COPY 无 RUN、全 FROM digest 钉定不变。
+- `deploy/check-image-pins.sh`：FROM 行豁免「tag 非纯数字」噪声过滤（修复 `postgres:16`/`redis:7` 等真实引用零计数的盲区）；头注识别口径/盲区同步。
+- `internal/dbtemplate/dbtemplate.go`：`Engine`/`Distribution` 词表常量 + `Template` 身份字段（Engine/Distribution/Major）；既有四条目填身份值——ID/Image/其余字段值逐字不变。
+- `internal/dbtemplate/render.go`：`renderEnv`/`ConnectionVars` 分派轴 ID→Engine；PGDATA 改由 `VolumeMountPath + "/pgdata"` 派生（PG16 现值逐字不变；percona 原生挂载点自然成立）。
+- `internal/dbtemplate/dbtemplate_test.go`：新增身份字段齐备/逐字钉、PGDATA 参数化（合成 percona 条目）、PG URL 投影回归。
+- `internal/database/adapters.go`：五处 switch ID→Engine；新增 `pgToolDir`（major → `/usr/lib/postgresql/<major>/bin`；未知 major/非 PG 引擎诚实报错）；PG 三段脚本工具二进制全改显式绝对路径；恢复 PGDATA 参数化 + 工具面缺面前置（exit 66）；`DefaultDatabaseToolsImage` 注释更新（双工具面 + 待发布回填说明）。
+- `internal/database/rotate.go`：`rotateCredential` 分派轴 ID→Engine（票面未列的第六处同轴补全）。
+- `internal/database/backup.go`：`pruneBackups` 前置模板读取（`pruneJobScript` 改签传模板）。
+- `internal/database/adapters_test.go`（新）：major 选工具面（16/18/percona 路径）+ 反钉别代路径 + PG16 现值钉 + 全注册表脚本可构建 + 未知引擎 fail-loud。
+- `internal/database/dbtools_manual_test.go`（新，`-tags manual` + env 门）：PG16/PG18 真机 dump→verify→restore 全链探针（adapter 原语脚本逐字 + docker run 承载 + 重放断言）。
+- `.github/workflows/dbtools.yml`：头注更新（镜像内容 = 单镜像双 PG 工具面）；构建/签名形态零变化（机制裁决结果）。
+- `docs/design/2026-09-20-managed-databases.md`：§2.6 增「工具面版本纪律」段（与实例数据目录同 major）。
+- `docs/runbooks/image-prepull.md`：§5 门禁盲区修复记录与复验；台账新增 #22 行（**待 CI 发布**形态，digest 待回填）。
+- `docs/plan/2026-09-26-torchwood-line-impl.md`：本审查/实施记录。
+
+测试清单与票面四项验收逐条对应：
+
+| 验收条款 | 证据（新增测试 + 一手观测） |
+|---|---|
+| ① PG18 真机探针（dump→verify→restore 全链，原始输出） | `TestManualDbtoolsPostgresMultiMajor/major18`（manual 探针；见下方原始输出）：官方 `postgres:18` 真机实例，adapter 原语脚本（`backupJobScript`/`verifyJobScript`/`restorePostgresJobScript` 对合成 PG18 模板的逐字产物）跑通，重放断言 = 备份后新增行消失、备份时刻行在场 |
+| ② PG16 全链零回归 | 全量 `go test ./... -count=1` 全绿（32 包 ok）；变更包 `-race` 绿；`go vet ./...` 净；探针 `major16` 腿（同一批脚本对真实 `postgres:16` 实例全链）；`TestPostgres16ToolFaceValuesUnchanged`（PGDATA/命令现值逐字钉）；既有 `backup_test`/`restore_test`/`w4_mysql_mongo_test`/`rotate_test`/`upgrade_test` 零改动全绿（脚本断言为子串匹配，绝对路径化后语义不变） |
+| ③ 镜像发布（CI 新 digest + cosign） | **挂账**（`不 commit/push` ⇒ CI 无法构建新内容；阻塞证据与命令见文末「发布挂账」）。本地实证：`docker buildx build --load -f deploy/Dockerfile.dbtools deploy` 成功，镜像 `1,132,959,955 B`（现行 `1,084,149,767 B`，+48.8MB/+4.5%）；`sh deploy/check-image-pins.sh` = `OK — 31 image reference(s) digest-pinned, 0 exempt`（rc=0），负路径 `FROM postgres:18` 未钉 → rc=1 点名 file:line |
+| ④ redis/mysql/mongo 零回归 | 全量测试绿（M/G 腿适配器/恢复/轮换回归全在）；`TestEngineDispatchCoversEveryRegistryTemplate`（四引擎脚本全可构建）；`TestEngineDispatchUnknownEngineAndMissingMajorFailLoud` |
+
+一手验证证据（原始输出摘要）：
+
+```
+$ go test ./... -count=1
+ok  github.com/fleetlyrun/fleetly/internal/database    2.865s
+ok  github.com/fleetlyrun/fleetly/internal/dbtemplate  6.246s
+（其余 30 包 ok；含 api/state/engine/substrate/ingress/runtime/cmd 全链）
+
+$ go vet ./...
+（零输出，rc=0）
+
+$ go test -race -count=1 ./internal/dbtemplate/... ./internal/database/...
+ok  github.com/fleetlyrun/fleetly/internal/dbtemplate  6.445s
+ok  github.com/fleetlyrun/fleetly/internal/database   71.657s
+
+$ sh deploy/check-image-pins.sh            # 正路径（修复后计数 28→31）
+check-image-pins: OK — 31 image reference(s) digest-pinned, 0 exempt      # rc=0
+$ sh deploy/check-image-pins.sh deploy/Dockerfile.dbtools
+check-image-pins: OK — 6 image reference(s) digest-pinned, 0 exempt       # 六个 FROM 全数
+$ sh deploy/check-image-pins.sh <tmp>/Dockerfile.neg     # 负路径：FROM postgres:18 未钉
+::error file=…/Dockerfile.neg line=2::container image reference without digest: postgres:18
+check-image-pins: FAILED — 1 unpinned reference(s) (1 pinned, 0 exempt)   # rc=1
+$ sh -n deploy/check-image-pins.sh         # OK
+
+$ docker buildx build --load -t fleetly-dbtools:local -f deploy/Dockerfile.dbtools deploy
+#36 DONE … naming to docker.io/library/fleetly-dbtools:local
+$ docker inspect --format '{{.Size}}' fleetly-dbtools:local
+1132959955        # 现行 v0.3.0-dbtools.1 = 1084149767（+48.8MB）；双镜像否定项候选 = 1089486184（第二枚全镜像）
+$ docker run --rm fleetly-dbtools:local /usr/lib/postgresql/16/bin/pg_dump --version
+pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg13+2)
+$ docker run --rm fleetly-dbtools:local /usr/lib/postgresql/18/bin/pg_dump --version
+pg_dump (PostgreSQL) 18.6 (Debian 18.6-1.pgdg13+2)
+
+$ FLEETLY_MANUAL_DBTOOLS=1 FLEETLY_MANUAL_DBTOOLS_IMAGE=fleetly-dbtools:local \
+    go test -tags manual ./internal/database -run TestManualDbtoolsPostgresMultiMajor -v
+=== RUN   TestManualDbtoolsPostgresMultiMajor
+    dbtools_manual_test.go:72: tools face pg_dump 16.: pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg13+2)
+    dbtools_manual_test.go:72: tools face pg_dump 18.: pg_dump (PostgreSQL) 18.6 (Debian 18.6-1.pgdg13+2)
+=== RUN   TestManualDbtoolsPostgresMultiMajor/major16
+    dbtools_manual_test.go:82: leg major16 server: PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) …
+    dbtools_manual_test.go:82: leg major16 backup snapshot=1eb02bf1b9755eb52718fa3bc4fa52a6e4f3b9a038fa37e174c0f64e9aaa5dcb size=0
+    dbtools_manual_test.go:82: leg major16 verify ok:
+    dbtools_manual_test.go:82: leg major16 restore ok: … starting PostgreSQL 16.15 … database system is ready to accept connections … DROP DATABASE / CREATE DATABASE … server stopped
+    dbtools_manual_test.go:82: leg major16 replayed rows: 1:at-backup-time
+=== RUN   TestManualDbtoolsPostgresMultiMajor/major18
+    dbtools_manual_test.go:82: leg major18 server: PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) …
+    dbtools_manual_test.go:82: leg major18 backup snapshot=44bb90bc623192947f220f9c43651094e19095ace29a402321182731e857dd8b size=0
+    dbtools_manual_test.go:82: leg major18 verify ok:
+    dbtools_manual_test.go:82: leg major18 restore ok: … starting PostgreSQL 18.6 … database system is ready to accept connections … DROP DATABASE / CREATE DATABASE … server stopped
+    dbtools_manual_test.go:82: leg major18 replayed rows: 1:at-backup-time
+--- PASS: TestManualDbtoolsPostgresMultiMajor (28.58s)      # 两条腿均 PASS
+```
+
+探针环境注记：本机 Docker 29.7.2 / swarm 无关（`docker run` 等价承载 adapter 的 `["sh","-c",script]` Cmd 形态）；restic repo = 本地卷（免 S3 依赖）；实例容器挂平台同款卷路径（`PGDATA=<挂载点>/pgdata`）。**「size=0」是存量观测**：restic 0.19 `--json` summary 无 `total_bytes` 字段（真实字段 `total_bytes_processed`/`data_added`——本机实测 schema 原文见审查节），`parseResticSummary` 的 tag 从未命中 ⇒ `db_backups.size_bytes` 生产恒 0（既有测试夹具的假 JSON 用了同名字段，故单测不可见）。**本票不修**（出票面范围；建议另立小票：tag 改 `total_bytes_processed` + 夹具同步 + 台账断言更新）。
+
+偏离清单（实现中的决策，均按纪律登记）：
+
+1. **无新镜像常量、dbtools.yml 构建形态零变化**：单镜像机制裁决的直接结果（票面「新常量如 `DatabaseToolsImagePostgres18`」的双镜像假设不成立）；「按 major 选择」落在工具二进制路径（`pgToolDir`），job 镜像恒 `DefaultDatabaseToolsImage`。
+2. **PG16 脚本同步显式绝对路径**：pg_wrapper 陷阱（两代并存后裸名解析为 18）使「裸名 = 现值」不再成立；`/usr/lib/postgresql/16/bin/*` 即今日 pg_wrapper 的解析结果（同一二进制；wrapper 在显式 `-h` 下不注入 cluster 缺省），行为逐字不变——既有脚本断言为子串匹配故零改动全绿，新测试另钉绝对路径。
+3. **门禁修复**：`check-image-pins.sh` 的 FROM 行豁免纯数字 tag 噪声过滤（审查必查项 5 的盲区；修复后仓库计数 28→31，负路径自证改为本票真实形态 `FROM postgres:18`）。`COPY --from=<外部镜像>` 盲区不修（头注明示改走 FROM stage 形态）。
+4. **PGDATA 参数化扩到渲染面**：除恢复脚本外，`renderEnv` 的 PGDATA 一并由 `VolumeMountPath` 派生（PG16 输出逐字不变）——DB-1 的 percona 条目无需再改渲染器。
+5. **第六处分派轴迁移**：`rotate.go:rotateCredential`（票面只列 adapters.go 五处 + render.go 两处）；不迁移则 percona/新 major 条目会在轮换面落 `no rotation adapter`。
+6. **`pruneJobScript`/`backupFilename` 签名改传模板**：脚本构建器统一「调用方解析模板 → 纯函数拼装」（避免脚本构建器内重复 `dbtemplate.Get`；探针/单测可对合成模板钉行为）。
+7. **探针不依赖 DB-1 词表**：PG18 侧用合成模板（`syntheticPostgresTemplate(18, …)`，只进测试）——DB-1 落 `postgres-18` 条目后可换读注册表；引擎镜像字面 = `postgres:18@sha256:5a5a…`（与 Dockerfile 的 FROM 同 digest）。
+8. **`db_backups.size_bytes` 存量缺陷仅记录不修**（见上「size=0」注记）。
+9. **新发现（DB-1 交接项，审查节已列）**：percona 数据目录 + pgvector 的原地重放对 vanilla PG18 工具链不可用（`extension "vector" is not available` → 依赖表/数据整链失败）——DB-1 需按发行版决策（建议：dbtools PG18 面补 percona vector 控制/库文件，或恢复临时实例改用引擎镜像）。本票机制（major 面）不覆盖分布差异，如实交接。
+
+**验收追认（2026-09-27）**：用户以「提交推送」指示验收，追认五项裁决与两项交接：①单镜像双工具面（无新镜像常量，工具按 major 显式绝对路径选择；否定双镜像）；②PG16 脚本同步绝对路径化（pg_wrapper 裸名解析陷阱，行为逐字不变）；③check-image-pins FROM 行盲区修复（未钉真实引用原可蒙混）；④PGDATA 参数化扩到渲染面；⑤发布挂账（推送后 CI 发布 + 三锚回填）；交接一 = percona+pgvector 恢复归 DB-1；交接二 = `db_backups.size_bytes` 存量缺陷另立小票。
+
+**发布挂账（票面兜底「如实挂账并给阻塞证据」；不虚构 CI 结果）**：
+
+- 阻塞证据：`gh auth status` = `qiulin@github.com`，scopes 含 `workflow`（dispatch 能力在）；`git ls-remote origin` 仅 `refs/heads/main`，本票改动全部未提交/未推送。GitHub Actions `workflow_dispatch` 只能跑**远端 ref** 上的既有内容——新 Dockerfile 不在任何远端 ref，dispatch 只会重建旧内容（无意义）；而「不 commit/push」是本票硬约束，故 CI 构建新内容客观不可行。本机未做任何 ghcr 推送（供应链纪律：发布只走 CI + cosign）。
+- 解除步骤（用户验收后执行，三条命令 + 三锚回填）：
+  1. `git add deploy/Dockerfile.dbtools deploy/check-image-pins.sh …`（本票全部变更）→ commit → push（或仅推送承载 Dockerfile 的提交）；
+  2. `gh workflow run dbtools.yml --repo fleetlyrun/fleetly --ref <branch> -f tag=v0.3.1-dbtools.1` → `gh run watch` 等完 → `gh run view --log | grep -i digest`（或 `docker buildx imagetools inspect ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1` 取多架构 index digest）；
+  3. 三锚回填：`internal/database/adapters.go` 的 `DefaultDatabaseToolsImage`、`e2e/databases.sh` 的 `DBTOOLS_IMG`、`docs/runbooks/image-prepull.md` 台账 #22 的 digest 列（cosign 签名由 workflow 自带 verify 门确认）。
+- 回填前语义：PG16 模板的 job 在旧镜像上仍全功能（显式 16 路径在旧镜像同样存在）；PG18 模板（DB-1 落条目后）的 job 会以「镜像缺该 major 工具面」显式失败（fail-loud）。
+
+staging/真机待执行项（本环境不可得者，未虚构）：
+
+- **多架构 arm64 运行腿**：本机 classic image store 对同 digest 换平台报 `cannot overwrite digest`（DB-1 审查同款限制），arm64 本地不可运行验证；缺口库闭包由 `COPY` 同源 + `/usr/lib/*-linux-gnu/` 通配按构造覆盖，**CI buildx 双平台构建**为第一道门（amd64 已实证；arm64 建议 staging/dind 按 digest 独立拉取复验）。
+- staging 真机复验建议：发布后对 `postgres-18` 实例跑一次 backup→verify→restore（DB-1 的矩阵承接），并观察 `db_backups.size_bytes` 是否为 0（存量缺陷现场确认）。
+- e2e `databases.sh`：DBTOOLS_IMG 随发布回填（三锚之一）；D 腿（PG16）预期零回归，DB-1 增设的 P 段（PG18 矩阵）承接新条目全链。

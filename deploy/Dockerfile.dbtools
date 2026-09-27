@@ -16,6 +16,23 @@
 #   - redis-cli 改从 debian 版 redis:7 拷入（与 dbtemplate.DefaultRedisImage
 #     同一钉定 digest）——musl 链接的 alpine redis-cli 在 glibc 基底不可运行；
 #     restic 为 Go 静态二进制，任意基底可运行（来源镜像不变）。
+#   - **PG 双大版本工具面（v0.3.x IMPL-DB-0，DB-1 前置）**：基底仍是
+#     postgres:16（16.15-trixie，与 dbtemplate.DefaultPostgresImage 同一
+#     钉定 digest），另从 postgres:18（DB-1 的 vanilla 引擎同 digest）COPY
+#     18 工具链到 **Debian 版本分区路径**（pgdg 布局天然按 major 分区，无
+#     share/prefix 冲突面）：
+#       /usr/lib/postgresql/18（bin + pkglib，与引擎镜像逐位同版）
+#       /usr/share/postgresql/18（share：conf/hba 样例、extension、tz 等）
+#       缺失 soname 补 /usr/local/dbtools-lib（libnuma.so.1/liburing.so.2——
+#       PG18 的 postgres 链接、基底实测缺；libpq.so.5 两镜像逐字节同源）。
+#     **工具面版本纪律：与实例数据目录同 major**——job 脚本按模板 Major 取
+#     /usr/lib/postgresql/<major>/bin 显式绝对路径（pg_dump 拒更高 major
+#     服务器、pg_restore 拒更高 major 归档、临时 postgres 拒异 major 数据
+#     目录；证据见 docs/plan/2026-09-26-torchwood-line-impl.md §4
+#     「IMPL-DB-0 方案可行性审查」）。**裸名不可用**：两代并存后 /usr/bin
+#     的 postgresql-common pg_wrapper 会把裸名 pg_dump/psql/pg_restore/
+#     pg_isready 解析为最新 major（实测 18）——显式路径是唯一确定性来源。
+#     （单镜像裁决与双镜像否定项的实测体积对比见同节审查记录。）
 #   - **mysql/mongo 工具面（v0.3 W4-S2，D-W4-3「临时 mysqld/mongod 须在
 #     dbtools 镜像内」的镜像裁决落地）**：从两引擎镜像同 digest COPY，与
 #     PG 基底选型同一条「与引擎逐位同版」原则——备份导出与恢复重放的工具
@@ -53,17 +70,20 @@
 #     mysql/mongo 工具面（mysqld 64MB + 私有库 30MB + mongo 全套）后
 #     ~1.08GB（docker images 本机实测，amd64 未压缩）——本镜像是**一次性
 #     job 执行体、非常驻**，按需拉取用后即删，预算口径明示可接受。
-#   - 工具面（引擎适配器的命令词表，internal/database S5/W4 消费）：
-#       pg_dump / pg_restore / psql / pg_isready / pg_ctl   （postgres:16
-#       基底自带，/usr/local/bin——与引擎镜像同源同版）
+#   - 工具面（引擎适配器的命令词表，internal/database S5/W4 消费；PG 按
+#     实例数据目录 major 显式选路径——见上「PG 双大版本工具面」）：
+#       pg_dump / pg_restore / psql / pg_isready / pg_ctl / postgres
+#                                    （/usr/lib/postgresql/16/bin 与
+#                                     /usr/lib/postgresql/18/bin，两代并存；
+#                                     postgres:16 基底自带 + postgres:18 COPY）
 #       redis-cli                     （/usr/local/bin/redis-cli）
 #       restic                        （/usr/bin/restic → /usr/local/bin）
 #       gosu                          （postgres 官方镜像自带——恢复重放的
 #       降权执行依赖，internal/database 恢复词表消费）
 #       mysqld / mysql / mysqldump / mysqladmin   （/usr/sbin、/usr/bin）
 #       mongod / mongosh / mongodump / mongorestore   （/usr/bin）
-#   - 多架构：五个 FROM 全为多架构 index（含新增 mysql:8.4/mongo:8.0——
-#     与台账 #19/#20 同 digest），COPY --from 按目标平台解析对应 manifest；
+#   - 多架构：六个 FROM 全为多架构 index（含新增 postgres:18——与 DB-1
+#     的 vanilla 引擎同 digest），COPY --from 按目标平台解析对应 manifest；
 #     缺口库源路径用 /usr/lib/*-linux-gnu/ 通配（amd64/arm64 双覆盖）——
 #     仍纯 COPY 无 RUN，无需 QEMU。
 #
@@ -78,11 +98,23 @@ FROM mysql:8.4@sha256:0744ee5ef89ce6ccfa13de3e579fe6b9e27f93dd70da9c06d2c908b1b1
 
 FROM mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2 AS mongo-engine
 
+# PG18 工具链来源（FROM stage 形态——引用落进 check-image-pins 扫描口径；
+# 与 DB-1 vanilla 引擎同 digest，逐位同版）。
+FROM postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 AS postgres-engine-18
+
 FROM postgres:16@sha256:a3b7f434b2dc57ce85a67e171163eb8ab1a1ebcb39d27484661f26b1dfbe30d6
 
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 
 COPY --from=redis /usr/local/bin/redis-cli /usr/local/bin/redis-cli
+
+# PG18 工具链（版本分区路径——见头注「PG 双大版本工具面」）。
+COPY --from=postgres-engine-18 /usr/lib/postgresql/18 /usr/lib/postgresql/18
+COPY --from=postgres-engine-18 /usr/share/postgresql/18 /usr/share/postgresql/18
+# 缺失 soname 补集（PG18 的 postgres 链接 libnuma/liburing；基底实测缺，
+# 落 /usr/local/dbtools-lib 随既有 LD_LIBRARY_PATH——无遮蔽面）。
+COPY --from=postgres-engine-18 /usr/lib/*-linux-gnu/libnuma.so.1 /usr/local/dbtools-lib/
+COPY --from=postgres-engine-18 /usr/lib/*-linux-gnu/liburing.so.2 /usr/local/dbtools-lib/
 
 # mysql 工具面（mysql:8.4 引擎同源——台账 #19 同 digest，逐位同版）。
 # mysqld 私有库随 /usr/lib64/mysql 原样落位（$ORIGIN/../lib64/mysql/private

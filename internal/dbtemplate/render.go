@@ -53,9 +53,17 @@ const (
 	pgUser           = "fleetly"
 	pgPasswordFile   = "/run/secrets/password"
 	pgSecretName     = "password"
-	pgDataSubdir     = "/var/lib/postgresql/data/pgdata"
 	redisPasswordEnv = "FLEETLY_DB_PASSWORD"
 )
+
+// pgDataDirectory 返回 PG 的 PGDATA（数据目录 = 挂载点 + pgdata 子目录
+// 约定，§2.2 卷行：官方镜像 initdb 在挂载点根目录会撞 lost+found，子目录
+// 是官方文档的规避形态）。由模板 VolumeMountPath 派生（IMPL-DB-0 参数化）：
+// PG16 现值 /var/lib/postgresql/data/pgdata 逐字不变；发行版按条目携带的
+// 原生挂载点自然成立（percona /data/db → /data/db/pgdata）。
+func pgDataDirectory(tpl Template) string {
+	return tpl.VolumeMountPath + "/pgdata"
+}
 
 // Render 渲染库实例的 Swarm 服务形态投影。网络 = 实例专属共享 overlay
 // （别名 = 实例名——防两个 PG 实例的通用别名 postgres 在共享网络互撞 DNS，
@@ -138,25 +146,26 @@ func Render(in RenderInput) (engine.ServiceSpec, error) {
 	return spec, nil
 }
 
-// renderEnv 组装引擎注入 env（调用方 sortEnv 排序）。PG：固定 USER、
-// DATABASE（实例名 '-'→'_'）、密码经 secret 文件、PGDATA 子目录约定；
-// Redis：健康门用的密码 env 引用源；MySQL/Mongo：官方入口 _FILE 变体消费
-// 同一 secret 文件（v0.3 W4 D-W4-1/2，设计 managed-databases §8.2 表）。
+// renderEnv 组装引擎注入 env（调用方 sortEnv 排序）。分派轴 = Engine（同族
+// 发行版/大版本共享——IMPL-DB-0）：PG：固定 USER、DATABASE（实例名 '-'→'_'）、
+// 密码经 secret 文件、PGDATA 子目录约定（挂载点派生）；Redis：健康门用的
+// 密码 env 引用源；MySQL/Mongo：官方入口 _FILE 变体消费同一 secret 文件
+// （v0.3 W4 D-W4-1/2，设计 managed-databases §8.2 表）。
 func renderEnv(tpl Template, in RenderInput) []string {
 	var env []string
-	switch tpl.ID {
-	case TemplatePostgres16:
+	switch tpl.Engine {
+	case EnginePostgres:
 		env = []string{
-			"PGDATA=" + pgDataSubdir,
+			"PGDATA=" + pgDataDirectory(tpl),
 			"POSTGRES_DB=" + DatabaseName(in.Instance),
 			"POSTGRES_PASSWORD_FILE=" + pgPasswordFile,
 			"POSTGRES_USER=" + pgUser,
 		}
-	case TemplateRedis7:
+	case EngineRedis:
 		env = []string{
 			redisPasswordEnv + "=" + in.Credentials.Password,
 		}
-	case TemplateMySQL84:
+	case EngineMySQL:
 		// 官方镜像凭据规格：USER/DATABASE 由实例名与模板确定性推导；
 		// MYSQL_ROOT_PASSWORD 与应用密码同值（root 不在投影/用户面暴露，
 		// 仅满足官方镜像 initdb 必填——轮换只动 fleetly@'%'）。
@@ -166,7 +175,7 @@ func renderEnv(tpl Template, in RenderInput) []string {
 			"MYSQL_ROOT_PASSWORD_FILE=" + pgPasswordFile,
 			"MYSQL_USER=" + pgUser,
 		}
-	case TemplateMongoDB80:
+	case EngineMongo:
 		// 官方入口把 initdb root 恒建于 admin 库；MONGO_INITDB_DATABASE
 		// 只声明 initdb 缺省库（库本体由首写惰性创建——MongoDB 语义）。
 		// 连接串投影因此带 ?authSource=admin（§8.1 实现注记）。
@@ -237,20 +246,20 @@ func ConnectionVars(templateID, instance, password string) (map[string]string, e
 		prefix + "_PORT":     fmt.Sprintf("%d", tpl.EnginePort),
 		prefix + "_PASSWORD": password,
 	}
-	switch tpl.ID {
-	case TemplatePostgres16:
+	switch tpl.Engine {
+	case EnginePostgres:
 		dbName := DatabaseName(instance)
 		out[prefix+"_URL"] = fmt.Sprintf("postgres://%s:%s@%s:%d/%s", pgUser, password, instance, tpl.EnginePort, dbName)
 		out[prefix+"_USER"] = pgUser
 		out[prefix+"_DATABASE"] = dbName
-	case TemplateRedis7:
+	case EngineRedis:
 		out[prefix+"_URL"] = fmt.Sprintf("redis://:%s@%s:%d/0", password, instance, tpl.EnginePort)
-	case TemplateMySQL84:
+	case EngineMySQL:
 		dbName := DatabaseName(instance)
 		out[prefix+"_URL"] = fmt.Sprintf("mysql://%s:%s@%s:%d/%s", pgUser, password, instance, tpl.EnginePort, dbName)
 		out[prefix+"_USER"] = pgUser
 		out[prefix+"_DATABASE"] = dbName
-	case TemplateMongoDB80:
+	case EngineMongo:
 		// ?authSource=admin：官方入口把 initdb root 恒建于 admin 库（镜像
 		// 入口脚本硬编码，8.0 无 MONGO_INITDB_ROOT_DATABASE），驱动缺省按
 		// URI path 库认证——无该参数认证必败（§8.1 实现注记）。
