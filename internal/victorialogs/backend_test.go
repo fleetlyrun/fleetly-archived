@@ -61,7 +61,7 @@ func TestBuildLogsQLInjectionNegative(t *testing.T) {
 		`*" OR "`,                // 通配 + 引号
 	}
 	for _, kw := range malicious {
-		q, err := BuildLogsQL(nil, nil, nil, kw)
+		q, err := BuildLogsQL(nil, nil, nil, nil, kw)
 		if err != nil {
 			t.Fatalf("BuildLogsQL(%q) unexpected error: %v", kw, err)
 		}
@@ -88,7 +88,7 @@ func TestBuildLogsQLInjectionNegative(t *testing.T) {
 	}
 	// 端到端核对：真机样本 keyword 的查询 = match-all 前缀 + 单一转义
 	// 短语（语义不逃逸的充分形态——VL v1.52 实测精确命中该消息）。
-	q, err := BuildLogsQL(nil, nil, nil, `a"b\c|d*e`)
+	q, err := BuildLogsQL(nil, nil, nil, nil, `a"b\c|d*e`)
 	if err != nil {
 		t.Fatalf("BuildLogsQL sample: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestBuildLogsQLInjectionNegative(t *testing.T) {
 
 // TestBuildLogsQLFilters 白名单与组合渲染。
 func TestBuildLogsQLFilters(t *testing.T) {
-	q, err := BuildLogsQL([]string{"demo", "shop"}, []string{"web"}, []string{"container"}, "boom")
+	q, err := BuildLogsQL([]string{"demo", "shop"}, []string{"web"}, []string{"container"}, nil, "boom")
 	if err != nil {
 		t.Fatalf("BuildLogsQL: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestBuildLogsQLFilters(t *testing.T) {
 		t.Fatalf("query = %q", q)
 	}
 	// 全空 = match-all（时间窗由 start/end 参数承载）。
-	if q, err := BuildLogsQL(nil, nil, nil, ""); err != nil || q != "*" {
+	if q, err := BuildLogsQL(nil, nil, nil, nil, ""); err != nil || q != "*" {
 		t.Fatalf("match-all query = %q err=%v, want *", q, err)
 	}
 	// 白名单负向：服务名/应用名/来源越界拒绝（ErrBadQuery 哨兵）。S2 起
@@ -120,12 +120,12 @@ func TestBuildLogsQLFilters(t *testing.T) {
 		{apps: []string{"ok"}, services: []string{"ok"}, sources: []string{"network"}},
 		{sources: []string{"container; drop"}},
 	} {
-		if _, err := BuildLogsQL(tc.apps, tc.services, tc.sources, ""); !errors.Is(err, ErrBadQuery) {
+		if _, err := BuildLogsQL(tc.apps, tc.services, tc.sources, nil, ""); !errors.Is(err, ErrBadQuery) {
 			t.Errorf("BuildLogsQL(%v,%v,%v) err = %v, want ErrBadQuery", tc.apps, tc.services, tc.sources, err)
 		}
 	}
 	// source=access 已入词表（W5-S2 访问日志采集同拍放行）。
-	q, err = BuildLogsQL([]string{"demo"}, nil, []string{"access"}, "")
+	q, err = BuildLogsQL([]string{"demo"}, nil, []string{"access"}, nil, "")
 	if err != nil {
 		t.Fatalf("BuildLogsQL access source: %v", err)
 	}

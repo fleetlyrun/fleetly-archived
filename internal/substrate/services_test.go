@@ -11,6 +11,56 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/engine"
 )
 
+// TestBuildSwarmSpecTaskHardeningMapping 断言任务加固字段的 swarm 翻译面
+// （DT-5 守卫①的底座层快照：CapDrop→CapabilityDrop、只读 rootfs→ReadOnly、
+// pids→Resources.Limits.Pids（swarm ContainerSpec 无该字段的真机落点）、
+// 非 root user、restart-condition none、Args 覆盖面）。
+func TestBuildSwarmSpecTaskHardeningMapping(t *testing.T) {
+	spec := engine.ServiceSpec{
+		Name:           "fleetly-task-01ABCDEFGHJKMNPQRSTVWXYZ0",
+		Image:          "alpine:3.19@sha256:deadbeef",
+		Args:           []string{"sleep", "60"},
+		User:           "65534:65534",
+		ReadOnlyRootfs: true,
+		CapDrop:        []string{"ALL"},
+		PidsLimit:      512,
+		Replicas:       1,
+		Networks:       []engine.NetworkAttach{{Name: "fleetly-taskgroup-tenant1"}},
+		RestartPolicy:  &engine.RestartPolicySpec{Condition: "none"},
+		Resources:      &engine.ResourcesSpec{NanoCPUs: 500_000_000, MemoryBytes: 128 << 20},
+	}
+	sw, err := buildSwarmSpec(spec, nil, nil)
+	if err != nil {
+		t.Fatalf("buildSwarmSpec: %v", err)
+	}
+	cs := sw.TaskTemplate.ContainerSpec
+	if cs == nil {
+		t.Fatal("container spec missing")
+	}
+	if cs.User != "65534:65534" {
+		t.Errorf("User = %q, want 65534:65534 (non-root is server-enforced)", cs.User)
+	}
+	if !cs.ReadOnly {
+		t.Error("ReadOnly = false, want true (read-only rootfs is server-enforced)")
+	}
+	if len(cs.CapabilityDrop) != 1 || cs.CapabilityDrop[0] != "ALL" {
+		t.Errorf("CapabilityDrop = %v, want [ALL]", cs.CapabilityDrop)
+	}
+	if cs.Args == nil || len(cs.Args) != 2 || cs.Args[0] != "sleep" {
+		t.Errorf("Args = %v, want [sleep 60]", cs.Args)
+	}
+	if sw.TaskTemplate.Resources == nil || sw.TaskTemplate.Resources.Limits == nil ||
+		sw.TaskTemplate.Resources.Limits.Pids != 512 {
+		t.Errorf("Resources.Limits = %+v, want Pids=512", sw.TaskTemplate.Resources)
+	}
+	if rp := sw.TaskTemplate.RestartPolicy; rp == nil || string(rp.Condition) != "none" {
+		t.Errorf("RestartPolicy = %+v, want condition=none", rp)
+	}
+	if len(sw.TaskTemplate.Networks) != 1 || sw.TaskTemplate.Networks[0].Target != "fleetly-taskgroup-tenant1" {
+		t.Errorf("Networks = %+v, want the single scope network (join by name, no attach inputs)", sw.TaskTemplate.Networks)
+	}
+}
+
 func TestBuildSwarmSpecManagedFields(t *testing.T) {
 	spec := engine.ServiceSpec{
 		Name:              "fleetly-demo-web",

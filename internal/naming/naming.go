@@ -43,6 +43,11 @@ import (
 //	               网络名结构不相交）
 //	项目网别名     <app>-<service>                 （仅项目网；短名别名
 //	               <service> 仅在 app 专属网——OT-1 别名隔离）
+//	任务服务名     fleetly-task-<taskID>            （DT-5 程序化动态工作负载：
+//	               稳定 DNS 名 = 服务名；taskID = 任务平台 ULID 全量）
+//	task-group 网名 fleetly-taskgroup-<ref>         （DT-5 长活共享作用域；
+//	               ref = 调用方 slug [a-z0-9]{2,32}，不含 '-'——与三段 app
+//	               网名结构不相交）
 //	日志流标签 app 值  <team>/<prj>/<app>（三段限定形，QualifiedName）
 const (
 	// namePrefix 是全部平台对象名的公共前缀（防集群全局命名空间撞名）。
@@ -261,6 +266,95 @@ func ProjectNetworkAlias(app, service string) (string, error) {
 		return "", err
 	}
 	return app + "-" + service, nil
+}
+
+// taskNamePrefix / taskGroupNetworkPrefix 是程序化动态工作负载（T 线 DT-5）
+// 的命名族：任务服务名 `fleetly-task-<taskID>`（taskID = 任务平台 ULID 全量），
+// task-group 网络名 `fleetly-taskgroup-<ref>`（ref = 调用方 slug）。两族与既有
+// 前缀族结构不相交的论证：
+//   - task 前缀族 vs 三段 app 服务名/网络名（team slug="task" 时
+//     `fleetly-task-<prj>-<app>-…` 含小写与 '-'）——taskID 是 26 位 Crockford
+//     大写 ULID，字符集不相交（IsTaskServiceName 以 ULID 形态校验尾段）；
+//   - taskgroup 前缀族 vs 三段 app 网名（team slug="taskgroup" 时
+//     `fleetly-taskgroup-<prj>-<app>-net`）——ref 禁止 '-'（[a-z0-9]{2,32}），
+//     结构不相交；
+//   - 与 cron/init/db/dbjob 前缀族首段不同，天然不相交。
+//
+// 任务服务是瞬时/半瞬时对象（TTL 回收），识别谓词同时服务对账豁免、日志
+// 归因与孤儿 task 清扫（IsCronJobName 同款纪律）。
+const (
+	taskNamePrefix         = namePrefix + "task-"
+	taskGroupNetworkPrefix = namePrefix + "taskgroup-"
+)
+
+// TaskServiceName 返回任务承载的 Swarm 服务名 `fleetly-task-<taskID>`
+// （DT-5：稳定 DNS 名 = 服务名，任务实例免 inspect 寻址）。
+func TaskServiceName(taskID string) (string, error) {
+	if err := validateResourceID("task", taskID); err != nil {
+		return "", err
+	}
+	return taskNamePrefix + taskID, nil
+}
+
+// IsTaskServiceName 报告 Swarm 服务名是否为任务服务（前缀 + 全量 ULID 尾段
+// 形态——前缀族识别谓词，IsProjectNetworkName 同款纪律）。
+func IsTaskServiceName(name string) bool {
+	rest, ok := strings.CutPrefix(name, taskNamePrefix)
+	if !ok || rest == "" {
+		return false
+	}
+	return validateResourceID("task", rest) == nil
+}
+
+// TaskGroupNetworkName 返回 task-group 网络名 `fleetly-taskgroup-<ref>`
+// （DT-5：task-group 网长活，经幂等 EnsureTaskNetwork 创建；任务只按名加入）。
+func TaskGroupNetworkName(ref string) (string, error) {
+	if err := ValidateTaskGroupRef(ref); err != nil {
+		return "", err
+	}
+	return taskGroupNetworkPrefix + ref, nil
+}
+
+// IsTaskGroupNetworkName 报告网络名是否为 task-group 网络（前缀 + 合法 ref
+// 尾段；前缀族识别谓词）。
+func IsTaskGroupNetworkName(name string) bool {
+	rest, ok := strings.CutPrefix(name, taskGroupNetworkPrefix)
+	if !ok || rest == "" {
+		return false
+	}
+	return ValidateTaskGroupRef(rest) == nil
+}
+
+// ValidateTaskGroupRef 校验 task-group ref：小写字母数字 2-32 位、不含 '-'
+// （与三段 app 网名结构不相交的前提；见前缀族注）。
+func ValidateTaskGroupRef(ref string) error {
+	if len(ref) < 2 || len(ref) > 32 {
+		return fmt.Errorf("naming: task-group ref %q must be 2-32 characters", ref)
+	}
+	for _, r := range ref {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return fmt.Errorf("naming: task-group ref %q contains character %q outside [a-z0-9]", ref, r)
+		}
+	}
+	return nil
+}
+
+// validateResourceID 校验平台 ULID 形态（26 位 Crockford 大写字母+数字；
+// validateProjectID 的泛化形——任务/项目同用平台主键口径）。
+func validateResourceID(field, id string) error {
+	if id == "" {
+		return fmt.Errorf("naming: %s id is empty", field)
+	}
+	if len(id) != 26 {
+		return fmt.Errorf("naming: %s id %q must be a 26-char ULID", field, id)
+	}
+	for _, r := range id {
+		isCrockford := (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z')
+		if !isCrockford {
+			return fmt.Errorf("naming: %s id %q contains character %q outside the Crockford alphabet", field, id, r)
+		}
+	}
+	return nil
 }
 
 // cronJobNamePrefix 是一次性 cron job 服务名的固定前缀（E5 Cron）：完整名
@@ -550,6 +644,11 @@ var reservedTeamSlugReasons = map[string]string{
 	"acme":         "collides with the ACME challenge router/service key fleetly-acme-challenge",
 	"metrics":      "collides with the managed metrics overlay network fleetly-metrics-net",
 	"victorialogs": "collides with the managed VictoriaLogs overlay network fleetly-victorialogs-net",
+	// taskgroup（T 线 DT-5 / IMPL-T2-1）：team slug=taskgroup 时 app 网名
+	// `fleetly-taskgroup-<prj>-<app>-net` 落进 task-group 网络前缀族空间。
+	// task-group ref 禁止 '-'（naming.ValidateTaskGroupRef），两族结构本不
+	// 相交——本保留字是纵深防御（防未来 ref 字符集放宽时静默合并）。
+	"taskgroup": "collides with the task-group network prefix family fleetly-taskgroup-<ref> (DT-5 dynamic workloads)",
 }
 
 // IsReservedTeamSlug 报告 team slug 是否与平台组件命名空间撞键（团队受理

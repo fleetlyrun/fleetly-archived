@@ -1214,3 +1214,215 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 - 回填前语义：vanilla 16/18 与 mysql/mongo/redis 面在旧镜像上全功能；percona-postgresql-18 条目的 job 以「镜像缺该发行版工具面」fail-loud（restore 首步缺面前置；backup/verify 亦会因路径不存在退败）。
 
 **发布完成（2026-09-27，本会话执行——挂账解除）**：本票提交推送（`0bf5019`）后 dispatch `dbtools.yml`（run **36312138248**，tag `v0.3.1-dbtools.2`，conclusion=success，cosign 签名 + 验签门随工作流）；多架构 index digest = `sha256:b57a5cfc…ac2d`（`docker buildx imagetools inspect` 实测；amd64 manifest `b6f9ce6a…`、arm64 `c9f37525…`）；发布产物按 digest 拉取实证三面（percona 18.6.1 + `vector.control`、vanilla 16.15/18.6）+ 真机探针三腿 PASS（含 pgvector 回读；本会话复跑）。三锚已回填：`DefaultDatabaseToolsImage`、e2e `DBTOOLS_IMG`、台账 #25。
+
+### IMPL-T2-1 方案可行性审查（2026-09-27，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 「控制面服务每网一次性挂靠」按平台既有纪律裁决为**经发布管线重部署**（成员声明落 state，planner 投影双挂；不是直改 app 服务 spec 的第二写通道——理由见设计点 2）。票面「Console 后置 backlog」照办（本票零 console 改动，仅 `pnpm gen:api` 再生成类型）。
+
+#### A. 前置依赖核查（T15-1 可复用面逐处取证）
+
+- **网络对象端口**：`engine.NetworkSubstrate`（`ports.go:303-314`，ensureWithLabels/list/inspect/remove 四原语）+ 实现 `substrate/networks.go`（NetworkEnsureWithLabels 幂等：已存在即成功、创建竞态已存在即成功；NetworkList 按 label 过滤；NetworkInspect 归一 `ErrNetworkNotFound`）✓——本票新增 `NetworkEnsureWithOptions(name, labels, internal)` 与 `NetworkState.Internal` 读面（internal 变体的判据与错配拒绝）。
+- **项目网机器**：`engine.EnsureProjectNetwork`（幂等 ensure + 自描述 label）与 `engine.EnqueueNetworkRedeploy`（「最近 succeeded 部署」重部署原语，无成功史返回 `ErrNoRedeploySource`）——task-group 网络与成员挂靠**逐字复用**这两条腿（同一发布管线，不新造写通道）✓。
+- **命名族与保留前缀**：`naming.PlatformPrefix` / `IsCronJobName` / `IsInitJobName` / `IsDBJobName` / `IsProjectNetworkName`（形态校验谓词族）✓；本票新增 `IsTaskServiceName`（前缀 + 26 位 Crockford ULID 尾段）与 `IsTaskGroupNetworkName`（前缀 + 无 '-' ref），并把 `taskgroup` 加入 team slug 保留清单（纵深防御）。
+- **recon 扩面模式**：`engine.substrateRecon`（30s 频控 + `substrateNextAt`）→ `reconNetworks`（瞬态读错不结论、按名节流 seen 记忆、披露 + 修正口径）✓；本票 tasks 面照此（`reconTasks` 同拍、同纪律；孤儿 task 归属明确 → 披露 + 回收）。
+- **janitor/recon/duty 模式**：engine tick 的 `safeCall` 清单（`safecall_test.go` 源扫描断言）+ 时间闸字段模式（`substrateNextAt`/`projectNetNextAt`）✓；state janitor（`state/janitor.go` PruneOnce 顺序 duties）✓——本票 tick 增 `reapExpiredTasks`/`advanceTasks` 两 duty（每拍，无时间闸：任务生命周期秒级）与 state janitor 的终态台账 30 天保留回收。
+- **机具令牌/scope 机制**：`state.Token`（user_id NULL = 机具令牌）、`api.Authenticator.containsScope`（read ⊂ deploy ⊂ admin ⊕ terminal）、`methodScopes` 未登记即 admin fail-closed、`cmd/fleetly tokens create --scopes`（原型 `in: [...]`）✓——本票增独立 `ScopeTasks`（与 terminal 同族：read/deploy 不蕴含、admin 蕴含），`CreateTokenRequest.scopes` 白名单加 `tasks`（加法），令牌创建面用户可达集不含 tasks（`reachableScopesForUser` 未扩——会话凭据进不来，显式授予 tasks 的用户 PAT 等价机具令牌）。
+- **日志归因挂点**：`logs.Port.JobServiceStates`（T1-3 服务发现族）+ `jobServiceRefOf`（label 权威归属）+ `victorialogs` 入湖流字段（`_stream_fields=app,service,source`）✓——本票增 `Port.TaskServiceStates`（无 app 归属的独立发现面）、`Entry.Task`、入湖 `_stream_fields` 加 `task`、SearchLogs 增 `tasks` 选择器（`BuildLogsQL` 增 task 白名单校验）。
+- **`buildSwarmSpec` 加固字段支持面**：**缺**——现行映射只有 Command/Env/StopSignal/Healthcheck/Mounts/Secrets/Configs/Networks/Placement/Resources/RestartPolicy（`substrate/services.go:166-298`），没有 User/只读 rootfs/能力剥夺/pids。本票补：`engine.ServiceSpec` 加 `Args/User/ReadOnlyRootfs/CapDrop/PidsLimit` 五人读字段 + 适配器映射与 `serviceToState` 反解（记录见实施记录；drift 投影不扩——app 服务不设这些位，扩了会平移既有哈希）。
+- **T2-0① 结论**：internal overlay 无默认路由/无 gwbridge/公网 DNS+TCP+HTTP 全 fail、对等与跨节点数据面正常（报告 §1，单节点矩阵 + 双 dind 跨节点腿）；nft 兜底未触发 ⇒ **internal 变体可承载不可信函数**，本票 task-group internal 直接落 `--internal`。
+- **T2-0③ 参数建议**：janitor 扫描 30s 量级、TTL 下限 ≥1min、默认 5-15min、显式钉 `stop_grace_period`（建议 2-10s）⇒ 本票默认 TTL **600s**、下限 60s/上限 24h、`stop_grace_period` 钉 **5s**、TTL 回收走每拍（2s tick）而非 30s 闸。
+
+#### B. 现状机制核实（逐项取证）
+
+1. **scope 门与拦截器**：`api/auth.go` `UnaryAuthInterceptor` 先查 `methodScopes`，未登记按 admin 拒绝（fail-closed）；`scopeSetToList`/`containsScope` 是词表唯一判定点 ⇒ 新 scope 必须三处同步（常量、containsScope 分支、登记表）。本票落实，并在 api 测试钉死「read/deploy 不蕴含 tasks、admin 蕴含」。
+2. **配额执行点的原子性**：SQLite 单写点 + `InTx`（BEGIN IMMEDIATE）⇒ 「清点非终态行 + 插入」同事务可消除竞态窗；`tokRowCols` 纪律（gosec G101 命名规避）与本票的 `taskRowCols` 同款。
+3. **任务 env 的密文纪律**：app env 先例 = 明文只存在于「API/引擎解密 → spec」内存链、库内恒 envelope 密文（`secrets.Box`）⇒ 任务 env 逐字同款（`tasks.env_cipher`；引擎收敛时解密）。
+4. **`restart-condition none` 的 swarm 形态**：`swarm.RestartPolicy{Condition: RestartPolicyConditionNone}`（现有 buildSwarmSpec 对 Job 已用）✓；`ContainerSpec.Args` / `User` / `ReadOnly` / `CapabilityDrop` 存在，**pids 限额不在 ContainerSpec**——在 `TaskTemplate.Resources.Limits.Pids`（`moby/api@v1.56.0 types/swarm/task.go:109`；等价 `docker service create --limit-pids`）⇒ 本票按该落点映射（真机回读实证见实施记录）。
+5. **`NetworkState.Internal` 与错配拒绝**：`network inspect` 的 `Internal` 字段可用（真机实证 internal=true 读回）⇒ ensure 幂等语义必须校验变体一致（已存在非 internal 网请求 internal → 显式失败，不静默接受）。
+6. **孤儿识别用 label 而非前缀猜测**：任务服务带 `fleetly.task-id` / `fleetly.task-owner` / `fleetly.tasks` 自描述 label（前缀族 `fleetly-task-` 只是二次校验）⇒ 对账归因不靠字符串反解（服务名含 '-' 时歧义，`jobServiceRefOf` 同款结论）。
+7. **logs `Port` 与 VL 流字段**：`Port` 是接口，新增方法会波及测试替身（apitest `fakeLogPort` + logs 包 `fakePort`）——本票同步扩（两个替身各 +1 方法）；`_stream_fields` 是 `spec.go` 单常量（VL 流粒度唯一真源），加 `task` 后非任务行 `task` 空串 → 独立流标签组合，无跨流混淆。
+
+#### C. 五个设计点的裁决（给证据）
+
+1. **scope 引用模型 = `{kind: app|project|task-group, ref, internal}`，网络映射**：
+   - `app` → `fleetly-<team>-<prj>-<app>-net`（ref：裸名/限定形，经 `GetAppByName` 解析）；
+   - `project` → `fleetly-project-<projectID>`（ref：项目 ID 或 `team/prj` 限定形，经 `GetProject`/`GetTeamBySlug`+项目列表解析）；
+   - `task-group` → `fleetly-taskgroup-<ref>`（ref：`[a-z0-9]{2,32}` 无 '-'，结构上与三段网名不相交）。
+   - **internal 支持矩阵**：只对 `task-group` 支持（DT-7 不可信隔离面）；`app`/`project` 带 `internal=true` **fail-closed 拒绝**（`E_TASK_UNSUPPORTED`，文案点名理由——app/project 网承载自身出网，转 internal 会切断其正常出口，不可静默降级）；已存在网的 internal 与请求不一致同样拒绝（错变体不可静默接受）。
+   - **任务只按名加入既有网**：CreateTask 前置 `NetworkInspect`——缺失即 `E_TASK_UNSUPPORTED`（不代建）；tasks.v1 请求面**不存在 attach 入参**（类型层不可表示，守卫⑤；`TaskScope` 只是网络引用）。app 网/project 网由既有机制创建（部署 / 项目网 attach），task-group 网由 `EnsureTaskNetwork` 创建。
+2. **EnsureNetwork 语义 = task-group 网长活 + 幂等 + 自描述 label + 控制面一次性挂靠（经发布管线）**：
+   - 长活：创建后**不随任务回收**，也不进 tasks 对账的孤儿判定（`fleetly.task-group` label = 归属锚；孤儿判定跳过——与项目网同款「归属明确不误删」口径）。
+   - 幂等：`NetworkEnsureWithOptions`（已存在 + 变体一致即成功；创建竞态已存在即成功）；label = `managed=true` + `fleetly.task-group=<ref>` +（internal 时）`fleetly.network-internal=true`。
+   - **控制面挂靠的落地形态（裁决）**：`EnsureTaskNetworkRequest.members[{app, service}]` → state `task_network_members`（主键 (ref, app_id, service) = 防重复）→ **新成员入队该 app 的发布管线重部署**（复用 `EnqueueNetworkRedeploy`；无成功部署史 = `ErrNoRedeploySource` → 状态 `pending`，下次发布生效）。**为什么不直改 spec**：app 服务的唯一写通道是发布管线（IMPL-T15-1 审查记录 E.1 已冻结「直改 spec 与快照比对成漂移且需第二写通道」）；DT-5 的「一次 service update，摊销在项目创建时刻」在平台纪律内的等价形态 = **一次重部署**（applyDesired 对成员服务各一次 ServiceUpdate），幂等键 = state 声明，重复调用零新增。在途部署 409 拒绝（旧快照不得覆盖在途发布，与项目网 attach 同门）。
+   - 语义代价如实披露：挂靠生效依赖成员 app 下一次发布；成员 app 无部署史时只有声明（`pending`），不做越权直写。
+3. **任务镜像来源 = digest 引用与 tag 引用两态，统一经平台解析腿钉定**：`ResolveTaskImage` 走 `engine.images.ImageDigest`（IMPL-T1-2 冻结次序：平台 zot 前哨 → digest 直通 → tag registry-first + 平台凭证 + airgap 本机回落）；CreateTask 内钉成 `repo@sha256:…` 落库，失败 `E_IMAGE_PULL_FAILED` fail-closed（不落行、不进收敛队列）。T2-2 的 build API 产物（digest 引用）同路径直通——两支无需分叉。
+4. **配额模型 = 每令牌 `task_quotas` 行覆盖 + 平台默认常量（并发/CPU 合计/内存合计），执行点 = CreateTask 同事务 fail-closed**：默认 `max_concurrent=16` / `8000m` / `8GiB`；请求面单片上限 `cpu≤4000m`、`memory≤4GiB`；`E_TASK_QUOTA_EXCEEDED`（429）。**设置面裁决**：本票只落 state 原语（`LoadTaskQuota`/`SaveTaskQuota`）+ 默认常量；CLI/Console 配额设置面挂 backlog（票面 CLI 动词清单只有 run/ls/rm/logs；配额行由测试与后续设置票写入）——登记为偏离 3。
+5. **TTL 与回收 = 可选字段（下限 60s / 上限 24h / 缺省 600s）+ 每拍 janitor 回收 + 事件；孤儿双向口径**：
+   - 到期（queued/running 且 `expires_at ≤ now`）→ `stopping` + `task.expired` 事件 + 审计 → 同一/下一拍移除底座服务 → `stopped`（`stop_reason=expired`）。
+   - 孤儿（swarm→state）：带任务 label + 前缀族的服务无对应非终态行（或行已终态）→ `task.orphaned` 事件 + 审计 + **回收该服务**（归属明确的平台对象，派生修正；与项目网「无法归因只披露」的差别在于任务服务带自描述 label）。
+   - 反向（state→swarm）：非终态行而服务缺失 → 收敛 duty 幂等重建（`ServiceCreate`）；容器任务 failed/rejected → `failed` 终态 + `task.failed`（restart:none 上抛；平台不静默自愈）。
+   - 读错不结论（瞬态）、持续形态按服务名节流（seen 记忆）。
+
+#### D. 补充前提（本票实现依据）
+
+- 事件注册表只增（95 个；golden 显式再生成）；错误码只增（`E_TASK_UNSUPPORTED` 400 / `E_TASK_QUOTA_EXCEEDED` 429；golden + 计数断言同步）。
+- proto 无破坏性变更：新服务 `TasksService` + 新文件；`logs.proto` 只做放宽（`SearchLogsRequest.app` 去掉 `min_len`——任务日志面 app 可空）+ 加法字段（`tasks` / `SearchLogRow.task`）。**无既有字段删改**。
+- 任务日志仅 VL 后端采集（jsonl 形态无任务检索面——落盘面按 app 分文件，任务无 app 归属）：诚实边界写进 proto 注释、CLI 帮助与实施记录。
+- 生成物纪律：`buf generate`（proto）、`go generate ./...`（wire）、`pnpm gen:api`（console 类型）三步显式再生成；golden 三处（events/errcode/migrations）显式再生成。
+
+### IMPL-T2-1 实施记录（2026-09-27，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。六条守卫逐条落回归；本机 swarm 真机探针（hardening + internal 出网）原始输出见下；全量测试/race/vet/生成物幂等证据见下。**
+
+变更文件清单（每文件一句）：
+
+- `proto/fleetly/server/v1/tasks.proto`（新）：TasksService 六 RPC（EnsureTaskNetwork/CreateTask/GetTask/ListTasks/StopTask/DeleteTask）+ TaskScope/TaskView/成员状态消息；**请求面零 attach 入参、零加固字段**（结构性禁令与安全默认在注释里明示）。
+- `genproto/fleetly/server/v1/tasks.{pb.go,pb.gw.go,grpc.pb.go,swagger.json}`（新）：buf generate 生成物。
+- `proto/fleetly/server/v1/tokens.proto` + `genproto/…/tokens.*`：`CreateTokenRequest.scopes` 白名单加 `tasks`（加法；枚举校验面），注释同步。
+- `proto/fleetly/server/v1/logs.proto` + `genproto/…/logs.*`：SearchLogsRequest 增 `tasks` 选择器（app 放宽为可空——任务日志面）、SearchLogRow 增 `task`。（加法/放宽，无破坏性变更。）
+- `internal/state/migrations/00026_tasks.sql`（新）：tasks / task_network_members / task_quotas 三表 + 索引；Down 演练。
+- `internal/state/testdata/migrations.golden`：00026 行显式再生成（`UPDATE_GOLDEN=1`）。
+- `internal/state/tasks.go`（新）：任务台账原语（CreateTask 同事务配额核对、状态机 CAS 转移、到期扫描、墓碑删除、终态保留期回收）+ 配额读写 + 挂靠声明 upsert/投影；事件/审计同事务 fail-closed。
+- `internal/state/tasks_test.go`（新）：配额 fail-closed（并发/CPU/内存）、状态机与事件序列、越权列表隔离、挂靠幂等、终态保留回收。
+- `internal/state/janitor.go`：JanitorConfig 增 `TaskRetentionDays`（缺省 30）+ PruneOnce 任务终态台账回收 duty。
+- `internal/state/labels.go`：`LabelTaskGroup`/`LabelNetworkInternal`/`LabelTasks`/`LabelTaskID`/`LabelTaskOwner`/`LabelTaskTTL` 六 label 登记。
+- `internal/naming/naming.go`：`TaskServiceName`/`IsTaskServiceName`/`TaskGroupNetworkName`/`IsTaskGroupNetworkName`/`ValidateTaskGroupRef` + `validateResourceID` 泛化 + 公式表两行 + 保留 slug `taskgroup`（纵深防御论证）。
+- `internal/naming/naming_task_test.go`（新）：两族公式/形态/前缀族不与三段网名相撞（team slug 最凶形态实证）。
+- `internal/naming/naming_test.go`：保留清单断言增 `taskgroup`。
+- `internal/engine/ports.go`：ServiceSpec 增 `Args/User/ReadOnlyRootfs/CapDrop/PidsLimit`（平台加固字段面）；ServiceState 与 `serviceSpecOf` 同步反解；NetworkState 增 `Internal`；NetworkSubstrate 增 `NetworkEnsureWithOptions`。
+- `internal/engine/tasks.go`（新）：作用域解析（含 internal 支持矩阵与在位核验）、镜像钉定、EnsureTaskNetwork（长活网 + 成员声明 + 重部署入队）、TTL 回收 duty、收敛 duty（create/update/remove/失败检测）、tasks 对账 duty（孤儿披露 + 回收）、任务服务 spec 组装（加固 + owner/TTL label + 按名加入网络）与投影读取。
+- `internal/engine/tasks_test.go`（新）：守卫①（spec 加固快照）、守卫③（TTL 回收链）、守卫⑥（孤儿披露 + 回收 + 节流 + 不误伤）、作用域矩阵、镜像钉定、挂靠投影与幂等。
+- `internal/engine/engine.go`：`taskOrphanSeen` 状态 + tick 增 `reapExpiredTasks`/`advanceTasks` 两 duty + planAndRelease 传 `TaskNetworks` 投影。
+- `internal/engine/planner.go`：PlanInput 增 `TaskNetworks`（服务名 → 网络集，去重防撞）与 buildServiceSpec 的 task-group 双挂投影（别名 = `<app>-<service>`）。
+- `internal/engine/substrate.go`：substrateRecon 同拍调 `reconTasks`。
+- `internal/engine/safecall_test.go`：tick duty 清单扩两条（源扫描一致面）。
+- `internal/engine/fakes_test.go`：假网络面扩 internal 变体（`NetworkEnsureWithOptions` + inspect 投影；错配显式失败）。
+- `internal/substrate/services.go`：buildSwarmSpec 加固映射（Args/User→`ContainerSpec.User`/`ReadOnly`/`CapabilityDrop`/`Resources.Limits.Pids`）+ `serviceToState` 反解。
+- `internal/substrate/networks.go`：`NetworkEnsureWithOptions`（internal 创建 + 变体错配拒绝）+ `NetworkState.Internal` 投影。
+- `internal/substrate/services_test.go`：加固字段的 swarm 翻译快照断言（守卫①底座层）。
+- `internal/substrate/tasks_manual_test.go`（新，默认不跑）：本机真机探针（internal 网、加固回读、出网封死）。
+- `internal/api/tasks.go`（新）：TasksService 六 handler（受理/视图/停止/删除 + task-group ensure）、`TasksOrchestrator` 端口、TTL/资源/env 校验、配额与镜像 fail-closed、跨令牌隔离（owner_token_id，越权恒 404）、env 加密落库与 Get 回显。
+- `internal/api/tasks_test.go`（新）：守卫②（配额 429 信封）、守卫④（跨令牌 Get/Stop/Delete 404 + scope 门）、守卫⑤（描述符扫描 + 网络面字段集断言）、scope 登记、TTL/资源/保留前缀校验、env 密文与列表面零 env、挂靠成员与在途 409。
+- `internal/api/scope.go`：TasksService 六 RPC 登记 `ScopeTasks`（独立 scope；注释给理由）。
+- `internal/api/auth.go`：`ScopeTasks` 常量 + containsScope 分支 + `scopeSetToList` 词表。
+- `internal/api/logs.go`：SearchLogs 增 tasks 选择器（全局凭据 + tasks 非空时 app 可空）+ 行级 task 投影。
+- `internal/logs/logs.go` / `manager.go`：`Entry.Task`、`Port.TaskServiceStates`、任务流采集（独立发现面 + 独立游标族 + 仅 VL 采集 + 游标回收）。
+- `internal/logs/tasklogs_test.go`（新）：任务日志入湖以 task 归因（app/service 空）、jsonl 形态不采集、游标回收。
+- `internal/logs/logs_test.go`：假端口扩 TaskServiceStates（底座暂态注入面）。
+- `internal/victorialogs/backend.go` / `spec.go`：入湖行 `task` 字段、`_stream_fields` 加 `task`、SearchQuery.Tasks + task 流过滤 + `LogRow.Task` + ULID 白名单校验。
+- `internal/victorialogs/taskfilter_test.go`（新）：task 过滤器渲染与注入负路径。
+- `internal/victorialogs/backend_test.go`：BuildLogsQL 调用面随签名扩展（本票改动）。
+- `internal/substrate/logs.go`：`TaskServiceStates`（任务服务发现，label + 前缀族双条件）。
+- `internal/eventcode/events.go` / `eventcode_test.go` / `testdata/events.golden`：7 个 task.* 事件登记（95 个；golden 显式再生成、文档清单同步）。
+- `internal/errcode/codes.go` / `errcode_test.go` / `testdata/codes.golden`：`E_TASK_UNSUPPORTED`（400）/`E_TASK_QUOTA_EXCEEDED`（429）登记 + 计数断言 82/5 + golden 显式再生成。
+- `internal/apitest/apitest.go`：TasksService 装配确定性假编排端口（CLI/集成测试同路径）+ 日志假端口扩任务面。
+- `internal/runtime/provides.go` / `wire_gen.go` / `grpc.go`：`NewTasksService` 提供者（engine 实现编排端口）+ gRPC 注册 + wire 再生成。
+- `sdk/go/fleetly/client.go`：`Tasks()` 访问器（CLI 消费面）。
+- `cmd/fleetly/cmd/tasks.go`（新）：`fleetly tasks run/ls/stop/rm/logs` + `tasks network ensure`（沿仓库 CLI 惯例；logs 复用检索面并诚实报后端不可用）。
+- `cmd/fleetly/cmd/tasks_test.go`（新）+ `app.go` 注册：CLI 全链回归与用法错误（64）。
+- `console/src/api/schema.d.ts`：`pnpm gen:api` 从新 swagger 再生成（tasks.* 类型；UI 零改动——票面 Console 后置 backlog）。
+- `docs/runbooks/dynamic-tasks.md`（新）：任务面运维手册（语义/参数/操作/回收对账/已知边界/真机探针复跑）。
+- `docs/plan/2026-09-26-torchwood-line-impl.md`：本两小节（审查 + 实施记录）。
+
+测试清单与票面六条守卫 + 设计点逐条对应表：
+
+| 条款 | 回归测试（新增，除注明外） |
+|---|---|
+| ① hardening 默认落 service spec（spec 快照断言） | `TestTaskConvergenceAppliesServerEnforcedHardening`（引擎产出的 ServiceSpec：User=65534:65534 / ReadOnlyRootfs / CapDrop=[ALL] / PidsLimit=512 / restart=none / stop_grace=5s / 资源 / owner+TTL label / 单网按名加入）`TestBuildSwarmSpecTaskHardeningMapping`（swarm 翻译层：`ContainerSpec.User/ReadOnly/CapabilityDrop` + `Resources.Limits.Pids`——pids 无 ContainerSpec 字段的真机落点）；真机 `TestManualTaskHardening` 原样回读 |
+| ② 配额超限（并发/资源）fail-closed 拒绝 | `TestCreateTaskQuotaFailClosed`（state：并发上限、CPU 合计、放行边界）`TestTaskQuotaOverridesAndValidation`（覆盖行生效 + 零值拒绝）`TestTasksQuotaFailClosed`（API：429 + `E_TASK_QUOTA_EXCEEDED` 信封） |
+| ③ TTL 到期 janitor 回收 + 事件 | `TestTaskTTLReclaimStopsAndRemovesService`（未到期不动 → 到期 `stopping` + `task.expired` → 下一拍服务移除 + `stopped`）；`TestExpiredTasksAndTerminalPrune`（扫描窗口 + 台账保留回收） |
+| ④ 跨 scope 越权（他令牌的 task）拒绝 | `TestTasksCreateListStopDeleteFlowAndCrossTokenIsolation`（B 令牌 Get/Stop/Delete 恒 404、列表零行；read scope 令牌在 scope 门 403）`TestTaskFailureAndCrossOwnerIsolation`（state 列表按属主过滤） |
+| ⑤ **API 面无 attach 入参（类型层不可表示）** | `TestTasksRequestSurfaceHasNoAttachOrHardeningInputs`（描述符扫描：CreateTaskRequest/TaskScope 无 attach/network/cap/privileged/read_only/pids/user/rootfs/restart 字段；EnsureTaskNetworkRequest 字段恰 `[ref internal members]`）；proto 面据此只有网络**引用** |
+| ⑥ networks/tasks 对账含 task（孤儿 task 暴露） | `TestReconTasksDisclosesAndReclaimsOrphan`（注入 state 外的任务服务 → `task.orphaned` 事件 + 审计 + 回收；非任务受管服务零误伤；节流；非终态行不判孤儿）；`TestResolveTaskScopeMatrix`（作用域网络在位核验） |
+| 设计点 1（三作用域 + internal 矩阵） | `TestResolveTaskScopeMatrix`（app/project internal 拒绝；task-group internal 只认 internal 网；缺失网拒绝；未知 kind 拒绝）`TestTaskNamingFormulas`/`TestTaskNamingFamiliesAreStructurallyDisjoint`（命名族结构不相交） |
+| 设计点 2（EnsureNetwork + 控制面一次性挂靠） | `TestEnsureTaskNetworkMembersAndProjection`（长活网 + label + internal 变体 + 成员声明 + 无部署史 pending + 幂等 + 变体错配拒绝 + 未知成员拒绝）`TestTasksEnsureNetworkMembersAndInFlightGuard`（API：成员映射 + 在途 409 + ref 违约）`TestPlanProjectsTaskNetworkMembership`（planner 双挂 + 别名） |
+| 设计点 3（镜像 digest 钉定） | `TestResolveTaskImagePinsDigest`（tag → digest 钉定；缺失 `E_IMAGE_PULL_FAILED`）`TestTasksValidationBoundsAndEnvHandling`（API 侧解析失败 fail-closed） |
+| 设计点 4（配额表/默认/设置面） | 见守卫②；默认常量表测试（`TestTasksCreateListStopDeleteFlowAndCrossTokenIsolation` 的缺省 TTL 断言 + `TestTaskQuotaOverridesAndValidation`） |
+| 设计点 5（TTL/孤儿双向） | 见守卫③⑥ + `TestTaskFailureOnContainerTaskFailure`（容器任务 failed → `task.failed` 终态 + 错误摘要） |
+| 日志入 VL（task 标签归因） | `TestTaskLogsIngestWithTaskAttribution`（task 归因行、app/service 空、游标回收）`TestTaskLogsSkippedInJSONLMode`（诚实边界）`TestBuildLogsQLTaskFilter`（过滤器 + 注入负路径） |
+| scope 门/令牌词表 | `TestTasksServiceScopeRegistration`（六 RPC 登记 `tasks`；read/deploy 不蕴含、admin 蕴含） |
+| 事件/错误码只增纪律 | eventcode `TestDocEventSetMatchesRegistry`/`TestGoldenSnapshot`（95）+ errcode `TestDocCodeSetMatchesRegistry`/`TestRegisteredCountByKind`（82 E/5 W）/`TestGoldenSnapshot`（均显式再生成） |
+| 迁移纪律 | `TestMigrationsAreAdditiveOnly`（00026 + golden 再生成） |
+| 结构纪律 | `TestTickDutiesAllGoThroughSafeCall`（tick duty 清单 11 条含两新 duty）；apex `TestReservedTeamSlugs`（taskgroup 保留） |
+| CLI 面 | `TestTasksCLISurface`（network ensure → run --json → ls → stop → rm → logs 诚实报错 + 用法 64） |
+
+一手验证证据（原始输出摘要）：
+
+```
+$ go test ./... -count=1
+ok  github.com/fleetlyrun/fleetly/cmd/fleetly/cmd  14.920s
+ok  github.com/fleetlyrun/fleetly/internal/api     26.120s
+ok  github.com/fleetlyrun/fleetly/internal/engine  18.879s
+ok  github.com/fleetlyrun/fleetly/internal/logs     7.832s
+ok  github.com/fleetlyrun/fleetly/internal/naming   5.784s
+ok  github.com/fleetlyrun/fleetly/internal/state   33.404s
+ok  github.com/fleetlyrun/fleetly/internal/substrate 24.584s
+ok  github.com/fleetlyrun/fleetly/internal/victorialogs 2.902s
+（其余包 ok；32 包全绿）
+
+$ go vet ./...
+（零输出，rc=0）
+
+$ go test -race -count=1 ./internal/state ./internal/engine ./internal/api ./internal/logs ./internal/naming ./internal/substrate ./internal/victorialogs ./internal/eventcode ./internal/errcode ./internal/apitest ./internal/runtime ./cmd/fleetly/cmd
+ok  github.com/fleetlyrun/fleetly/internal/state        291.896s
+ok  github.com/fleetlyrun/fleetly/internal/engine       233.395s
+ok  github.com/fleetlyrun/fleetly/internal/api          238.101s
+ok  github.com/fleetlyrun/fleetly/internal/logs          49.407s
+ok  github.com/fleetlyrun/fleetly/internal/naming         1.084s
+ok  github.com/fleetlyrun/fleetly/internal/substrate     42.488s
+ok  github.com/fleetlyrun/fleetly/internal/victorialogs  28.833s
+ok  github.com/fleetlyrun/fleetly/internal/eventcode      1.147s
+ok  github.com/fleetlyrun/fleetly/internal/errcode        1.133s
+ok  github.com/fleetlyrun/fleetly/internal/apitest       30.825s
+ok  github.com/fleetlyrun/fleetly/internal/runtime       49.691s
+ok  github.com/fleetlyrun/fleetly/cmd/fleetly/cmd       105.402s
+（首跑 engine 一处夹具缺陷：taskFixture 混用真实时钟落库与包级假时钟推进，
+TTL 到期判定随测试在包内的执行时刻漂移（单跑绿、全包跑红）；修复 = 夹具显式
+钉 ExpiresAt 为假时钟基（见偏离 14），复跑全绿。）
+
+$ sh deploy/check-image-pins.sh
+check-image-pins: OK — 32 image reference(s) digest-pinned, 0 exempt（本票零新增镜像引用）
+
+$ buf lint && buf generate（二次）
+tasks.pb.go / logs.pb.go sha256 前后一致（生成物幂等；wire 经 mise run generate:wire 再生成，console 经 pnpm gen:api 再生成）
+
+$ cd console && pnpm typecheck / pnpm lint / pnpm test (333 passed) / pnpm build
+（全净；console 仅 `pnpm gen:api` 再生成 schema.d.ts，UI 零改动）
+
+$ FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/substrate -run TestManualTaskHardening -v
+=== RUN   TestManualTaskHardening
+    task-group network: name=fleetly-taskgroup-manualt21 internal=true labels=map[fleetly.managed:true fleetly.task-group:manualt21] driver=overlay
+    task service inspect: user="65534:65534" read_only_rootfs=true cap_drop=[ALL] pids=512 args=[sleep 120] restart=&{Condition:none Delay:0s MaxAttempts:0s Window:0s} stop_grace=5s networks=[{Name:<网络 ID> Aliases:[]}] resources=&{NanoCPUs:500000000 MemoryBytes:134217728}
+    internal egress probe exit code = 1 (no egress — DT-7 contract holds)
+    internal egress probe output: wget: can't connect to remote host (1.1.1.1): Network unreachable
+--- PASS: TestManualTaskHardening (0.76s)
+```
+
+（探针附加观测，如实记录：①平台的 task-group 网刻意**不可 attachable**——探针容器直挂被 daemon 拒绝 `network … not manually attachable`，容器侧无法挂入是安全姿态，任务只能作为 swarm service 按名加入；②`network inspect` 的服务端把 attachment 的 `Target` 归一为网络 ID（T15-1 同款观测），别名集合为空——`serviceToState` 的 `Networks[].Name` 因此是 ID 而非名，收敛判据用 desired-hash label 不依赖该字段回比；③本机 `network inspect` 的 Driver 字段偶发为空（daemon 版本行为），不影响对账。）
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **控制面挂靠 = 发布管线重部署（非直改 app 服务 spec）**：设计点 2 裁决（审查记录）；state `task_network_members` 是幂等键，`EnqueueNetworkRedeploy` 是生效腿，无成功部署史 = `pending`。DT-5 原文「一次 service update，摊销在项目创建时刻」的平台等价形态 = 一次重部署。
+2. **pids 限额落 `Resources.Limits.Pids`**（`ContainerSpec` 无该字段；moby api v1.56 实测）——加固字段面因此是「ContainerSpec 三字段 + Resources.Limits.Pids」的组合，真机回读实证。
+3. **配额设置面只落 state 原语 + 默认常量**（无 proto/CLI 写面）：票面 CLI 动词清单无配额动词；行由测试/后续设置票写入（`SaveTaskQuota`），登记 backlog。
+4. **任务日志仅 VL 后端采集**：jsonl 形态无任务检索面（落盘面按 app 分文件，任务无 app 归属）；边界写进 proto/CLI/实施记录（`E_LOGS_BACKEND_UNAVAILABLE` 诚实报错），不伪造空列表。
+5. **`SearchLogsRequest.app` 放宽为可空**（原 `min_len: 1`）：任务日志面无 app 归属；放宽只对「机具令牌/平台管理员 + tasks 非空」放行（用户凭据仍强制限定形 app 选择器），handler 内双保险；proto 层是**放宽**不是破坏。
+6. **任务服务命名 `fleetly-task-<taskID>` 全量 ULID + task-group ref 禁 '-'**：结构上使两个新前缀族与三段 app 命名不相交（`taskgroup` 同时进保留 slug 清单纵深防御）；`IsTaskServiceName`/`IsTaskGroupNetworkName` 是形态谓词（对账/日志/清扫的识别面）。
+7. **`stop_grace_period` 显式钉 5s**（T2-0③ 建议区间 2-10s 的中间值）；TTL 缺省 600s（T2-0③ 建议 5-15min 区间内），下限 60s/上限 24h。
+8. **任务服务重新收敛语义**：非终态行而服务缺失 → 幂等重建（与 app 服务「缺失创建」同纪律）；容器任务 failed/rejected → `failed` 终态（restart:none 上抛）；`complete` → `stopped`（`stop_reason=exited`）。收敛里对「期望哈希不符」的服务执行一次 ServiceUpdate（外部篡改/上一代残留的重申）。
+9. **`NetworkSubstrate` 增方法而非改签名**（`NetworkEnsureWithOptions`）：既有 `NetworkEnsureWithLabels` 语义零变化（项目网路径逐字不动），测试替身只增一个方法。
+10. **drift 投影不扩加固字段**：`ServiceSpec` 新增五字段只进任务路径（app 服务恒零值），`driftProjection` 不收录以免平移既有 app 漂移哈希；`serviceToState` 照实反解（回读忠实）。
+11. **`EnsureTaskNetwork` 无审计/事件**（网络 ensure 本身）：成员声明的可见面 = state 行 + 随后的重部署审计（发布管线）；如后续需要独立事件面，属新票（登记为明示取舍）。
+12. **`TaskRetentionDays` 只加常量不放 config 键**（state janitor 兜底 30 天）：与 API key 先例（JanitorConfig 内聚）一致，减少配置面。
+13. **API 面 env 回显口径**：`GetTask` 回显 env（值由调用方自持，解密失败显式 5xx）；`ListTasks` 恒零 env（仓库级读面不铺开值）。
+14. **引擎测试夹具的时钟锚修正**（race 全包跑暴露）：`taskFixture` 的 `ExpiresAt` 显式钉为引擎假时钟基（`h.clk.Now()+ttl`）——state 落库用真实时钟、引擎推进用包级假时钟（`testStart`），不钉锚时「到期」判定随测试在包内的执行时刻漂移（单测绿、全包/race 跑红）。修复只动测试夹具，不改产品语义。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认五项设计裁决与十四项偏离登记：①scope 模型 + internal 仅 task-group 矩阵（app/project fail-closed）；②控制面「每网一次性挂靠」= 发布管线重部署（成员声明为幂等键）；③任务镜像经 T1-2 解析腿钉定 digest；④配额 state 原语 + 默认常量（设置面 backlog）；⑤TTL 600s/60s–24h/stop_grace 5s（沿 T2-0③）；及全部登记偏离（pids 落 `Resources.Limits.Pids`、任务日志 VL-only、`SearchLogs.app` 可空放宽、任务命名族与 `taskgroup` 保留、drift 投影不扩、retention 30d 常量、ensure 无独立事件等）。挂账（配额设置面 / ensure 事件面 / T2-3 对齐）与 staging 项按记录执行。
+
+staging/真机待执行项（本环境无 staging 访问权，未虚构）：
+
+- **多节点**：task-group overlay 跨节点数据面（依赖 VPC UDP 4789/7946 放行，同 T15-1 前置）；任务服务在跨节点调度下的 DNS 可达与 TTL 回收时延（本机单节点已实证硬化与 internal 出网）。
+- **平台默认参数下的 TTL 回收端到端**（T2-0③ 建议的复跑项 6）：staging 建任务 → 到期 → `task.expired` → 服务回收，记录实际回收时延（本票单节点逻辑链已回归，未测真实网络时延）。
+- **CreateTask 的 registry 解析腿跨节点**（T1-2②/T2-0② 的承接）：digest 钉定 + 凭证下发在 staging 多节点上以任务面复跑一次（与部署面共享实现，风险低）。
+- **T2-3 对齐**：torchwood dispatcher 的 `EnsureTaskNetwork.members` 语义与任务 DNS 名消费方式（`TaskView.service`/`dns_name`）在 T2-3 落地时按实际调用形态复核（本票已按「成员 app 服务 + 每网一次」形态实现）。
+

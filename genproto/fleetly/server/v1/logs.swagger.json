@@ -105,6 +105,7 @@
         "parameters": [
           {
             "name": "app",
+            "description": "app 流选择器（三段限定形 team/prj/app 或裸名；用户凭据强制限定形）。\n空 = 仅按 tasks 选择器查询（任务日志；全局调用方限定）。",
             "in": "path",
             "required": true,
             "type": "string"
@@ -179,6 +180,17 @@
             "in": "query",
             "required": false,
             "type": "string"
+          },
+          {
+            "name": "tasks",
+            "description": "任务流选择器（DT-5 任务日志面；值 = 任务平台 ID——入湖 task 流标签）。\n非空时 app 可空（任务行无 app 归属）。",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
           }
         ],
         "tags": [
@@ -435,9 +447,13 @@
             "type": "string"
           },
           "title": "访问行（source=access）的结构化字段透传（W5-S2 设计 §3.2：method/\nstatus/host/path/route/duration_ms/client_ip/deployment_id——入湖\n白名单词表内回读；deployment_id 为滚动窗内**近似**归因，多副本滚动\n窗内外流量可能分属新旧两代部署）。container/build 行为空。"
+        },
+        "task": {
+          "type": "string",
+          "title": "任务归因（DT-5：任务行 = 任务平台 ID；其余行空）。"
         }
       },
-      "title": "SearchLogRow 是检索命中的单行（字段与入湖行对齐：_time/_msg/app/\nservice/source/stderr——E6 设计 §3.1 行集契约）。"
+      "title": "SearchLogRow 是检索命中的单行（字段与入湖行对齐：_time/_msg/app/\nservice/source/stderr——E6 设计 §3.1 行集契约；DT-5 增 task）。"
     },
     "v1SearchLogsResponse": {
       "type": "object",

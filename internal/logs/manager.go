@@ -99,6 +99,9 @@ func (m *Manager) scanOnce(ctx context.Context) {
 		// 服务)。
 		m.pollJobServices(ctx, app, red)
 	}
+	// DT-5：任务服务日志（无 app 归属的独立发现面；仅 VL 后端采集——
+	// 纯 jsonl 形态无任务检索面，采集面整体跳过，诚实边界见 runbook）。
+	m.pollTaskServices(ctx)
 	m.pollAccess(ctx, candidates)
 }
 
@@ -123,6 +126,109 @@ func (m *Manager) pollStream(ctx context.Context, app state.App, service string,
 // init 共用（键内已含 job 服务名，跨族不撞）。
 func jobCursorKey(app, jobService string) string {
 	return app + "\x00job\x00" + jobService
+}
+
+// taskCursorKey / taskCursorPrefix 是任务日志采集的游标键（DT-5：与 app
+// 游标面完全隔离——任务无 app 归属；键 = \x00task\x00 + 任务平台 ID）。
+func taskCursorKey(taskID string) string { return "\x00task\x00" + taskID }
+
+func taskCursorPrefix() string { return "\x00task\x00" }
+
+// pollTaskServices 采集平台任务服务的日志（DT-5 任务日志面）：任务行以
+// task 标签归因入湖（VL）；发现即从零全量回读（任务生命周期秒级/分钟级，
+// 历史即全部），服务消失后游标当轮回收。仅 VL 后端采集——纯 jsonl 形态
+// 无任务检索面（不落盘：落盘面按 app 分文件，任务无 app 归属），诚实边界
+// 记录在 proto 与 runbook。
+func (m *Manager) pollTaskServices(ctx context.Context) {
+	if !m.vlEnabled() {
+		m.evictTaskCursors(map[string]bool{})
+		return
+	}
+	states, err := m.port.TaskServiceStates(ctx)
+	if err != nil {
+		// 底座暂态：跳过本轮，游标保留（下一轮发现集为空时回收）。
+		m.log.Debug("logs: task service discovery failed", "error", err.Error())
+		return
+	}
+	seen := make(map[string]bool, len(states))
+	for _, s := range states {
+		taskID := s.Labels[state.LabelTaskID]
+		if taskID == "" {
+			continue
+		}
+		seen[taskCursorKey(taskID)] = true
+		m.pollTaskStream(ctx, taskID, s.Name)
+	}
+	m.evictTaskCursors(seen)
+}
+
+// evictTaskCursors 回收已消失任务的采集游标（发现集之外的 task 游标 = 任务
+// 已回收；evictJobCursors 同款）。
+func (m *Manager) evictTaskCursors(seen map[string]bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	prefix := taskCursorPrefix()
+	for key := range m.streams {
+		if strings.HasPrefix(key, prefix) && !seen[key] {
+			delete(m.streams, key)
+		}
+	}
+}
+
+// pollTaskStream 拉取单条任务流的本轮增量并入湖（task 标签归因；不落盘/
+// 不进 ring——任务检索面在日志库）。
+func (m *Manager) pollTaskStream(ctx context.Context, taskID, swarmName string) {
+	key := taskCursorKey(taskID)
+	m.mu.Lock()
+	cur, ok := m.streams[key]
+	if !ok {
+		// 首拍零点全量回读（job 同口径：一次性/短生命周期作业从服务创建起
+		// 的全部输出）。
+		cur = &stream{app: "", appID: "", service: "", lastAt: time.Time{}}
+		m.streams[key] = cur
+	}
+	since := cur.lastAt
+	m.mu.Unlock()
+
+	lines, err := m.port.StreamServiceLogs(ctx, swarmName, since, false)
+	if err != nil {
+		m.log.Debug("logs: task stream open failed", "task", taskID, "error", err.Error())
+		return
+	}
+	watchdog := time.NewTimer(m.pollWatchdog())
+	defer watchdog.Stop()
+	var last time.Time
+deliver:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-watchdog.C:
+			m.log.Error("logs: task poll round exceeded watchdog deadline, abandoning this round", "task", taskID)
+			return
+		case line, ok := <-lines:
+			if !ok {
+				break deliver
+			}
+			if !line.At.IsZero() && line.At.After(last) {
+				last = line.At
+			}
+			m.ing.Add(Entry{
+				Task:   taskID,
+				At:     line.At,
+				Stderr: line.Stderr,
+				Line:   line.Line, // 任务无 app env 脱敏面（值由调用方自持）
+				Source: SourceContainer,
+			})
+		}
+	}
+	if !last.IsZero() {
+		m.mu.Lock()
+		if last.After(cur.lastAt) {
+			cur.lastAt = last
+		}
+		m.mu.Unlock()
+	}
 }
 
 func jobCursorPrefix(app string) string { return app + "\x00job\x00" }

@@ -347,6 +347,18 @@ var builtins = []Code{
 		Summary:    "the web terminal feature is disabled (terminal.enabled=false): no exec relay is deployed and no terminal tickets are issued",
 		Suggestion: "Enable the feature by setting terminal.enabled: true in the control plane config and restarting fleetlyd; the exec relay duty converges the fleetly-exec service on every node automatically."},
 
+	// ── 程序化动态工作负载（T 线 DT-5 / IMPL-T2-1，注册表只增）：任务面的
+	// 请求契约违约（scope 形态/内部变体支持矩阵/TTL 与资源上下限）走 400；
+	// 每令牌配额 fail-closed 拒绝走 429（可重试语义：等非终态任务回收后再试
+	// ——不是请求错误）。消费点 = internal/api/tasks.go 与 internal/engine
+	// tasks.go（ResolveTaskScope 的 fail-closed 面）。
+	{ID: "E_TASK_UNSUPPORTED", HTTP: 400,
+		Summary:    "task request falls outside the dynamic-workload contract (scope kind/ref invalid, internal variant unsupported for the scope kind, scope network absent, ttl/resource bounds violated)",
+		Suggestion: "Fix the named field: internal=true is only supported for task-group networks; tasks join networks that already exist (create the task-group network via EnsureTaskNetwork first); ttl_seconds must be within [60, 86400] and resources within the platform bounds."},
+	{ID: "E_TASK_QUOTA_EXCEEDED", HTTP: 429,
+		Summary:    "the token's task quota is exhausted (concurrent tasks or total CPU/memory of non-terminal tasks at the limit; fail-closed)",
+		Suggestion: "Wait for running tasks to reach a terminal state (TTL reclaim or explicit stop) before creating more, or raise the per-token quota."},
+
 	// ── 认证/用户面（v0.3 W1，RBAC 设计 §2.1/§10；注册表只增）：注册窗口
 	//    关闭的稳定拒绝码（无用户窗口恒开不落本码；users 非空后
 	//    auth.registration 缺省 closed 管辖）。消费点：internal/api/

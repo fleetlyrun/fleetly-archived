@@ -62,6 +62,9 @@ func (e *Engine) substrateRecon(ctx context.Context, force bool) {
 	// networks 面先行（读面披露——与 services 面共享同一频控闸；读错各自
 	// 独立消化，互不阻塞）。
 	e.reconNetworks(ctx)
+	// tasks 面（DT-5 对账兜底守卫）：孤儿 task 服务披露 + 回收（与 networks
+	// 面同拍；读错不结论）。
+	e.reconTasks(ctx)
 	apps, err := e.store.ListActiveApps(ctx)
 	if err != nil {
 		e.log.Warn("engine: substrate recon list apps", "error", err)

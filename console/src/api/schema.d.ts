@@ -2260,9 +2260,10 @@ export interface components {
         };
         v1CreateTokenRequest: {
             /**
-             * scope 集（read / deploy / terminal / admin；admin 蕴含 deploy 蕴含 read
-             *     ⊕ terminal——terminal 为独立 scope，read/deploy 不蕴含（E7 W5-S6）；
-             *     重复项服务端归一去重）。
+             * scope 集（read / deploy / terminal / tasks / admin；admin 蕴含
+             *     deploy 蕴含 read ⊕ terminal ⊕ tasks——terminal 为 Web 终端独立 scope、
+             *     tasks 为程序化动态工作负载面独立 scope（DT-5），read/deploy 均不蕴含
+             *     （E7 W5-S6 / IMPL-T2-1）；重复项服务端归一去重）。
              */
             scopes?: string[];
             /** 备注（人读；如 "CI 部署"）。字段名 note（name 列承载，兼容既有表结构）。 */
@@ -3251,7 +3252,7 @@ export interface components {
         };
         /**
          * SearchLogRow 是检索命中的单行（字段与入湖行对齐：_time/_msg/app/
-         *     service/source/stderr——E6 设计 §3.1 行集契约）。
+         *     service/source/stderr——E6 设计 §3.1 行集契约；DT-5 增 task）。
          */
         v1SearchLogRow: {
             /** Format: date-time */
@@ -3270,6 +3271,8 @@ export interface components {
             fields?: {
                 [key: string]: string;
             };
+            /** 任务归因（DT-5：任务行 = 任务平台 ID；其余行空）。 */
+            task?: string;
         };
         v1SearchLogsResponse: {
             rows?: components["schemas"]["v1SearchLogRow"][];
@@ -7025,9 +7028,18 @@ export interface operations {
                  *     命中向后走（VL limit/offset 语义）。
                  */
                 cursor?: string;
+                /**
+                 * @description 任务流选择器（DT-5 任务日志面；值 = 任务平台 ID——入湖 task 流标签）。
+                 *     非空时 app 可空（任务行无 app 归属）。
+                 */
+                tasks?: string[];
             };
             header?: never;
             path: {
+                /**
+                 * @description app 流选择器（三段限定形 team/prj/app 或裸名；用户凭据强制限定形）。
+                 *     空 = 仅按 tasks 选择器查询（任务日志；全局调用方限定）。
+                 */
                 app: string;
             };
             cookie?: never;

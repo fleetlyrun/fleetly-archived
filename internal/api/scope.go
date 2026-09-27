@@ -310,6 +310,19 @@ var methodScopes = map[string]string{
 	// 只读不代写；机具令牌 admin 等价照旧）。
 	"/fleetly.server.v1.ProjectsService/AttachAppProjectNetwork": ScopeAdmin,
 	"/fleetly.server.v1.ProjectsService/DetachAppProjectNetwork": ScopeAdmin,
+	// TasksService（T 线 DT-5 / IMPL-T2-1，程序化动态工作负载面）：**整体
+	// tasks 独立 scope**——read/deploy 不蕴含（独立授予，terminal 同族先例；
+	// admin 蕴含）。机具令牌为典型持有者：任务面是平台级程序化工作负载
+	//（动态容器群、资源配额、网络作用域），与「应用运行面写语义」不同级；
+	// 跨令牌隔离（owner_token_id）与配额在 handler/state 面收口，与 scope
+	// 门正交。用户 principal 无 tasks 可达集（会话凭据不经此门），显式
+	// 授予 tasks 的用户 PAT 照门放行（设计与机具令牌等价）。
+	"/fleetly.server.v1.TasksService/EnsureTaskNetwork": ScopeTasks,
+	"/fleetly.server.v1.TasksService/CreateTask":        ScopeTasks,
+	"/fleetly.server.v1.TasksService/GetTask":           ScopeTasks,
+	"/fleetly.server.v1.TasksService/ListTasks":         ScopeTasks,
+	"/fleetly.server.v1.TasksService/StopTask":          ScopeTasks,
+	"/fleetly.server.v1.TasksService/DeleteTask":        ScopeTasks,
 }
 
 // RequiredScope 返回方法所需 scope（未登记返回 false——调用方按 admin

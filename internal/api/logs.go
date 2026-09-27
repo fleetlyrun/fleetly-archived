@@ -130,7 +130,8 @@ const (
 // 解析出的规范限定形下发查询（与 ingest 写入的标签值同口径）。机具令牌与
 // 平台管理员不受约束（全库）。
 func (s *LogsService) SearchLogs(ctx context.Context, req *serverv1.SearchLogsRequest) (*serverv1.SearchLogsResponse, error) {
-	apps, err := s.constrainSearchApps(ctx, req.GetApp(), req.GetApps())
+	tasks := req.GetTasks()
+	apps, err := s.constrainSearchApps(ctx, req.GetApp(), req.GetApps(), tasks)
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +163,7 @@ func (s *LogsService) SearchLogs(ctx context.Context, req *serverv1.SearchLogsRe
 		Keyword:  req.GetKeyword(),
 		Services: req.GetServices(),
 		Sources:  req.GetSources(),
+		Tasks:    tasks,
 		Limit:    limit,
 		Offset:   offset,
 	}
@@ -191,6 +193,7 @@ func (s *LogsService) SearchLogs(ctx context.Context, req *serverv1.SearchLogsRe
 			App:     r.App,
 			Service: r.Service,
 			Source:  r.Source,
+			Task:    r.Task,
 			Stderr:  r.Stderr,
 			Msg:     r.Msg,
 			Fields:  searchRowFields(r.Fields),
@@ -206,6 +209,9 @@ func (s *LogsService) SearchLogs(ctx context.Context, req *serverv1.SearchLogsRe
 // constrainSearchApps 校验并归一 SearchLogs 的 app 流选择器（v0.3 W2-S4
 // 强制约束，rbac-teams §4.2「SearchLogs 强制 app 约束」的执行点）：
 //   - 选择器必填（proto 形状已约束，此处双保险——无选择器 400 带指引）；
+//   - **DT-5 例外**：tasks 选择器非空且调用方为全局凭据（机具令牌/平台
+//     管理员）时 app 可空——任务行无 app 归属，task 流标签即约束面；用户
+//     凭据不得以 tasks 绕过 app 约束（仍要求限定形 app 选择器）；
 //   - 非全局调用方（用户且非平台管理员）：选择器必须是三段限定形
 //     team/prj/app（选择器即约束面——裸名无从判定「查的是哪个项目的流」），
 //     解析后过角色门（不可见/越权随门拒绝）；
@@ -214,9 +220,12 @@ func (s *LogsService) SearchLogs(ctx context.Context, req *serverv1.SearchLogsRe
 //   - 返回查询过滤集（规范限定形——与 ingest 写入的流标签值同口径）。
 //     预留的 apps 重复字段与归一结果不符即 400（单 app 诚实边界，不静默
 //     忽略额外值）。
-func (s *LogsService) constrainSearchApps(ctx context.Context, appRef string, extraApps []string) ([]string, error) {
+func (s *LogsService) constrainSearchApps(ctx context.Context, appRef string, extraApps []string, tasks []string) ([]string, error) {
 	appRef = strings.TrimSpace(appRef)
 	if appRef == "" {
+		if len(tasks) > 0 && callerIsGlobal(ctx, s.st) {
+			return nil, nil // 任务日志面：task 选择器承载约束
+		}
 		return nil, statusInvalidArgument(
 			`search requires an app stream selector: pass app="team/prj/app" (the qualified form is mandatory for user credentials)`)
 	}

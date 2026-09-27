@@ -123,6 +123,10 @@ type Engine struct {
 	// 可再报；重启清零 = 重报一次——与 substrateMissingSeen 同语义）。
 	networkOrphanSeen  map[string]bool
 	networkMissingSeen map[string]bool
+	// taskOrphanSeen 是 tasks 对账面（DT-5/IMPL-T2-1）孤儿 task 披露的进程内
+	// 记忆：按服务名节流（持续形态只报一次；回收成功/条件解除清零可再报；
+	// 重启清零 = 重报一次——与 networkOrphanSeen 同语义）。
+	taskOrphanSeen map[string]bool
 	// projectNetNextAt 是项目网收敛 duty 的最早时刻（projectNetworkSweepInterval
 	// 频控，substrateNextAt 同模式：tick goroutine 专用；重启即清零 = 重启后
 	// 立即扫一拍）。
@@ -176,6 +180,7 @@ func NewEngine(cfg Config, store *state.Store, sub Substrate, images ImageChecke
 		substrateDrainedSeen: map[string]bool{},
 		networkOrphanSeen:    map[string]bool{},
 		networkMissingSeen:   map[string]bool{},
+		taskOrphanSeen:       map[string]bool{},
 		scalingDormantSeen:   map[string]bool{},
 		scalingNoDataSeen:    map[string]bool{},
 	}
@@ -291,7 +296,8 @@ func (e *Engine) safeCall(name string, fn func()) {
 // tick 是一个推进周期：恢复重试（M1-8）→ 队列拾取 → 在途推进 → 窗后巡检
 // → deleting 应用回收（H10/MG-3，时间闸降频）→ 运行期存在性对账
 // （T0-V2.2/R2，时间闸降频；IMPL-T15-1 起含 networks 面）→ init 孤儿服务
-// 清扫（DT-4，时间闸降频）→ 项目网 GC（IMPL-T15-1，时间闸降频）。
+// 清扫（DT-4，时间闸降频）→ 项目网 GC（IMPL-T15-1，时间闸降频）→ 任务
+// TTL 回收 + 任务收敛（DT-5/IMPL-T2-1，每拍；任务生命周期是秒级语义）。
 // 全部 duty 经 safeCall 收口（MG-5）。
 func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("recoveryRetry", func() { e.retryRecoveryIfNeeded(ctx) })
@@ -302,6 +308,11 @@ func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("substrateRecon", func() { e.substrateRecon(ctx, false) })
 	e.safeCall("sweepInitJobs", func() { e.sweepInitJobs(ctx, false) })
 	e.safeCall("reconcileProjectNetworks", func() { e.reconcileProjectNetworks(ctx, false) })
+	// 任务面（DT-5）：TTL 回收到期行（stopping + task.expired）→ 收敛
+	//（queued→running、running 失败/自然退出检测、stopping/deleting 服务
+	// 移除与终态）。无时间闸：任务生命周期以秒计（T2-0③ 基线），每拍收敛。
+	e.safeCall("reapExpiredTasks", func() { e.reapExpiredTasks(ctx) })
+	e.safeCall("advanceTasks", func() { e.advanceTasks(ctx) })
 	// 扩缩评估（W5-S1，D-V3W5-2）：收敛拍尾部——发布链路推进完毕后的稳态
 	// 求值（自有 30s 频控闸；查询面未装配时 duty 空转）。
 	e.safeCall("dutyAutoscaling", func() { e.dutyAutoscaling(ctx, false) })
@@ -679,6 +690,12 @@ func (e *Engine) planAndRelease(ctx context.Context, rec state.DeployRecord, pre
 	if err != nil {
 		return e.failTransitionErr(ctx, rec, err)
 	}
+	// task-group 挂靠投影（DT-5 控制面一次性挂靠）：成员声明（state）→
+	// 本次发布的服务双挂；命名违约显式失败（同项目网纪律）。
+	taskNetworks, err := e.taskNetworkProjection(ctx, rec.AppID)
+	if err != nil {
+		return e.failTransitionErr(ctx, rec, err)
+	}
 	plan, err := BuildPlan(PlanInput{
 		AppID:               rec.AppID,
 		AppName:             rec.AppName,
@@ -698,6 +715,7 @@ func (e *Engine) planAndRelease(ctx context.Context, rec state.DeployRecord, pre
 		Decision:            pre.decision,
 		Volumes:             volumes,
 		ProjectNetwork:      projectNetwork,
+		TaskNetworks:        taskNetworks,
 	})
 	if err != nil {
 		return e.failTransitionErr(ctx, rec, err)

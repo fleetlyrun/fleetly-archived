@@ -341,11 +341,15 @@ func (x *ListHistoryLogsResponse) GetEntries() []*LogEntryView {
 }
 
 // SearchLogsRequest 统一检索输入（E6 设计 §3.1）。app 为路径参数（v0.2
-// 只做 app 级检索——全局跨应用检索页挂账 v0.2.x）；apps/services/sources
-// 为可选过滤集（空 = 不过滤该维度）。
+// 只做 app 级检索——全局跨应用检索页挂账 v0.2.x）；apps/services/sources/
+// tasks 为可选过滤集（空 = 不过滤该维度）。**DT-5 任务日志面（IMPL-T2-1）**：
+// app 可空（仅当 tasks 非空且调用方为机具令牌/平台管理员）——任务行无 app
+// 归属，task 流标签即归因面。
 type SearchLogsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	App   string                 `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
+	// app 流选择器（三段限定形 team/prj/app 或裸名；用户凭据强制限定形）。
+	// 空 = 仅按 tasks 选择器查询（任务日志；全局调用方限定）。
+	App string `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
 	// 可选的 app 过滤集（预留跨应用语义；当前检索面为单 app，额外值不
 	// 放行——诚实边界）。
 	Apps []string `protobuf:"bytes,2,rep,name=apps,proto3" json:"apps,omitempty"`
@@ -364,7 +368,10 @@ type SearchLogsRequest struct {
 	Limit int32 `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
 	// 分页游标（服务端签发的下一页凭证；空 = 第一页）。游标分页自最新
 	// 命中向后走（VL limit/offset 语义）。
-	Cursor        string `protobuf:"bytes,9,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Cursor string `protobuf:"bytes,9,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	// 任务流选择器（DT-5 任务日志面；值 = 任务平台 ID——入湖 task 流标签）。
+	// 非空时 app 可空（任务行无 app 归属）。
+	Tasks         []string `protobuf:"bytes,10,rep,name=tasks,proto3" json:"tasks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -462,8 +469,15 @@ func (x *SearchLogsRequest) GetCursor() string {
 	return ""
 }
 
+func (x *SearchLogsRequest) GetTasks() []string {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
 // SearchLogRow 是检索命中的单行（字段与入湖行对齐：_time/_msg/app/
-// service/source/stderr——E6 设计 §3.1 行集契约）。
+// service/source/stderr——E6 设计 §3.1 行集契约；DT-5 增 task）。
 type SearchLogRow struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	At      *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`
@@ -476,7 +490,9 @@ type SearchLogRow struct {
 	// status/host/path/route/duration_ms/client_ip/deployment_id——入湖
 	// 白名单词表内回读；deployment_id 为滚动窗内**近似**归因，多副本滚动
 	// 窗内外流量可能分属新旧两代部署）。container/build 行为空。
-	Fields        map[string]string `protobuf:"bytes,7,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Fields map[string]string `protobuf:"bytes,7,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// 任务归因（DT-5：任务行 = 任务平台 ID；其余行空）。
+	Task          string `protobuf:"bytes,8,opt,name=task,proto3" json:"task,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -558,6 +574,13 @@ func (x *SearchLogRow) GetFields() map[string]string {
 		return x.Fields
 	}
 	return nil
+}
+
+func (x *SearchLogRow) GetTask() string {
+	if x != nil {
+		return x.Task
+	}
+	return ""
 }
 
 type SearchLogsResponse struct {
@@ -902,9 +925,9 @@ const file_fleetly_server_v1_logs_proto_rawDesc = "" +
 	"\x12FollowLogsResponse\x125\n" +
 	"\x05entry\x18\x01 \x01(\v2\x1f.fleetly.server.v1.LogEntryViewR\x05entry\"T\n" +
 	"\x17ListHistoryLogsResponse\x129\n" +
-	"\aentries\x18\x01 \x03(\v2\x1f.fleetly.server.v1.LogEntryViewR\aentries\"\xbe\x02\n" +
-	"\x11SearchLogsRequest\x12\x19\n" +
-	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\x12\x12\n" +
+	"\aentries\x18\x01 \x03(\v2\x1f.fleetly.server.v1.LogEntryViewR\aentries\"\xcb\x02\n" +
+	"\x11SearchLogsRequest\x12\x10\n" +
+	"\x03app\x18\x01 \x01(\tR\x03app\x12\x12\n" +
 	"\x04apps\x18\x02 \x03(\tR\x04apps\x12\x18\n" +
 	"\akeyword\x18\x03 \x01(\tR\akeyword\x129\n" +
 	"\n" +
@@ -914,7 +937,9 @@ const file_fleetly_server_v1_logs_proto_rawDesc = "" +
 	"\asources\x18\a \x03(\tR\asources\x12 \n" +
 	"\x05limit\x18\b \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xe8\a(\x00R\x05limit\x12\x16\n" +
-	"\x06cursor\x18\t \x01(\tR\x06cursor\"\xa8\x02\n" +
+	"\x06cursor\x18\t \x01(\tR\x06cursor\x12\x14\n" +
+	"\x05tasks\x18\n" +
+	" \x03(\tR\x05tasks\"\xbc\x02\n" +
 	"\fSearchLogRow\x12*\n" +
 	"\x02at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x10\n" +
 	"\x03app\x18\x02 \x01(\tR\x03app\x12\x18\n" +
@@ -922,7 +947,8 @@ const file_fleetly_server_v1_logs_proto_rawDesc = "" +
 	"\x06source\x18\x04 \x01(\tR\x06source\x12\x16\n" +
 	"\x06stderr\x18\x05 \x01(\bR\x06stderr\x12\x10\n" +
 	"\x03msg\x18\x06 \x01(\tR\x03msg\x12C\n" +
-	"\x06fields\x18\a \x03(\v2+.fleetly.server.v1.SearchLogRow.FieldsEntryR\x06fields\x1a9\n" +
+	"\x06fields\x18\a \x03(\v2+.fleetly.server.v1.SearchLogRow.FieldsEntryR\x06fields\x12\x12\n" +
+	"\x04task\x18\b \x01(\tR\x04task\x1a9\n" +
 	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"j\n" +

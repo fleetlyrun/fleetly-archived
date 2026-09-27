@@ -55,6 +55,7 @@ func NewGRPCServer(
 	auditSvc *api.AuditService,
 	teamsSvc *api.TeamsService,
 	projectsSvc *api.ProjectsService,
+	tasksSvc *api.TasksService,
 	sys *api.SystemService,
 ) (*lynxgrpc.Server, error) {
 	validator, err := protovalidate.New()
@@ -116,6 +117,9 @@ func NewGRPCServer(
 	// （机具令牌/非成员 403、平台管理员只读——internal/api/teams.go 头注）。
 	serverv1.RegisterTeamsServiceServer(g, teamsSvc)
 	serverv1.RegisterProjectsServiceServer(g, projectsSvc)
+	// 程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：整体 tasks 独立 scope
+	//（scope.go 登记处）；跨令牌隔离与配额在 handler/state 面收口。
+	serverv1.RegisterTasksServiceServer(g, tasksSvc)
 	return srv, nil
 }
 

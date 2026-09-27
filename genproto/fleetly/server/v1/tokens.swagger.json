@@ -108,7 +108,7 @@
           "items": {
             "type": "string"
           },
-          "title": "scope 集（read / deploy / terminal / admin；admin 蕴含 deploy 蕴含 read\n⊕ terminal——terminal 为独立 scope，read/deploy 不蕴含（E7 W5-S6）；\n重复项服务端归一去重）。"
+          "title": "scope 集（read / deploy / terminal / tasks / admin；admin 蕴含\ndeploy 蕴含 read ⊕ terminal ⊕ tasks——terminal 为 Web 终端独立 scope、\ntasks 为程序化动态工作负载面独立 scope（DT-5），read/deploy 均不蕴含\n（E7 W5-S6 / IMPL-T2-1）；重复项服务端归一去重）。"
         },
         "note": {
           "type": "string",

@@ -103,10 +103,14 @@ message ListHistoryLogsResponse {
 }
 
 // SearchLogsRequest 统一检索输入（E6 设计 §3.1）。app 为路径参数（v0.2
-// 只做 app 级检索——全局跨应用检索页挂账 v0.2.x）；apps/services/sources
-// 为可选过滤集（空 = 不过滤该维度）。
+// 只做 app 级检索——全局跨应用检索页挂账 v0.2.x）；apps/services/sources/
+// tasks 为可选过滤集（空 = 不过滤该维度）。**DT-5 任务日志面（IMPL-T2-1）**：
+// app 可空（仅当 tasks 非空且调用方为机具令牌/平台管理员）——任务行无 app
+// 归属，task 流标签即归因面。
 message SearchLogsRequest {
-  string app = 1 [(buf.validate.field).string.min_len = 1];
+  // app 流选择器（三段限定形 team/prj/app 或裸名；用户凭据强制限定形）。
+  // 空 = 仅按 tasks 选择器查询（任务日志；全局调用方限定）。
+  string app = 1;
   // 可选的 app 过滤集（预留跨应用语义；当前检索面为单 app，额外值不
   // 放行——诚实边界）。
   repeated string apps = 2;
@@ -126,10 +130,13 @@ message SearchLogsRequest {
   // 分页游标（服务端签发的下一页凭证；空 = 第一页）。游标分页自最新
   // 命中向后走（VL limit/offset 语义）。
   string cursor = 9;
+  // 任务流选择器（DT-5 任务日志面；值 = 任务平台 ID——入湖 task 流标签）。
+  // 非空时 app 可空（任务行无 app 归属）。
+  repeated string tasks = 10;
 }
 
 // SearchLogRow 是检索命中的单行（字段与入湖行对齐：_time/_msg/app/
-// service/source/stderr——E6 设计 §3.1 行集契约）。
+// service/source/stderr——E6 设计 §3.1 行集契约；DT-5 增 task）。
 message SearchLogRow {
   google.protobuf.Timestamp at = 1;
   string app = 2;
@@ -142,6 +149,8 @@ message SearchLogRow {
   // 白名单词表内回读；deployment_id 为滚动窗内**近似**归因，多副本滚动
   // 窗内外流量可能分属新旧两代部署）。container/build 行为空。
   map<string, string> fields = 7;
+  // 任务归因（DT-5：任务行 = 任务平台 ID；其余行空）。
+  string task = 8;
 }
 
 message SearchLogsResponse {

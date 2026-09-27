@@ -84,6 +84,12 @@ type PlanInput struct {
 	// 既有行为零变化）。投影进 spec.Networks ⇒ 进 desired-hash 与快照
 	// ⇒ attach/detach 由下一次重部署滚动收敛。
 	ProjectNetwork string
+	// TaskNetworks 是 task-group 网络挂靠投影（DT-5 控制面一次性挂靠）：
+	// 服务名 → 网络名列表（成员声明经 EnsureTaskNetwork 落 state，成员 app
+	// 的部署在此投影**双挂**——别名 = <app>-<service>，与项目网同款；
+	// 重部署由 EnsureTaskNetwork 入队，投影随快照/desired-hash 收敛）。
+	// 空 = 本发布无挂靠（缺省零行为变化）。
+	TaskNetworks map[string][]string
 	// Images 是服务 → digest 钉定镜像引用（building 阶段产出）。
 	Images map[string]string
 	// Decision 是放置裁决（绑定约束编译结果）。
@@ -318,6 +324,29 @@ func buildServiceSpec(in PlanInput, svc *compose.Service, image string, volByKey
 			return ServiceSpec{}, nil, errorf("E_RUNTIME_UNAVAILABLE", "project network alias failed for service %s: %v", svc.Name, perr)
 		}
 		networks = append(networks, NetworkAttach{Name: in.ProjectNetwork, Aliases: []string{projectAlias}})
+	}
+	// task-group 挂靠投影（DT-5：控制面服务每网一次性挂靠——成员声明在
+	// state，投影随本次发布双挂；别名 = <app>-<service> 使任务侧可按名回访
+	// 控制面。网络名列表按调用方给定序，去重防重复声明）。
+	for _, taskNet := range in.TaskNetworks[svc.Name] {
+		if taskNet == "" || taskNet == in.ProjectNetwork {
+			continue
+		}
+		dup := false
+		for _, existing := range networks {
+			if existing.Name == taskNet {
+				dup = true
+				break
+			}
+		}
+		if dup {
+			continue
+		}
+		taskAlias, terr := naming.ProjectNetworkAlias(in.AppName, svc.Name)
+		if terr != nil {
+			return ServiceSpec{}, nil, errorf("E_RUNTIME_UNAVAILABLE", "task network alias failed for service %s: %v", svc.Name, terr)
+		}
+		networks = append(networks, NetworkAttach{Name: taskNet, Aliases: []string{taskAlias}})
 	}
 
 	spec := ServiceSpec{

@@ -87,6 +87,27 @@ func (c *Client) JobServiceStates(ctx context.Context, app string) ([]engine.Ser
 	return out, nil
 }
 
+// TaskServiceStates 实现 logs.Port（DT-5 任务日志面）：列出全部存活的
+// 任务服务实况投影（fleetly-task-<id> 前缀族 + 任务 label；任务无 app
+// 归属，发现面不按 app 过滤）。归因以 label 为权威（fleetly.task-id）。
+func (c *Client) TaskServiceStates(ctx context.Context) ([]engine.ServiceState, error) {
+	rows, err := c.ServiceList(ctx, map[string]string{
+		state.LabelManaged: state.ManagedLabelValue,
+		state.LabelTasks:   "true",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("substrate: service list for tasks: %w", err)
+	}
+	out := make([]engine.ServiceState, 0, len(rows))
+	for _, r := range rows {
+		if !naming.IsTaskServiceName(r.Name) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
 // StreamServiceLogs 打开 Swarm 服务日志流（service 传 Swarm 服务名，
 // fleetly 命名 = naming.ServiceName(app, service)）。follow=false 时读至
 // 流自然结束（配合 since 做轮询拉取）；follow=true 持续跟随。since 非零

@@ -55,6 +55,30 @@ const (
 	// （仅网络对象写入）。
 	LabelProjectNetwork = "fleetly.project-network"
 
+	// LabelTaskGroup 标记 task-group 网络归属（网络对象 label，值 = 调用方
+	// ref；DT-5/IMPL-T2-1）。与 LabelProjectNetwork 同款自描述锚：task-group
+	// 网长活、不随任务回收，识别面据此与孤儿网判定解耦（只披露不误删）。
+	LabelTaskGroup = "fleetly.task-group"
+	// LabelNetworkInternal 标记网络的 internal 变体（网络对象 label，值
+	// "true"；DT-7 不可信隔离面——internal overlay 无出网、无外部 DNS）。
+	// 底座 network inspect 的 Internal 字段是权威；label 是平台侧
+	// 快照/审计可读面（读面判据仍以底座字段为准）。
+	LabelNetworkInternal = "fleetly.network-internal"
+	// LabelTasks 标记任务服务（服务 label，值 "true"；DT-5）。任务服务无
+	// app 归属（fleetly.app 不出现在任务服务上），对账/日志/孤儿清扫按本
+	// label + 前缀族双条件圈定。
+	LabelTasks = "fleetly.tasks"
+	// LabelTaskID 标记任务服务归属的任务行（值 = 任务平台 ID；孤儿 task
+	// 归因与日志归因的自描述锚——服务名字符串反解在含 '-' 时有歧义，
+	// label 是唯一权威，jobServiceRefOf 同款纪律）。
+	LabelTaskID = "fleetly.task-id"
+	// LabelTaskOwner 标记任务的属主令牌（值 = token ID；跨令牌越权与
+	// 孤儿处置的归因面）。
+	LabelTaskOwner = "fleetly.task-owner"
+	// LabelTaskTTL 标记任务的 TTL 秒数（值 = 十进制秒；DT-5 的
+	// owner/TTL label 面——回收窗口的平台侧可读快照）。
+	LabelTaskTTL = "fleetly.task-ttl"
+
 	// LabelNodeID 是节点身份锚（node label，值 = 平台节点 ID n_<ULID>，
 	// state-model §2.3）。
 	LabelNodeID = "fleetly.node-id"

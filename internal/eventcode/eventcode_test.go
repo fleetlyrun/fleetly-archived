@@ -186,6 +186,16 @@ var docEvents = map[string]string{ // event → 文档出处
 	"project.network_changed": "T-line OT-1/IMPL-T15-1 (explicit opt-in attach/detach of an app to its project network; state projectnetworks.go, same transaction; defaults off)",
 	"network.orphaned":        "T-line OT-1/IMPL-T15-1 DT-5 recon guard (platform-managed fleetly- network with no state attribution; disclosed only, never deleted silently)",
 	"network.missing":         "T-line OT-1/IMPL-T15-1 DT-5 recon guard (expected project network absent from the substrate; re-ensured by attach/deploy, never auto-recreated by recon)",
+	// T 线 DT-5 / IMPL-T2-1 动态工作负载面（注册表只增）：发出/消费点 =
+	// internal/state/tasks.go 原语（受理/停止/删除/终态与业务写同事务 =
+	// Outbox）+ internal/engine/tasks.go duty（收敛/回收/孤儿对账）。
+	"task.created":  "T-line DT-5/IMPL-T2-1 dynamic tasks (task accepted; state tasks.go, same transaction; payload carries image/scope/network/ttl, never env values)",
+	"task.started":  "T-line DT-5/IMPL-T2-1 dynamic tasks (substrate service converged and resolvable by its stable DNS name; engine tasks.go)",
+	"task.stopped":  "T-line DT-5/IMPL-T2-1 dynamic tasks (task stopped and the substrate service removed; payload carries reason owner|expired|exited)",
+	"task.expired":  "T-line DT-5/IMPL-T2-1 dynamic tasks (TTL elapsed; the janitor reclaims the substrate service; state tasks.go RequestTaskStop reason=expired)",
+	"task.failed":   "T-line DT-5/IMPL-T2-1 dynamic tasks (convergence failure or container task failed/rejected; restart-condition none — no self-healing; bounded error summary)",
+	"task.deleted":  "T-line DT-5/IMPL-T2-1 dynamic tasks (ledger row removed after the substrate service was removed; state tasks.go DeleteTaskRow)",
+	"task.orphaned": "T-line DT-5/IMPL-T2-1 DT-5 recon guard (platform-managed task service with no non-terminal state row; disclosed and reclaimed — label attribution)",
 
 	// v0.3 W3-S2 git SSH host key（rbac-teams §6 裁决 D-W0-8 FZ-12，注册表
 	// 只增）：发出来源 = host key 启动装载与指纹台账的比对事务

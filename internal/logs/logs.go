@@ -27,7 +27,10 @@ import (
 type Entry struct {
 	App     string    `json:"app"`
 	Service string    `json:"service"`
-	At      time.Time `json:"at"`
+	// Task 是任务日志归因（DT-5）：任务平台 ID；app/service 行恒空。入湖
+	// 后是 task 流标签（fleetly 任务服务日志的检索键）。
+	Task string    `json:"task,omitempty"`
+	At   time.Time `json:"at"`
 	Stderr  bool      `json:"stderr,omitempty"`
 	Line    string    `json:"line"`
 	// Source ∈ container | build | access（History/SearchLogs 按 source
@@ -105,6 +108,10 @@ type Port interface {
 	// 列出；归属映射解析（job 名 + 受管 label → compose 服务）由 logs 层
 	// jobServiceRefOf 纯函数承载（可 hermetic 测试）。
 	JobServiceStates(ctx context.Context, app string) ([]engine.ServiceState, error)
+	// TaskServiceStates 返回全部存活的任务服务实况投影（DT-5 任务日志面：
+	// fleetly-task-<id> 前缀族 + 任务 label；任务无 app 归属，发现面不按
+	// app 过滤）。实现只负责忠实列出。
+	TaskServiceStates(ctx context.Context) ([]engine.ServiceState, error)
 }
 
 // JobServiceRef 是一次性 job 服务的日志采集归属（cron 与 init 共用）：

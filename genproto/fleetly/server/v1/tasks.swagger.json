@@ -1,0 +1,539 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "fleetly/server/v1/tasks.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "TasksService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/tasks": {
+      "get": {
+        "summary": "ListTasks 列本令牌的任务（缺省只出非终态；include_terminal=true 出台账）。",
+        "operationId": "TasksService_ListTasks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListTasksResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "include_terminal",
+            "description": "是否包含终态（stopped/failed）台账行；缺省 false = 只出在途。",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "limit",
+            "description": "返回上限（缺省 100，上限 500）。",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      },
+      "post": {
+        "summary": "CreateTask 受理任务（owner = 调用令牌；TTL/资源配额 fail-closed 校验；\n状态收敛由引擎 duty 承载——本 RPC 返回 queued 形态）。",
+        "operationId": "TasksService_CreateTask",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateTaskResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateTaskRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      }
+    },
+    "/v1/tasks/networks": {
+      "post": {
+        "summary": "EnsureTaskNetwork 幂等确保 task-group 网络在位（长活，不随任务回收）。\ninternal=true 是 DT-7 的不可信函数隔离面（overlay internal：无出网、\n无外部 DNS，跨节点数据面正常——T2-0① 实证）。members 是控制面服务\n的一次性挂靠面（每网一次、摊销在网络创建时刻；挂靠经发布管线重部署\n生效，不是 per-task attach）。",
+        "operationId": "TasksService_EnsureTaskNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1EnsureTaskNetworkResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1EnsureTaskNetworkRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      }
+    },
+    "/v1/tasks/{id}": {
+      "get": {
+        "summary": "GetTask 取单个任务视图（env 只在本面回显；他令牌的任务 404）。",
+        "operationId": "TasksService_GetTask",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetTaskResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteTask 删除任务（停止 + 移除底座服务 + 台账行删除；幂等不做：不存在\n404——与域名资源删除同口径）。",
+        "operationId": "TasksService_DeleteTask",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteTaskResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      }
+    },
+    "/v1/tasks/{id}/stop": {
+      "post": {
+        "summary": "StopTask 停止任务（幂等：停止中/已停止成功返回；底座服务由引擎移除）。",
+        "operationId": "TasksService_StopTask",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1StopTaskResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/TasksServiceStopTaskBody"
+            }
+          }
+        ],
+        "tags": [
+          "TasksService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "TasksServiceStopTaskBody": {
+      "type": "object"
+    },
+    "v1CreateTaskRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "人读名（可选；进 label 与视图，不参与寻址——寻址键恒为任务 ID）。"
+        },
+        "image": {
+          "type": "string",
+          "title": "镜像引用（digest 钉定或 tag；tag 经平台 registry 解析腿钉定）。"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "覆盖镜像 ENTRYPOINT（可选）。"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "覆盖镜像 CMD（可选）。"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "注入环境变量（KEY=VALUE 语义；值明文只存活于任务行与底座 spec）。"
+        },
+        "scope": {
+          "$ref": "#/definitions/v1TaskScope",
+          "title": "隔离作用域（必填）。"
+        },
+        "ttl_seconds": {
+          "type": "string",
+          "format": "int64",
+          "title": "TTL 秒数（可选；缺省平台默认 600s，下限 60s、上限 86400s；到期由\njanitor 回收 + task.expired 事件）。"
+        },
+        "cpu_millis": {
+          "type": "string",
+          "format": "int64",
+          "title": "CPU 请求（毫核；缺省 1000，上限 4000）。"
+        },
+        "memory_bytes": {
+          "type": "string",
+          "format": "int64",
+          "title": "内存请求（字节；缺省 268435456 = 256MiB，上限 4294967296 = 4GiB）。"
+        }
+      }
+    },
+    "v1CreateTaskResponse": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "#/definitions/v1TaskView"
+        }
+      }
+    },
+    "v1DeleteTaskResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "v1EnsureTaskNetworkRequest": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "title": "任务组 slug（小写字母数字，2-32 位，不含 '-'）。"
+        },
+        "internal": {
+          "type": "boolean",
+          "title": "internal 变体（不可信函数隔离面；缺省 false = 普通 overlay）。"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TaskNetworkMember"
+          },
+          "title": "控制面服务挂靠集（可选；每网一次性语义——重复请求幂等，members 变更\n会为新成员入队重部署）。"
+        }
+      }
+    },
+    "v1EnsureTaskNetworkResponse": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "网络名（fleetly-taskgroup-\u003cref\u003e）。"
+        },
+        "internal": {
+          "type": "boolean"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TaskNetworkMemberStatus"
+          }
+        }
+      }
+    },
+    "v1ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "title": "稳定错误码字符串（如 \"E_COMPOSE_INVALID\"），注册表校验只增。"
+        },
+        "message": {
+          "type": "string",
+          "title": "人读错误信息（面向运维/集成方，不承诺文案稳定）。"
+        },
+        "stage": {
+          "type": "string",
+          "title": "失败所处管线阶段（如 resolve / build / deploy / serve；勿与部署子状态\nphase 混用——该字段 2026-09-20 命名审查由 phase 更名 stage）。"
+        },
+        "deployment_id": {
+          "type": "string",
+          "title": "关联的部署 ID（无关联时为空）。"
+        },
+        "suggestion": {
+          "type": "string",
+          "title": "可执行的修复建议（面向用户展示）。"
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "结构化附加上下文（machine-readable 键值对）。"
+        },
+        "docs": {
+          "type": "string",
+          "title": "相关文档 URL（错误码文档锚点）。"
+        }
+      },
+      "title": "ErrorResponse 是 fleetly 对外错误信封的唯一契约定义（发布专项 §2.7、\n架构 D21）：gateway HTTPErrorHandler（阶段 3 落地）将 gRPC 错误统一渲染\n为本结构，snake_case JSON 输出；code 与 T0.2 错误码注册表（唯一真源，\n只增不复用）对齐。"
+    },
+    "v1GetTaskResponse": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "#/definitions/v1TaskView"
+        }
+      }
+    },
+    "v1ListTasksResponse": {
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TaskView"
+          }
+        }
+      }
+    },
+    "v1StopTaskResponse": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "#/definitions/v1TaskView"
+        }
+      }
+    },
+    "v1TaskNetworkMember": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "title": "TaskNetworkMember 是控制面服务的一次性挂靠声明（网络创建时刻摊销：\n挂靠使该 app 服务在新 revision 双挂该网络，别名 = \u003capp\u003e-\u003cservice\u003e）。"
+    },
+    "v1TaskNetworkMemberStatus": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "title": "attached（已挂靠）/ rolling（重部署入队生效中）/ pending（无成功部署史，\n下次发布生效）。"
+        },
+        "deployment_id": {
+          "type": "string",
+          "title": "rolling 时的重部署 ID。"
+        }
+      }
+    },
+    "v1TaskScope": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "title": "app | project | task-group。"
+        },
+        "ref": {
+          "type": "string",
+          "title": "作用域引用（语义随 kind；见消息注释）。"
+        },
+        "internal": {
+          "type": "boolean",
+          "title": "不可信变体（仅 task-group；overlay internal——无出网，DT-7）。"
+        }
+      },
+      "description": "internal 变体只对 task-group 支持（不可信函数隔离面）；app/project 网\ninternal=true 一律 fail-closed 拒绝（不可静默降级为可出网形态）。",
+      "title": "TaskScope 是任务的隔离作用域引用（三作用域模型，OT-1）：\n  - app：ref 指向应用 → 加入该 app 的专属网（fleetly-\u003cteam\u003e-\u003cprj\u003e-\u003capp\u003e-net）；\n  - project：ref 指向项目（ID 或 team/prj 限定形）→ 加入项目网；\n  - task-group：ref 是任务组 slug（[a-z0-9]{2,32}，不含 '-'——与三段\n    app 网名结构不相交）→ 加入 fleetly-taskgroup-\u003cref\u003e（长活，须先经\n    EnsureTaskNetwork 创建）。"
+    },
+    "v1TaskView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string",
+          "title": "钉定后的镜像引用（digest 形态）。"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "环境变量（仅 GetTask 填充；ListTasks 恒空）。"
+        },
+        "status": {
+          "type": "string",
+          "title": "queued | running | stopping | stopped | failed | deleting。"
+        },
+        "scope": {
+          "$ref": "#/definitions/v1TaskScope"
+        },
+        "ttl_seconds": {
+          "type": "string",
+          "format": "int64",
+          "title": "生效 TTL（秒）。"
+        },
+        "cpu_millis": {
+          "type": "string",
+          "format": "int64"
+        },
+        "memory_bytes": {
+          "type": "string",
+          "format": "int64"
+        },
+        "service": {
+          "type": "string",
+          "title": "底座 Swarm 服务名（fleetly-task-\u003cid\u003e）。"
+        },
+        "dns_name": {
+          "type": "string",
+          "title": "稳定 DNS 名（作用域网络内的解析目标 = service 名）。"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "error": {
+          "type": "string",
+          "title": "失败原因（failed 时非空）。"
+        },
+        "stop_reason": {
+          "type": "string",
+          "title": "停止原因（stopped 时非空）：owner（调用方停止）| expired（TTL 到期回收）\n| exited（容器任务自然完成——restart-condition none）。"
+        }
+      },
+      "title": "TaskView 是任务台账行的投影（env 只在 GetTask 回显——列表面零 env）。"
+    }
+  }
+}

@@ -94,8 +94,10 @@ const (
 
 // streamFields 是入湖流字段词表（设计 §2.3：_stream_fields={app,service,
 // source}——流粒度 = app × service × source，检索面的服务/来源过滤走
-// 流过滤）。单一事实源在本包；internal/logs 批量器经本包消费。
-const streamFields = "app,service,source"
+// 流过滤）。DT-5 起增 task（任务日志面：任务行 app/service 为空，task =
+// 任务平台 ID，流标签即归因面）。单一事实源在本包；internal/logs 批量器
+// 经本包消费。
+const streamFields = "app,service,source,task"
 
 // constraintFor 是 manager 钉定约束（与 rustfs/ingress 同公式：node.
 // labels.<LabelNodeID> == <platformID>；本地重写避免适配器反向依赖，

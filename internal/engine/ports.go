@@ -20,6 +20,20 @@ type ServiceSpec struct {
 	// Image 是 digest 钉定引用（`repo@sha256:...`，D9）。
 	Image   string   `json:"image"`
 	Command []string `json:"command,omitempty"`
+	// Args 覆盖镜像 CMD（DT-5 任务面：ENTRYPOINT/CMD 双面——空 = 镜像缺省；
+	// app 服务路径恒空）。
+	Args []string `json:"args,omitempty"`
+	// User 是容器运行用户（`uid:gid`；空 = 镜像缺省）。**平台加固字段**：
+	// 任务面由服务端强制非 root（DT-5），不进用户表达面（compose 无该键）。
+	User string `json:"user,omitempty"`
+	// ReadOnlyRootfs 是只读 rootfs（DT-5 任务加固：服务端恒 true；app 服务
+	// 路径恒 false——compose 无该键）。
+	ReadOnlyRootfs bool `json:"read_only_rootfs,omitempty"`
+	// CapDrop 是能力剥夺清单（DT-5 任务加固：服务端恒 ["ALL"]；compose
+	// cap_drop 在受控子集拒绝列表——该字段只由平台自己填）。
+	CapDrop []string `json:"cap_drop,omitempty"`
+	// PidsLimit 是 PID 数限额（DT-5 任务加固：服务端钉 512；0 = 不设限）。
+	PidsLimit int64 `json:"pids_limit,omitempty"`
 	// Env 是合并后的注入环境（KEY=VALUE，按 key 字典序；值明文只存活于
 	// 本结构与密文快照，不进日志/事件/审计）。
 	Env []string `json:"env,omitempty"`
@@ -110,6 +124,9 @@ type NetworkState struct {
 	Labels map[string]string
 	// Driver 是网络驱动（overlay/bridge/...；只读披露）。
 	Driver string
+	// Internal 是 internal 变体（无出网、无外部 DNS；DT-7 不可信隔离面
+	// ——task-group 网络的 internal 语义判据，idempotency 校验的读面）。
+	Internal bool
 	// Containers 是当前挂接的容器数（GC 安全性判据：零端点才回收；daemon
 	// 对 in-use 网络的移除另有 FailedPrecondition 拒绝兜底——真机实证）。
 	Containers int
@@ -197,6 +214,11 @@ type ServiceState struct {
 
 	// ── 运行域漂移反解字段（T2.13；与 ServiceSpec 同构，由适配器填充）──
 	Command         []string
+	Args            []string
+	User            string
+	ReadOnlyRootfs  bool
+	CapDrop         []string
+	PidsLimit       int64
 	Env             []string
 	ContainerLabels map[string]string
 	Global          bool
@@ -229,6 +251,11 @@ func serviceSpecOf(s ServiceState) ServiceSpec {
 		Name:              s.Name,
 		Image:             s.Image,
 		Command:           s.Command,
+		Args:              s.Args,
+		User:              s.User,
+		ReadOnlyRootfs:    s.ReadOnlyRootfs,
+		CapDrop:           s.CapDrop,
+		PidsLimit:         s.PidsLimit,
 		Env:               s.Env,
 		ServiceLabels:     s.Labels,
 		ContainerLabels:   s.ContainerLabels,
@@ -304,6 +331,10 @@ type NetworkSubstrate interface {
 	// NetworkEnsureWithLabels 幂等确保网络存在（缺失创建；自描述 label
 	// 随创建写入——项目网 = managed + fleetly.project-network=<projectID>）。
 	NetworkEnsureWithLabels(ctx context.Context, name string, labels map[string]string) error
+	// NetworkEnsureWithOptions 是带 internal 变体的幂等 ensure（DT-5/DT-7
+	// task-group 网络：internal=true = 无出网、无外部 DNS 的隔离面；
+	// 已存在网络的变体与请求不一致显式失败——不可静默接受错变体）。
+	NetworkEnsureWithOptions(ctx context.Context, name string, labels map[string]string, internal bool) error
 	// NetworkList 按 label 选择器（key=value）返回网络投影。
 	NetworkList(ctx context.Context, labels map[string]string) ([]NetworkState, error)
 	// NetworkInspect 按名取网络投影；缺失返回 ErrNetworkNotFound。

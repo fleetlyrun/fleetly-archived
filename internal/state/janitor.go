@@ -46,6 +46,8 @@ const (
 	// DefaultDeploymentDirRetentionDays 是部署 compose 持久化目录在部署
 	// 终态后的保留天数（终态前行恒不清理）。
 	DefaultDeploymentDirRetentionDays = 30
+	// DefaultTaskRetentionDays 是任务终态台账行的保留天数（DT-5/IMPL-T2-1）。
+	DefaultTaskRetentionDays = 30
 )
 
 // JanitorConfig 是 janitor 的保留窗与预算参数集（S18-A7/A10 装配扩展：
@@ -74,6 +76,9 @@ type JanitorConfig struct {
 	// StaleBuildBudget 是构建非终态超龄判定预算（2×构建超时，装配自
 	// build 配置；≤0 跳过构建扫描）。
 	StaleBuildBudget time.Duration
+	// TaskRetentionDays 是任务终态台账行保留天数（DT-5；缺省 30——任务
+	// 生命周期分钟级，台账只留观察窗）。
+	TaskRetentionDays int
 }
 
 // Janitor 周期清理过期事件与审计记录（S18-A7/A10：外加部署目录/构建
@@ -115,6 +120,7 @@ func NewJanitor(store *Store, cfg JanitorConfig, log *slog.Logger) *Janitor {
 			DeploymentDirRetentionDays: retentionDaysOr(cfg.DeploymentDirRetentionDays, DefaultDeploymentDirRetentionDays),
 			StaleDeploymentBudget:      cfg.StaleDeploymentBudget,
 			StaleBuildBudget:           cfg.StaleBuildBudget,
+			TaskRetentionDays:          retentionDaysOr(cfg.TaskRetentionDays, DefaultTaskRetentionDays),
 		},
 		eventRetention: retentionOrDefault(cfg.EventRetentionDays, DefaultEventRetentionDays),
 		auditRetention: retentionOrDefault(cfg.AuditRetentionDays, DefaultAuditRetentionDays),
@@ -206,6 +212,14 @@ func (j *Janitor) PruneOnce(ctx context.Context, now time.Time) (events int64, a
 		j.log.Error("janitor: prune cron runs failed", "error", err)
 	} else if n > 0 {
 		j.log.Info("janitor: pruned cron runs", "runs_pruned", n)
+	}
+	// T 线 DT-5/IMPL-T2-1：任务终态台账行保留期回收（默认 30 天；任务生命周期
+	// 分钟级，台账只留观察窗）。删除只清行——事件/审计面独立留存。
+	if n, err := j.store.PruneTerminalTasksOlderThan(ctx,
+		now.Add(-time.Duration(j.cfg.TaskRetentionDays)*24*time.Hour)); err != nil {
+		j.log.Error("janitor: prune terminal tasks failed", "error", err)
+	} else if n > 0 {
+		j.log.Info("janitor: pruned terminal tasks", "tasks_pruned", n)
 	}
 	// E6 W5-S4 通知投递台账留存窗（observability §5.2：7d——投递事实只保
 	// 一周，与事件 30d 窗解耦）。清窗失败只告警，不中断后续 duties。

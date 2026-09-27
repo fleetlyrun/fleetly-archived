@@ -87,6 +87,13 @@ s3.updated	object storage settings changed (payload carries the mode and toggles
 scaling.adjusted	autoscaler adjusted a service's replica count (payload carries the triggering dimension, before/after replicas and measured utilization)
 scaling.dormant	a scaling policy is dormant because metrics.mode is not on (one-time disclosure per policy; re-armed when metrics turns on)
 scaling.no_data	a scaling policy had no metric series for its target dimension — no action, honest no-data (one-time disclosure per policy)
+task.created	dynamic task accepted (owner token recorded; the engine converges the substrate service next; payload carries image/scope/network/ttl, never env values)
+task.deleted	dynamic task ledger row removed (substrate service already removed)
+task.expired	dynamic task TTL elapsed: the janitor reclaims the substrate service and lands the task stopped
+task.failed	dynamic task failed (substrate convergence failure, image unavailable, or the container task failed/rejected — restart-condition none means the platform does not self-heal it; payload carries a bounded error summary)
+task.orphaned	a platform-managed task service has no non-terminal state row (leftover or externally created): disclosed and reclaimed (the platform owns the object; label attribution)
+task.started	dynamic task converged: the substrate service is in place and resolvable by its stable DNS name inside the scope network
+task.stopped	dynamic task stopped and its substrate service removed (payload carries reason: owner | expired | exited)
 team.created	a team was created (payload carries slug/name; W1 source = the personal team provisioned atomically with registration, W2-S1 source = TeamsService.CreateTeam)
 team.member_changed	team membership changed — a member added, role changed or removed (payload carries change/user_id/role or from/to; removal carries the purged project-override count)
 terminal.closed	web terminal session closed (payload carries duration, close code and reason; metadata only, never session content)

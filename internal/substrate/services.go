@@ -172,6 +172,21 @@ func buildSwarmSpec(spec engine.ServiceSpec, secretIDs, configIDs map[string]str
 	if len(spec.Command) > 0 {
 		container.Command = spec.Command
 	}
+	// DT-5 平台加固字段（任务面服务端强制：CapDrop ALL / 只读 rootfs /
+	// 非 root user / pids 限额；app 服务路径恒零值——compose 受控子集没有
+	// 对应键，加固不进用户表达面）。
+	if len(spec.Args) > 0 {
+		container.Args = spec.Args
+	}
+	if spec.User != "" {
+		container.User = spec.User
+	}
+	if spec.ReadOnlyRootfs {
+		container.ReadOnly = true
+	}
+	if len(spec.CapDrop) > 0 {
+		container.CapabilityDrop = append([]string{}, spec.CapDrop...)
+	}
 	if spec.StopSignal != "" {
 		container.StopSignal = spec.StopSignal
 	}
@@ -232,13 +247,17 @@ func buildSwarmSpec(spec engine.ServiceSpec, secretIDs, configIDs map[string]str
 	if len(spec.Constraints) > 0 {
 		task.Placement = &swarm.Placement{Constraints: spec.Constraints}
 	}
-	if spec.Resources != nil {
-		task.Resources = &swarm.ResourceRequirements{
-			Limits: &swarm.Limit{
-				NanoCPUs:    spec.Resources.NanoCPUs,
-				MemoryBytes: spec.Resources.MemoryBytes,
-			},
+	if spec.Resources != nil || spec.PidsLimit > 0 {
+		limits := &swarm.Limit{}
+		if spec.Resources != nil {
+			limits.NanoCPUs = spec.Resources.NanoCPUs
+			limits.MemoryBytes = spec.Resources.MemoryBytes
 		}
+		// pids 限额在 swarm API 的 Resources.Limits.Pids（DT-5 任务加固：
+		// ContainerSpec 本体无该字段——真机 `docker service create
+		// --limit-pids` 的等价落点）。
+		limits.Pids = spec.PidsLimit
+		task.Resources = &swarm.ResourceRequirements{Limits: limits}
 	}
 	rp := spec.RestartPolicy
 	if rp == nil {
@@ -530,6 +549,10 @@ func serviceToState(svc swarm.Service) engine.ServiceState {
 		c := task.ContainerSpec
 		out.Image = c.Image
 		out.Command = append([]string{}, c.Command...)
+		out.Args = append([]string{}, c.Args...)
+		out.User = c.User
+		out.ReadOnlyRootfs = c.ReadOnly
+		out.CapDrop = append([]string{}, c.CapabilityDrop...)
 		out.Env = append([]string{}, c.Env...)
 		out.ContainerLabels = c.Labels
 		out.StopSignal = c.StopSignal
@@ -581,6 +604,7 @@ func serviceToState(svc swarm.Service) engine.ServiceState {
 			NanoCPUs:    task.Resources.Limits.NanoCPUs,
 			MemoryBytes: task.Resources.Limits.MemoryBytes,
 		}
+		out.PidsLimit = task.Resources.Limits.Pids
 	}
 	if task.RestartPolicy != nil {
 		rp := &engine.RestartPolicySpec{Condition: string(task.RestartPolicy.Condition)}

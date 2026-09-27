@@ -98,6 +98,7 @@ var ProviderSet = wire.NewSet(
 	NewAuditService,
 	NewTeamsService,
 	NewProjectsService,
+	NewTasksService,
 	NewGitTriggers,
 	NewGitKeysService,
 	NewGRPCServer,
@@ -625,6 +626,13 @@ func NewSecretsService(st *state.Store, sb *secrets.Box) *api.SecretsService {
 // 回读面）。
 func NewConfigsService(st *state.Store) *api.ConfigsService {
 	return api.NewConfigsService(st)
+}
+
+// NewTasksService 构造任务面（T 线 DT-5 / IMPL-T2-1）：执行面编排端口 =
+// engine（ResolveTaskScope / ResolveTaskImage / EnsureTaskNetwork 隐式实现
+// api.TasksOrchestrator；方向纪律同 appNetworkPort——装配层接线）。
+func NewTasksService(st *state.Store, sb *secrets.Box, eng *engine.Engine) *api.TasksService {
+	return api.NewTasksService(st, sb, eng)
 }
 
 // gitEndpointForHint 把 SSH 监听地址归一为 remote 提示的 host:port。主机位

@@ -99,6 +99,33 @@ func (f *fakeLogPort) JobServiceStates(_ context.Context, _ string) ([]engine.Se
 	return nil, nil
 }
 
+// TaskServiceStates 实现 logs.Port 增补面（DT-5 任务日志面）：API 测试装配
+// 无任务场景，恒空集。
+func (f *fakeLogPort) TaskServiceStates(_ context.Context) ([]engine.ServiceState, error) {
+	return nil, nil
+}
+
+// fakeTasksOrchestrator 是任务执行面编排端口的确定性假端口（DT-5/IMPL-T2-1；
+// 本进程无底座：作用畴网络名固定、镜像原样返回、挂靠声明全接受——RPC 链
+// 可走通，网络/收敛语义在 engine/state 各自测试覆盖）。
+type fakeTasksOrchestrator struct{}
+
+func (fakeTasksOrchestrator) ResolveTaskScope(context.Context, string, string, bool) (string, error) {
+	return "fleetly-taskgroup-apitest", nil
+}
+
+func (fakeTasksOrchestrator) ResolveTaskImage(_ context.Context, ref string) (string, error) {
+	return ref, nil
+}
+
+func (fakeTasksOrchestrator) EnsureTaskNetwork(_ context.Context, _ string, _ bool, members []engine.TaskNetworkMember) (string, []engine.TaskNetworkMemberStatus, error) {
+	out := make([]engine.TaskNetworkMemberStatus, 0, len(members))
+	for _, m := range members {
+		out = append(out, engine.TaskNetworkMemberStatus{App: m.App, Service: m.Service, Status: "pending"})
+	}
+	return "fleetly-taskgroup-apitest", out, nil
+}
+
 // Start 起一个完整服务面（除 ingress.Manager——nil 端口形态，入口面如实
 // 报告不可用）并返回连接与 admin token；生命周期挂 t.Cleanup。
 func Start(t *testing.T) *Env {
@@ -223,6 +250,9 @@ func start(t *testing.T, joinBaseDomain string, joinPort api.JoinTokenPort) *Env
 	//（attach/detach 的 RPC 链可走通；网络/重部署编排语义在 engine/state
 	// 各自测试覆盖——本环境无底座）。
 	serverv1.RegisterProjectsServiceServer(srv, api.NewProjectsService(st).WithNetworkPort(fakeProjectNetworkPort{}))
+	// 程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：确定性假编排端口
+	//（RPC 链可走通；收敛/对账语义在 engine/state 测试覆盖）。
+	serverv1.RegisterTasksServiceServer(srv, api.NewTasksService(st, box, fakeTasksOrchestrator{}))
 
 	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = srv.Serve(lis) }()

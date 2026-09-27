@@ -374,7 +374,7 @@ func must(t *testing.T, fn func() (string, error)) string {
 // 迁移退役（结构性安全——app 名不再紧邻 fleetly- 前缀，E_APP_NAME_RESERVED
 // 退役）。
 func TestReservedTeamSlugs(t *testing.T) {
-	want := []string{"acme", "cron", "db", "dbjob", "init", "metrics", "registry", "rustfs", "victorialogs"}
+	want := []string{"acme", "cron", "db", "dbjob", "init", "metrics", "registry", "rustfs", "taskgroup", "victorialogs"}
 	got := ReservedTeamSlugs()
 	if len(got) != len(want) {
 		t.Fatalf("reserved set = %v, want %v", got, want)

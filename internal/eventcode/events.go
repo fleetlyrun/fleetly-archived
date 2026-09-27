@@ -32,7 +32,9 @@ package eventcode
 // （registry.updated，DT-2 平台 registry 凭证面）= 83 + IMPL-T1-3 增 2
 // （release.job_failed / release.job_timed_out，DT-4 部署期 init job）=
 // 85 + IMPL-T15-1 增 3（project.network_changed 项目网参与面 +
-// network.orphaned / network.missing 对账兜底守卫，OT-1/DT-5）= 88 个事件名。
+// network.orphaned / network.missing 对账兜底守卫，OT-1/DT-5）= 88 +
+// IMPL-T2-1 增 7（task.created / task.started / task.stopped / task.expired /
+// task.failed / task.deleted / task.orphaned，DT-5 动态工作负载面）= 95 个事件名。
 var builtins = []Event{
 	// ── 发布（release-semantics §2.7）──
 	{Name: "deployment.queued", Summary: "deploy queued (per-app mutually exclusive queueing)"},
@@ -287,6 +289,20 @@ var builtins = []Event{
 	// 移除）；重建归 attach/发布链路的 NetworkEnsure（对账不自动重建，
 	// 与 app.substrate_missing 同纪律）。
 	{Name: "network.missing", Summary: "an expected project network is absent from the substrate (external removal); disclosed only — the next attach or member deploy re-ensures it"},
+
+	// ── 程序化动态工作负载（T 线 DT-5 / IMPL-T2-1，注册表只增。任务 =
+	//    swarm service 承载（restart-condition none：崩溃上抛不静默自愈），
+	//    平台管 API/网络/配额/审计/回收。发出/消费点 = internal/state
+	//    tasks.go 原语（与业务写同事务 = Outbox）与 internal/engine 任务
+	//    duty。payload 只带事实字段（task/image/scope/network/ttl/reason/
+	//    error），env 值与镜像凭证零出现）──
+	{Name: "task.created", Summary: "dynamic task accepted (owner token recorded; the engine converges the substrate service next; payload carries image/scope/network/ttl, never env values)"},
+	{Name: "task.started", Summary: "dynamic task converged: the substrate service is in place and resolvable by its stable DNS name inside the scope network"},
+	{Name: "task.stopped", Summary: "dynamic task stopped and its substrate service removed (payload carries reason: owner | expired | exited)"},
+	{Name: "task.expired", Summary: "dynamic task TTL elapsed: the janitor reclaims the substrate service and lands the task stopped"},
+	{Name: "task.failed", Summary: "dynamic task failed (substrate convergence failure, image unavailable, or the container task failed/rejected — restart-condition none means the platform does not self-heal it; payload carries a bounded error summary)"},
+	{Name: "task.deleted", Summary: "dynamic task ledger row removed (substrate service already removed)"},
+	{Name: "task.orphaned", Summary: "a platform-managed task service has no non-terminal state row (leftover or externally created): disclosed and reclaimed (the platform owns the object; label attribution)"},
 
 	// ── git SSH host key（v0.3 W3-S2，rbac-teams §6 裁决 D-W0-8 FZ-12；
 	//    注册表只增）：发出来源 = host key 启动装载与指纹台账的比对事务

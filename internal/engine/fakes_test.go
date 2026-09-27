@@ -575,6 +575,8 @@ type fakeNetwork struct {
 	labels     map[string]string
 	containers int
 	services   int
+	// internal 是 internal 变体位（DT-5/DT-7：task-group 不可信隔离面）。
+	internal bool
 }
 
 // fakeNetworkSubstrate 是 NetworkSubstrate 端口的内存实现（IMPL-T15-1 项目网
@@ -600,17 +602,26 @@ func newFakeNetworkSubstrate() *fakeNetworkSubstrate {
 }
 
 func (f *fakeNetworkSubstrate) NetworkEnsureWithLabels(_ context.Context, name string, labels map[string]string) error {
+	return f.NetworkEnsureWithOptions(context.Background(), name, labels, false)
+}
+
+// NetworkEnsureWithOptions 实现带 internal 变体的 ensure（DT-5/DT-7 任务面
+// 假底座：变体错配与真适配器同语义——显式失败）。
+func (f *fakeNetworkSubstrate) NetworkEnsureWithOptions(_ context.Context, name string, labels map[string]string, internal bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.ensures = append(f.ensures, name)
-	if _, ok := f.nets[name]; ok {
+	if net, ok := f.nets[name]; ok {
+		if net.internal != internal {
+			return fmt.Errorf("fake substrate: network %s exists with internal=%t but internal=%t was requested", name, net.internal, internal)
+		}
 		return nil // 已存在不覆盖（真实 daemon 语义）
 	}
 	copied := make(map[string]string, len(labels))
 	for k, v := range labels {
 		copied[k] = v
 	}
-	f.nets[name] = &fakeNetwork{labels: copied}
+	f.nets[name] = &fakeNetwork{labels: copied, internal: internal}
 	return nil
 }
 
@@ -656,6 +667,7 @@ func (f *fakeNetworkSubstrate) NetworkInspect(_ context.Context, name string) (N
 	}
 	return NetworkState{
 		Name: name, Labels: copyLabels(net.labels), Driver: "overlay",
+		Internal:   net.internal,
 		Containers: net.containers, Services: net.services,
 	}, nil
 }

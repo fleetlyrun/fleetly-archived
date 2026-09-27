@@ -26,6 +26,10 @@ type fakePort struct {
 	jobStates map[string][]engine.ServiceState
 	// jobErr 非 nil 时 JobServiceStates 返回该错误（底座暂态注入）。
 	jobErr error
+	// taskStates 是任务服务实况投影（DT-5 任务日志面测试的发现面注入）。
+	taskStates []engine.ServiceState
+	// taskErr 非 nil 时 TaskServiceStates 返回该错误（底座暂态注入）。
+	taskErr error
 }
 
 func newFakePort() *fakePort {
@@ -53,6 +57,13 @@ func (f *fakePort) JobServiceStates(_ context.Context, app string) ([]engine.Ser
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.jobStates[app], f.jobErr
+}
+
+// TaskServiceStates 实现 logs.Port 的任务日志发现面（DT-5）。
+func (f *fakePort) TaskServiceStates(_ context.Context) ([]engine.ServiceState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.taskStates, f.taskErr
 }
 
 func (f *fakePort) setApp(app string, services ...string) {

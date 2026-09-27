@@ -49,6 +49,10 @@ var servicePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 //（至多两个）；注入字形（引号/管道/空白）仍被结构性挡住。
 var appPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*(/[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*)?$`)
 
+// taskPattern 是任务流选择器的白名单形（DT-5 任务日志面：task 标签 =
+// 26 位 Crockford ULID；服务名/ID 之外的形态拒绝，注入安全硬性条款同源）。
+var taskPattern = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
+
 // allowedSources 是来源白名单词表（S1：container|build；S2 起访问日志
 // source=access 进入词表——与采集面同拍放行，诚实边界不预放行）。
 var allowedSources = map[string]bool{
@@ -70,10 +74,12 @@ func EscapeLogsQLPhrase(s string) string {
 
 // SearchQuery 是 SearchLogs 的查询输入（api 层投影后的形态）。
 type SearchQuery struct {
-	// Apps/Services/Sources 是可选过滤集（空 = 不过滤该维度）。
+	// Apps/Services/Sources/Tasks 是可选过滤集（空 = 不过滤该维度）。
 	Apps     []string
 	Services []string
 	Sources  []string
+	// Tasks 是任务流选择器（DT-5 任务日志面：task 标签 = 任务平台 ID）。
+	Tasks []string
 	// Keyword 是全文短语（空 = 无关键词过滤）。
 	Keyword string
 	// Start/End 是时间窗（零值 = 不设界；end 传给 VL 的语义为开区间）。
@@ -92,8 +98,10 @@ type LogRow struct {
 	App     string
 	Service string
 	Source  string
-	Stderr  bool
-	Msg     string
+	// Task 是任务日志归因（DT-5：task 标签 = 任务平台 ID；app 行恒空）。
+	Task   string
+	Stderr bool
+	Msg    string
 	// Fields 是 access 行的结构化字段回读（白名单键内取回；container/
 	// build 行为 nil）。
 	Fields map[string]string
@@ -159,6 +167,7 @@ func (b *Backend) IngestBulk(ctx context.Context, entries []logs.Entry) error {
 			App:     e.App,
 			Service: e.Service,
 			Source:  e.Source,
+			Task:    e.Task,
 			Stderr:  e.Stderr,
 		}
 		raw, err := json.Marshal(row)
@@ -201,7 +210,10 @@ type bulkRow struct {
 	App     string `json:"app"`
 	Service string `json:"service"`
 	Source  string `json:"source"`
-	Stderr  bool   `json:"stderr,omitempty"`
+	// Task 是任务日志归因（DT-5；空 = 非任务行——omitempty 保持既有行
+	// schema 零变化）。
+	Task   string `json:"task,omitempty"`
+	Stderr bool   `json:"stderr,omitempty"`
 }
 
 // expandAccessFields 把访问行的结构化字段并入入湖行 JSON（顶层键展开；
@@ -232,7 +244,7 @@ var ErrBadQuery = errors.New("victorialogs: invalid search query")
 // 流过滤 `{app=~"^(…)$",service=~"^(…)$",source=~"^(…)$"}`（值经白名单
 // 校验 + QuoteMeta 锚定）+ 关键词短语 `"escaped"`（EscapeLogsQLPhrase）。
 // 全空输入返回 `*`（match-all；时间窗由 start/end 参数承载）。
-func BuildLogsQL(apps, services, sources []string, keyword string) (string, error) {
+func BuildLogsQL(apps, services, sources, tasks []string, keyword string) (string, error) {
 	for _, v := range apps {
 		if !appPattern.MatchString(v) {
 			return "", fmt.Errorf("%w: app %q not in ^[a-z0-9-]+ or team/prj/app form", ErrBadQuery, v)
@@ -248,6 +260,11 @@ func BuildLogsQL(apps, services, sources []string, keyword string) (string, erro
 			return "", fmt.Errorf("%w: source %q not in {container, build, access}", ErrBadQuery, v)
 		}
 	}
+	for _, v := range tasks {
+		if !taskPattern.MatchString(v) {
+			return "", fmt.Errorf("%w: task %q not in ^[0-9A-HJKMNP-TV-Z]{26}$ form", ErrBadQuery, v)
+		}
+	}
 	var parts []string
 	if v := streamFilterField("app", apps); v != "" {
 		parts = append(parts, v)
@@ -256,6 +273,9 @@ func BuildLogsQL(apps, services, sources []string, keyword string) (string, erro
 		parts = append(parts, v)
 	}
 	if v := streamFilterField("source", sources); v != "" {
+		parts = append(parts, v)
+	}
+	if v := streamFilterField("task", tasks); v != "" {
 		parts = append(parts, v)
 	}
 	var b strings.Builder
@@ -292,7 +312,7 @@ func streamFilterField(field string, values []string) string {
 // E_LOGS_BACKEND_UNAVAILABLE 诚实报错——本层只回原生错误）。结果为 VL
 // 原生序（_time 最大优先——最新命中在前，检索面 UX 口径）。
 func (b *Backend) Search(ctx context.Context, q SearchQuery) ([]LogRow, error) {
-	query, err := BuildLogsQL(q.Apps, q.Services, q.Sources, q.Keyword)
+	query, err := BuildLogsQL(q.Apps, q.Services, q.Sources, q.Tasks, q.Keyword)
 	if err != nil {
 		return nil, err
 	}
@@ -363,6 +383,7 @@ func logRowOf(raw map[string]any) LogRow {
 		App:     rawString(raw["app"]),
 		Service: rawString(raw["service"]),
 		Source:  rawString(raw["source"]),
+		Task:    rawString(raw["task"]),
 		Msg:     rawString(raw["_msg"]),
 		Stderr:  rawBool(raw["stderr"]),
 	}

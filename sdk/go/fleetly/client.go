@@ -101,6 +101,7 @@ type Client struct {
 	secs     serverv1.SecretsServiceClient
 	configs  serverv1.ConfigsServiceClient
 	projects serverv1.ProjectsServiceClient
+	tasks    serverv1.TasksServiceClient
 }
 
 // NewClient 建立 gRPC 连接（默认 127.0.0.1:8421，明文——TLS 经 WithTLS/
@@ -151,6 +152,7 @@ func NewClient(opts ...Option) (*Client, error) {
 		secs:     serverv1.NewSecretsServiceClient(conn),
 		configs:  serverv1.NewConfigsServiceClient(conn),
 		projects: serverv1.NewProjectsServiceClient(conn),
+		tasks:    serverv1.NewTasksServiceClient(conn),
 	}, nil
 }
 
@@ -252,6 +254,11 @@ func (c *Client) Configs() serverv1.ConfigsServiceClient { return c.configs }
 // Projects 取项目面（v0.3 W2-S1 项目/覆写成员 + W2-S3 资源改派 +
 // IMPL-T15-1 项目网参与 attach/detach）。
 func (c *Client) Projects() serverv1.ProjectsServiceClient { return c.projects }
+
+// Tasks 取程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：任务受理/视图/
+// 停止/删除 + task-group 网络 ensure（整体 tasks 独立 scope；机具令牌为
+// 典型持有者——CLI `fleetly tasks` 的消费面）。
+func (c *Client) Tasks() serverv1.TasksServiceClient { return c.tasks }
 
 // Ping 探测控制面存活并取回 service / version（豁免鉴权——装面前的
 // 存活检查路径）。

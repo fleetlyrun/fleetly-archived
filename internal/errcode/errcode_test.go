@@ -145,6 +145,12 @@ var docCodes = map[string]string{ // code → 文档出处
 	// 拒绝（internal/api/terminal.go / internal/execrelay hub.go）。
 	"E_TERMINAL_DISABLED": "E7 web-terminal §2.4 (W5-S6 feature gate: terminal.enabled=false deploys no exec relay and refuses ticket issuance, 409)",
 
+	// T 线 DT-5 / IMPL-T2-1 动态工作负载面（注册表只增）：请求契约违约走
+	// 400（internal/api/tasks.go 与 internal/engine/tasks.go 的 ResolveTaskScope
+	// 校验）；每令牌配额 fail-closed 拒绝走 429（state/tasks.go 同事务核对）。
+	"E_TASK_UNSUPPORTED":    "T-line DT-5/IMPL-T2-1 (task scope/internal variant/ttl/resource bounds violated; tasks join existing networks only, 400)",
+	"E_TASK_QUOTA_EXCEEDED": "T-line DT-5/IMPL-T2-1 (per-token concurrent/resource quota exhausted; fail-closed at CreateTask, 429)",
+
 	// B 线 W5 ACME DNS-01 通配证书面（b-line-w5 设计 §3，D-V3W5-3/D-V3W5-4，
 	// W5-S3 接线，注册表只增）：acme.* 设置联动校验门两码（消费点 =
 	// internal/state/acmesettings.go ValidateAcmeSettings——422 语义违约 /
@@ -234,7 +240,9 @@ func TestDocCodeSetMatchesRegistry(t *testing.T) {
 // E_ACME_WILDCARD_REQUIRES_BASE_DOMAIN 联动门 + E_ACME_DNS_TEST_FAILED
 // 探针失败）→ 77 E + 5 W。DT-4（IMPL-T1-3）增 E_INIT_JOB_FAILED /
 // E_INIT_JOB_TIMED_OUT（部署期 init job 失败/超时归因）→ 79 E + 5 W；
-// IMPL-T1-4（OT-3）增 E_CONFIG_NOT_FOUND（明文配置资源缺失哨兵）→ 80 E + 5 W。
+// IMPL-T1-4（OT-3）增 E_CONFIG_NOT_FOUND（明文配置资源缺失哨兵）→ 80 E + 5 W；
+// T 线 DT-5/IMPL-T2-1 增 E_TASK_UNSUPPORTED / E_TASK_QUOTA_EXCEEDED（动态
+// 工作负载面契约违约与配额 fail-closed）→ 82 E + 5 W。
 func TestRegisteredCountByKind(t *testing.T) {
 	errCount, warnCount := 0, 0
 	for _, c := range Default().All() {
@@ -244,8 +252,8 @@ func TestRegisteredCountByKind(t *testing.T) {
 			warnCount++
 		}
 	}
-	if errCount != 80 || warnCount != 5 {
-		t.Fatalf("E_ = %d (want 80), W_ = %d (want 5)", errCount, warnCount)
+	if errCount != 82 || warnCount != 5 {
+		t.Fatalf("E_ = %d (want 82), W_ = %d (want 5)", errCount, warnCount)
 	}
 }
 
