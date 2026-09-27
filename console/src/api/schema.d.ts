@@ -1847,6 +1847,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/apps/{app}/configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ListConfigs 该 app 全部 config（按 name 字典序；只投影名称/指纹/时间锚
+         *     ——值只在 GetConfig 的 admin 回读路径出现）。
+         */
+        get: operations["ConfigsService_ListConfigs"];
+        put?: never;
+        /**
+         * SetConfig 写入（覆盖即换版）：值明文落 app_configs；审计 config.set
+         *     （diff 只带名称与 hash8 指纹）。
+         */
+        post: operations["ConfigsService_SetConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{app}/configs/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GetConfig 明文回读（admin scope——与 GetEnv 同级信任面）。 */
+        get: operations["ConfigsService_GetConfig"];
+        put?: never;
+        post?: never;
+        /**
+         * RemoveConfig 删除单条（幂等不做：不存在 404）。已被运行中服务引用的
+         *     removal 不追写部署——引用方下次部署 preflight E_CONFIG_NOT_FOUND 诚实
+         *     失败（移除声明再部署的既有语义，与 RemoveSecret 同口径）。
+         */
+        delete: operations["ConfigsService_RemoveConfig"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/notifications/deliveries": {
         parameters: {
             query?: never;
@@ -4177,6 +4223,57 @@ export interface components {
             app?: string;
             name?: string;
             /** 值指纹（sha256 前 8 hex——「是不是那个值」比对面；值材料零出现）。 */
+            hash8?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        ConfigsServiceSetConfigBody: {
+            /**
+             * config 声明名（compose 服务级 configs 引用的短名；合法标识符字符集
+             *     ^[A-Za-z0-9][A-Za-z0-9._-]*$——与 internal/compose 的 config 名校验同
+             *     规则，注释锚互指）。
+             */
+            name?: string;
+            /**
+             * 值（明文；上限 64KiB sanity——与 secrets 口径一致：swarm config 单对象
+             *     上界 500KB 的宽松内档；长度进形状层即拒）。
+             */
+            value?: string;
+        };
+        /**
+         * ConfigView 是配置资源的只读投影（值零出现——值只在 GetConfig 的显式
+         *     admin 回读路径；hash8 是内容寻址与「是不是那一版」比对面）。
+         */
+        v1ConfigView: {
+            name?: string;
+            hash8?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        v1GetConfigResponse: {
+            app?: string;
+            name?: string;
+            /** 配置内容明文（admin scope；与 GetEnv 的回读信任同级）。 */
+            value?: string;
+            hash8?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        v1ListConfigsResponse: {
+            configs?: components["schemas"]["v1ConfigView"][];
+        };
+        v1RemoveConfigResponse: {
+            app?: string;
+            name?: string;
+        };
+        v1SetConfigResponse: {
+            app?: string;
+            name?: string;
+            /** 内容指纹（sha256 前 8 hex——swarm config 对象名的内容寻址尾缀）。 */
             hash8?: string;
             /** Format: date-time */
             created_at?: string;
@@ -8537,6 +8634,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["v1RemoveSecretResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfigsService_ListConfigs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ListConfigsResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfigsService_SetConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 归属 app 名（或限定形/id）。 */
+                app: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigsServiceSetConfigBody"];
+            };
+        };
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1SetConfigResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfigsService_GetConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1GetConfigResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ConfigsService_RemoveConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1RemoveConfigResponse"];
                 };
             };
             /** @description An unexpected error response. */

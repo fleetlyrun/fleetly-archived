@@ -179,6 +179,7 @@ func (f *fakeSubstrate) stateOf(svc *fakeService) ServiceState {
 		Networks:        append([]NetworkAttach{}, svc.spec.Networks...),
 		Mounts:          append([]MountSpec{}, svc.spec.Mounts...),
 		Secrets:         append([]SecretMount{}, svc.spec.Secrets...),
+		Configs:         append([]ConfigMount{}, svc.spec.Configs...),
 		Healthcheck:     svc.spec.Healthcheck,
 		RestartPolicy:   svc.spec.RestartPolicy,
 		Resources:       svc.spec.Resources,
@@ -206,6 +207,20 @@ func globalReplicasOf(spec ServiceSpec) uint64 {
 		return 0
 	}
 	return spec.Replicas
+}
+
+// sameConfigMounts 比较 config 引用集（顺序敏感——期望序权威；config 引用
+// 变化 = task template 变化 = 服务滚动，OT-3/IMPL-T1-4 真机实证）。
+func sameConfigMounts(a, b []ConfigMount) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // mutateExternal 模拟外部操作（手动 docker service update --env 等）：绕过
@@ -282,12 +297,22 @@ func (f *fakeSubstrate) ServiceUpdate(_ context.Context, name string, spec Servi
 	f.updates = append(f.updates, [2]string{name, spec.Image})
 	oldImage := svc.spec.Image
 	oldTasks := append([]TaskState{}, svc.tasks...)
-	// 判定是否有实质变更（镜像变化才进入行为模型；纯 label 更新零任务
-	// 变动——归位零成本的假底座同构，Spike B2）。
-	contentChanged := oldImage != spec.Image
+	// 判定是否有实质变更（镜像或 config 引用变化才进入行为模型——真实
+	// swarm 的 task template 变更即触发滚动，config 引用是模板的一部分；
+	// 纯 label 更新零任务变动——归位零成本的假底座同构，Spike B2）。
+	imageChanged := oldImage != spec.Image
+	configsChanged := !sameConfigMounts(svc.spec.Configs, spec.Configs)
 	svc.spec = spec
-	if !contentChanged {
+	if !imageChanged && !configsChanged {
 		svc.update = "completed"
+		return nil
+	}
+	if configsChanged && !imageChanged {
+		// 同镜像、config 引用换版：真实 swarm 以 task template 变更重建任务
+		//（同镜像也替换；IMPL-T1-4 真机探针实证），更新即完成。
+		svc.update = "completed"
+		svc.message = ""
+		svc.tasks = f.runningTasks(svc, "t-cfg")
 		return nil
 	}
 	f.applyMode(svc, oldImage, oldTasks)

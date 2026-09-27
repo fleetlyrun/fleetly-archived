@@ -79,6 +79,7 @@ var ProviderSet = wire.NewSet(
 	NewCronService,
 	NewDatabaseService,
 	NewSecretsService,
+	NewConfigsService,
 	NewDeploymentsService,
 	NewRevisionsService,
 	NewBuildsService,
@@ -329,7 +330,7 @@ func NewMetricsManager(app lynx.App, cfg *AppConfig, st *state.Store, mb *metric
 // databases §2.1/§2.3 的 provisioner：按生命周期态分派收敛——provisioning
 // 建现场过健康门、ready/degraded 健康观察、paused 保持 scale-0、deleting
 // 幂等 reap；状态写全部经 state.EnterDbPhase 单写点）。自建 Docker 连接
-//（rustfs Manager 同款形态——引擎凭据 secret 的 SecretReference 翻译需要
+// （rustfs Manager 同款形态——引擎凭据 secret 的 SecretReference 翻译需要
 // 底座对象 ID 与完整 File UID/GID/Mode，通用投影装不下），cleanup 释放；
 // 放置裁决消费 placement.Resolver（接口在 internal/database 定义，方向
 // 纪律同 cron 的 NodePreflight）。
@@ -451,6 +452,13 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 		// E4 W4-S6：Swarm secret 清场端口（app 删除 reap 的扫尾面——按归属
 		// label 扫描移除，best-effort 不阻塞删除收敛）。
 		WithSecretReaper(sc).
+		// T 线 OT-3/IMPL-T1-4：Swarm config 确保端口（compose configs 注入
+		// 链的底座原语——内容寻址对象，ensure 幂等由 substrate.Client.
+		// EnsureConfig 承载）。
+		WithConfigEnsurer(sc).
+		// T 线 OT-3/IMPL-T1-4：Swarm config 清场端口（内容换版的旧对象 GC
+		// 与 app 删除 reap 的扫尾面，best-effort）。
+		WithConfigReaper(sc).
 		// W5-S1 自动扩缩（D-V3W5-2）：VM 瞬时查询端口——metrics.Backend 隐式
 		// 实现 engine.MetricsQuerier（评估器的 CPU/内存采样面）。
 		WithMetricsQuerier(mb)
@@ -483,7 +491,7 @@ func NewLogsManager(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate
 // 游标经 EventsSince 消费 → 订阅匹配 → 签名 POST + 退避重试。进程内消费者
 // ——与 WatchEvents 平行，不经 token/流机制；常驻循环由服务壳 Start 承载，
 // 资源层停机时 drain 在途尝试）。box 供台账投递时的密钥解密；零外部资源
-//（HTTP 客户端无连接池清理面），无 cleanup。
+// （HTTP 客户端无连接池清理面），无 cleanup。
 func NewNotifyManager(app lynx.App, st *state.Store, sb *secrets.Box) *notify.Manager {
 	return notify.NewManager(st, sb, notify.Config{}, app.Logger())
 }
@@ -604,6 +612,13 @@ func NewDatabaseService(st *state.Store, sb *secrets.Box, dm *database.Manager) 
 // secret 的唯一写入口——box 加密落库，无值读回面）。
 func NewSecretsService(st *state.Store, sb *secrets.Box) *api.SecretsService {
 	return api.NewSecretsService(st, sb)
+}
+
+// NewConfigsService 构造明文配置资源面服务（T 线 OT-3/IMPL-T1-4：compose
+// external configs 的唯一写入口——明文落 app_configs，GetConfig 走 admin
+// 回读面）。
+func NewConfigsService(st *state.Store) *api.ConfigsService {
+	return api.NewConfigsService(st)
 }
 
 // gitEndpointForHint 把 SSH 监听地址归一为 remote 提示的 host:port。主机位

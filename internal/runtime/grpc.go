@@ -48,6 +48,7 @@ func NewGRPCServer(
 	cronSvc *api.CronService,
 	dbs *api.DatabaseService,
 	secretsSvc *api.SecretsService,
+	configsSvc *api.ConfigsService,
 	execSvc *api.ExecService,
 	authSvc *api.AuthService,
 	usersSvc *api.UsersService,
@@ -102,6 +103,7 @@ func NewGRPCServer(
 	serverv1.RegisterCronServiceServer(g, cronSvc)
 	serverv1.RegisterDatabaseServiceServer(g, dbs)
 	serverv1.RegisterSecretsServiceServer(g, secretsSvc) // E4 W4-S4：平台密钥库面（D-DB-7，无值读回）
+	serverv1.RegisterConfigsServiceServer(g, configsSvc) // T 线 OT-3/IMPL-T1-4：明文配置资源面（Get 明文走 admin）
 	// 认证/用户面（v0.3 W1，rbac-teams §5）：注册/登录/注册状态三方法在
 	// 拦截器豁免名单，Logout/LogoutAll/Me/AcceptInvite = 任意已认证，用户
 	// 管理面 = admin scope + handler 内平台管理员判定（internal/api/users.go）。

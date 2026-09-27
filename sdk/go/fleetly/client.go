@@ -99,6 +99,7 @@ type Client struct {
 	cron    serverv1.CronServiceClient
 	dbs     serverv1.DatabaseServiceClient
 	secs    serverv1.SecretsServiceClient
+	configs serverv1.ConfigsServiceClient
 }
 
 // NewClient 建立 gRPC 连接（默认 127.0.0.1:8421，明文——TLS 经 WithTLS/
@@ -147,6 +148,7 @@ func NewClient(opts ...Option) (*Client, error) {
 		cron:    serverv1.NewCronServiceClient(conn),
 		dbs:     serverv1.NewDatabaseServiceClient(conn),
 		secs:    serverv1.NewSecretsServiceClient(conn),
+		configs: serverv1.NewConfigsServiceClient(conn),
 	}, nil
 }
 
@@ -240,6 +242,10 @@ func (c *Client) Databases() serverv1.DatabaseServiceClient { return c.dbs }
 // Secrets 取平台密钥库面（E4 managed-databases §2.7，D-DB-7：external
 // secret 写面——无值读回，list 只出名称/指纹）。
 func (c *Client) Secrets() serverv1.SecretsServiceClient { return c.secs }
+
+// Configs 取明文配置资源面（T 线 OT-3/IMPL-T1-4：external config CRUD——
+// 明文可回读，GetConfig 走 admin scope；list 只出名称/指纹）。
+func (c *Client) Configs() serverv1.ConfigsServiceClient { return c.configs }
 
 // Ping 探测控制面存活并取回 service / version（豁免鉴权——装面前的
 // 存活检查路径）。

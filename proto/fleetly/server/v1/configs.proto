@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package fleetly.server.v1;
+
+option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// 文件级 swagger 声明：default 错误响应引用 shared 的 ErrorResponse 信封
+//（与 buf.gen.yaml 的 disable_default_errors=true 配合）。与 system.proto
+// 同款惯例，逐文件声明。
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  responses: {
+    key: "default"
+    value: {
+      description: "An unexpected error response."
+      schema: { json_schema: { ref: ".fleetly.shared.v1.ErrorResponse" } }
+    }
+  }
+};
+
+// ConfigsService 是 app 级明文配置资源面（T 线 OT-3 / IMPL-T1-4）：compose
+// `configs:` 声明（external: true）的唯一写入口。
+//
+// 与 SecretsService 的差异 = 明文面：值可回读（GetConfig，admin scope——
+// 与 GetEnv/RevealDatabaseCredentials 同级信任），落库为明文（配置不是
+// 凭据材料；设计 OT-3 明确「明文、版本化、审计、可回读」）。容器内挂载
+// 点是 compose 声明的绝对路径（`type: config` 语义——只读单文件；目录级
+// 文件树应烘镜像，平台不映射）。
+//
+// 版本化语义：同名 SetConfig 覆盖即换版（hash8 重盖），发布引擎按内容
+// 寻址重建 swarm config 对象（`fleetly-<team>-<prj>-<app>-config-<name>-
+// <hash8>`）——内容变更随下次部署换挂并触发服务滚动，旧对象由发布对账
+// 回收（admin 面零手工对象管理）。
+//
+// 错误语义：
+//   app 不存在     → 404（apps 面同款退化信封）
+//   config 不存在  → 404（Get/Remove）
+//   值超长/名违规  → 400（buf.validate 形状层；handler 层同名规则兜底）
+service ConfigsService {
+  // SetConfig 写入（覆盖即换版）：值明文落 app_configs；审计 config.set
+  // （diff 只带名称与 hash8 指纹）。
+  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse) {
+    option (google.api.http) = {
+      post: "/v1/apps/{app}/configs"
+      body: "*"
+    };
+  }
+  // ListConfigs 该 app 全部 config（按 name 字典序；只投影名称/指纹/时间锚
+  // ——值只在 GetConfig 的 admin 回读路径出现）。
+  rpc ListConfigs(ListConfigsRequest) returns (ListConfigsResponse) {
+    option (google.api.http) = { get: "/v1/apps/{app}/configs" };
+  }
+  // GetConfig 明文回读（admin scope——与 GetEnv 同级信任面）。
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = { get: "/v1/apps/{app}/configs/{name}" };
+  }
+  // RemoveConfig 删除单条（幂等不做：不存在 404）。已被运行中服务引用的
+  // removal 不追写部署——引用方下次部署 preflight E_CONFIG_NOT_FOUND 诚实
+  // 失败（移除声明再部署的既有语义，与 RemoveSecret 同口径）。
+  rpc RemoveConfig(RemoveConfigRequest) returns (RemoveConfigResponse) {
+    option (google.api.http) = { delete: "/v1/apps/{app}/configs/{name}" };
+  }
+}
+
+message SetConfigRequest {
+  // 归属 app 名（或限定形/id）。
+  string app = 1 [(buf.validate.field).string.min_len = 1];
+  // config 声明名（compose 服务级 configs 引用的短名；合法标识符字符集
+  // ^[A-Za-z0-9][A-Za-z0-9._-]*$——与 internal/compose 的 config 名校验同
+  // 规则，注释锚互指）。
+  string name = 2 [(buf.validate.field).string.pattern = "^[A-Za-z0-9][A-Za-z0-9._-]*$"];
+  // 值（明文；上限 64KiB sanity——与 secrets 口径一致：swarm config 单对象
+  // 上界 500KB 的宽松内档；长度进形状层即拒）。
+  string value = 3 [(buf.validate.field).string = { min_len: 1, max_len: 65536 }];
+}
+
+message SetConfigResponse {
+  string app = 1;
+  string name = 2;
+  // 内容指纹（sha256 前 8 hex——swarm config 对象名的内容寻址尾缀）。
+  string hash8 = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message ListConfigsRequest {
+  string app = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ListConfigsResponse {
+  repeated ConfigView configs = 1;
+}
+
+message GetConfigRequest {
+  string app = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetConfigResponse {
+  string app = 1;
+  string name = 2;
+  // 配置内容明文（admin scope；与 GetEnv 的回读信任同级）。
+  string value = 3;
+  string hash8 = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+message RemoveConfigRequest {
+  string app = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message RemoveConfigResponse {
+  string app = 1;
+  string name = 2;
+}
+
+// ConfigView 是配置资源的只读投影（值零出现——值只在 GetConfig 的显式
+// admin 回读路径；hash8 是内容寻址与「是不是那一版」比对面）。
+message ConfigView {
+  string name = 1;
+  string hash8 = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}

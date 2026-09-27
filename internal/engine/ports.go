@@ -55,6 +55,12 @@ type ServiceSpec struct {
 	Mounts []MountSpec `json:"mounts,omitempty"`
 	// Secrets 是 Swarm secret 挂载（file target = compose 名）。
 	Secrets []SecretMount `json:"secrets,omitempty"`
+	// Configs 是 Swarm config 文件挂载（OT-3/IMPL-T1-4）：ConfigName 是
+	// 内容寻址的 swarm config 对象名（naming.ConfigName——内容变更即换名，
+	// 引用随 desired-hash 变化触发服务滚动），Target 是容器内绝对路径
+	//（只读）。明文值只存活于「app_configs → EnsureConfig 载荷」内存链，
+	// 进快照的只有名字。
+	Configs []ConfigMount `json:"configs,omitempty"`
 	// Healthcheck 为 nil = health_gate=none（健康门退化为退出/副本水位）。
 	Healthcheck *HealthcheckSpec `json:"healthcheck,omitempty"`
 	// UpdateOrder 是更新顺序（start-first 默认；有卷/固定端口/global 强制
@@ -105,6 +111,18 @@ type SecretMount struct {
 	// SecretName 是 Swarm secret 名（fleetly-<app>-<name>-<hash8>）。
 	SecretName string `json:"secret"`
 	// Target 是容器内挂载文件路径（/run/secrets/<compose 名>）。
+	Target string `json:"target"`
+}
+
+// ConfigMount 是一次 Swarm config 文件挂载（OT-3，IMPL-T1-4）：ConfigName
+// 是内容寻址的 swarm config 对象名（naming.ConfigName——值变更即换名换
+// 引用），Target 是容器内绝对路径（config 恒只读，/run/secrets 前缀在
+// compose 校验层拒绝——secret 固定根不可撞）。
+type ConfigMount struct {
+	// ConfigName 是 Swarm config 对象名
+	//（fleetly-<team>-<prj>-<app>-config-<name>-<hash8>）。
+	ConfigName string `json:"config"`
+	// Target 是容器内挂载文件绝对路径（compose configs.target）。
 	Target string `json:"target"`
 }
 
@@ -162,6 +180,7 @@ type ServiceState struct {
 	Networks        []NetworkAttach
 	Mounts          []MountSpec
 	Secrets         []SecretMount
+	Configs         []ConfigMount
 	Healthcheck     *HealthcheckSpec
 	RestartPolicy   *RestartPolicySpec
 	Resources       *ResourcesSpec
@@ -195,6 +214,7 @@ func serviceSpecOf(s ServiceState) ServiceSpec {
 		Networks:          s.Networks,
 		Mounts:            s.Mounts,
 		Secrets:           s.Secrets,
+		Configs:           s.Configs,
 		Healthcheck:       s.Healthcheck,
 		RestartPolicy:     s.RestartPolicy,
 		Resources:         s.Resources,

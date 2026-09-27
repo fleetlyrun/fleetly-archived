@@ -184,6 +184,9 @@ func start(t *testing.T, joinBaseDomain string, joinPort api.JoinTokenPort) *Env
 	// 读回——负面扫描的 CLI 断言面）。
 	serverv1.RegisterDatabaseServiceServer(srv, api.NewDatabaseService(st, box, nil, nil, nil))
 	serverv1.RegisterSecretsServiceServer(srv, api.NewSecretsService(st, box))
+	// 明文配置资源面（T 线 OT-3/IMPL-T1-4）：CLI/集成测试同路径消费
+	//（受理/投影面；Get 明文回读的 admin 门在 scope 登记，与生产同形）。
+	serverv1.RegisterConfigsServiceServer(srv, api.NewConfigsService(st))
 	// 通知 Webhook 面（E6 W5-S4；W4-S3 通道扩展）：CLI golden/冒烟测试同
 	// 路径消费（受理/投影面——投递器 duty 不在进程内装配，TestWebhook 指
 	// 向真实网络才可达）。

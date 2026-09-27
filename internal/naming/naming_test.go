@@ -36,6 +36,13 @@ func TestNamesMatchDesignDocs(t *testing.T) {
 			want: "fleetly-acme-prod-my-api-database_url-" + wantHash8,
 		},
 		{
+			// T 线 OT-3 config 行：`fleetly-<team>-<prj>-<app>-config-<name>-<hash8>`
+			// （内容寻址；hash8 与 secret 同口径 = 值 sha256 前 8）。
+			name: "config name",
+			got:  must(t, func() (string, error) { return ConfigName("acme", "prod", "my-api", "app.yaml", wantHash8) }),
+			want: "fleetly-acme-prod-my-api-config-app.yaml-" + wantHash8,
+		},
+		{
 			// rbac-teams §4.3 app 卷行「不变」：`fleetly-<app>-<key>-<appid8>`。
 			name: "volume name (v0.3 formula unchanged)",
 			got:  must(t, func() (string, error) { return VolumeName("my-api", "data", "01JABCDEFGH") }),
@@ -141,6 +148,15 @@ func TestHash8RotationIsNewName(t *testing.T) {
 	if !strings.HasPrefix(old, "fleetly-t-p-app-k-") || !strings.HasPrefix(rotated, "fleetly-t-p-app-k-") {
 		t.Fatalf("name prefix broken: %s / %s", old, rotated)
 	}
+	// OT-3 config 同律：内容变更即换名换引用（服务滚动的内容寻址面）。
+	oldCfg := must(t, func() (string, error) { return ConfigName("t", "p", "app", "k", Hash8("content-v1")) })
+	newCfg := must(t, func() (string, error) { return ConfigName("t", "p", "app", "k", Hash8("content-v2")) })
+	if oldCfg == newCfg {
+		t.Fatalf("rotated config name unchanged: %s", oldCfg)
+	}
+	if !strings.HasPrefix(oldCfg, "fleetly-t-p-app-config-k-") {
+		t.Fatalf("config name prefix broken: %s", oldCfg)
+	}
 }
 
 // TestSameNameAcrossProjects D-W0-4 二修的核心性质：两个项目各有同名 app，
@@ -227,6 +243,9 @@ func TestNameValidation(t *testing.T) {
 		{"short appid", func() (string, error) { return VolumeName("app", "data", "01JA") }},
 		{"empty hash8", func() (string, error) { return SecretName("team", "prj", "app", "k", "") }},
 		{"uppercase hash8", func() (string, error) { return SecretName("team", "prj", "app", "k", "ABCDEF12") }},
+		{"empty config hash8", func() (string, error) { return ConfigName("team", "prj", "app", "k", "") }},
+		{"short config hash8", func() (string, error) { return ConfigName("team", "prj", "app", "k", "abc123") }},
+		{"empty config name", func() (string, error) { return ConfigName("team", "prj", "app", "", "abc12345") }},
 		{"empty deployment", func() (string, error) { _, err := ServiceLabels("team", "prj", "app", "web", ""); return "", err }},
 		{"qualified empty name", func() (string, error) { return QualifiedName("team", "prj", "") }},
 	} {

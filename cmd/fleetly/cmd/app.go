@@ -59,6 +59,7 @@ func NewApp(version string) *commands.App {
 		newCronCmd(),
 		newDatabasesCmd(),
 		newSecretsCmd(),
+		newConfigsCmd(),
 	)
 	// 退出码四态（架构 §2.4 plan/apply 语义 + S17-D3）：0=无变化/成功、
 	// 2=有变化（仅 plan/diff）、1=错误、64=用法错误（EX_USAGE 惯例）。

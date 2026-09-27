@@ -28,7 +28,7 @@ func TestBuildSwarmSpecManagedFields(t *testing.T) {
 		},
 		RestartPolicy: &engine.RestartPolicySpec{Condition: "any", Delay: 5 * time.Second},
 	}
-	sw, err := buildSwarmSpec(spec, nil)
+	sw, err := buildSwarmSpec(spec, nil, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestBuildSwarmSpecManagedFields(t *testing.T) {
 
 func TestBuildSwarmSpecDefaultsAndGlobal(t *testing.T) {
 	// 无 restart_policy → 平台缺省 condition=any/delay=5s（architecture §2.5）。
-	sw, err := buildSwarmSpec(engine.ServiceSpec{Name: "s", Image: "img", Replicas: 1}, nil)
+	sw, err := buildSwarmSpec(engine.ServiceSpec{Name: "s", Image: "img", Replicas: 1}, nil, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestBuildSwarmSpecDefaultsAndGlobal(t *testing.T) {
 		t.Fatalf("default restart policy = %+v", rp)
 	}
 
-	g, err := buildSwarmSpec(engine.ServiceSpec{Name: "g", Image: "img", Global: true, UpdateOrder: "stop-first"}, nil)
+	g, err := buildSwarmSpec(engine.ServiceSpec{Name: "g", Image: "img", Global: true, UpdateOrder: "stop-first"}, nil, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec global: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestBuildSwarmSpecReplicatedJob(t *testing.T) {
 		Job:           true,
 		Replicas:      1,
 		RestartPolicy: &engine.RestartPolicySpec{Condition: "none"},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestBuildSwarmSpecReplicatedJob(t *testing.T) {
 		t.Fatalf("restart condition = %+v, want none", j.TaskTemplate.RestartPolicy)
 	}
 	// nil 重启策略 → 适配器补 none（不落到长驻缺省 any）。
-	j2, err := buildSwarmSpec(engine.ServiceSpec{Name: "j2", Image: "img", Job: true, Replicas: 1}, nil)
+	j2, err := buildSwarmSpec(engine.ServiceSpec{Name: "j2", Image: "img", Job: true, Replicas: 1}, nil, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec j2: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestBuildSwarmSpecSecretFileTargetFullValues(t *testing.T) {
 			{SecretName: "fleetly-demo-token-abc12345", Target: "/run/secrets/token"},
 		},
 	}
-	sw, err := buildSwarmSpec(spec, map[string]string{"fleetly-demo-token-abc12345": "secret-id-1"})
+	sw, err := buildSwarmSpec(spec, map[string]string{"fleetly-demo-token-abc12345": "secret-id-1"}, nil)
 	if err != nil {
 		t.Fatalf("buildSwarmSpec: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestBuildSwarmSpecSecretNotEnsuredFailsExplicitly(t *testing.T) {
 		Image:    "img",
 		Replicas: 1,
 		Secrets:  []engine.SecretMount{{SecretName: "fleetly-s-token-abc12345", Target: "/run/secrets/token"}},
-	}, nil)
+	}, nil, nil)
 	if err == nil {
 		t.Fatal("missing secret id must fail explicitly (engine ordering bug), got nil")
 	}

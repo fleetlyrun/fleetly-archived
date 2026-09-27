@@ -5,6 +5,7 @@
 # 支持面以顶层与服务级两表为纲。
 
 [top_level]
+configs
 name
 networks
 secrets
@@ -14,6 +15,7 @@ volumes
 [service]
 build
 command
+configs
 deploy
 env_file
 environment

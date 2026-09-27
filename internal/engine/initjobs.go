@@ -168,6 +168,12 @@ func (e *Engine) ensureInitJobServices(ctx context.Context, rec state.DeployReco
 	if err := e.ensureSnapshotSecrets(ctx, rec, templates); err != nil {
 		return err
 	}
+	// config 底座对象同源确保（OT-3/IMPL-T1-4：init 模板与长驻服务共用
+	// buildServiceSpec 的投影链——config 挂载在 job 服务创建前同样必须
+	// 在位；ConfigReference 需要底座对象 ID，W3 真机教训同族）。
+	if err := e.ensureSnapshotConfigs(ctx, rec, templates); err != nil {
+		return err
+	}
 	for i := range pending {
 		job := pending[i]
 		for _, n := range job.Networks {

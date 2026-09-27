@@ -106,6 +106,10 @@ import type {
   SearchLogsResponse,
   SearchMetricsResponse,
   SearchSource,
+  SetConfigResponse,
+  GetConfigResponse,
+  ListConfigsResponse,
+  RemoveConfigResponse,
   SetDriftConvergeResponse,
   SetEnvResponse,
   SetMetricsModeResponse,
@@ -1322,6 +1326,33 @@ export function setSecret(app: string, name: string, value: string) {
 export function removeSecret(app: string, name: string) {
   return api<RemoveSecretResponse>(
     `/apps/${encodeURIComponent(app)}/secrets/${encodeURIComponent(name)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── app configs（T 线 OT-3 明文配置资源；Get 明文回读按 admin 门）─────────
+
+export function listConfigs(app: string) {
+  return api<ListConfigsResponse>(`/apps/${encodeURIComponent(app)}/configs`);
+}
+
+/** Get 明文回读（admin scope；值逐字返回——调用方直接呈现/复制）。 */
+export function getConfig(app: string, name: string) {
+  return api<GetConfigResponse>(
+    `/apps/${encodeURIComponent(app)}/configs/${encodeURIComponent(name)}`,
+  );
+}
+
+export function setConfig(app: string, name: string, value: string) {
+  return api<SetConfigResponse>(`/apps/${encodeURIComponent(app)}/configs`, {
+    method: "POST",
+    json: { app, name, value },
+  });
+}
+
+export function removeConfig(app: string, name: string) {
+  return api<RemoveConfigResponse>(
+    `/apps/${encodeURIComponent(app)}/configs/${encodeURIComponent(name)}`,
     { method: "DELETE" },
   );
 }

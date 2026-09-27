@@ -201,8 +201,14 @@ func normalize(abs string, project *types.Project) (*Spec, []Warning, error) {
 	}
 	sort.Strings(secrets)
 
-	// 服务级 secret 引用的完整性哨兵在 dict 层（validateDict：声明面自洽
-	// 先于 typed 解析——compose-go 的引用校验报错不带平台路径上下文）。
+	var configs []string
+	for name := range project.Configs {
+		configs = append(configs, name)
+	}
+	sort.Strings(configs)
+
+	// 服务级 secret/config 引用的完整性哨兵在 dict 层（validateDict：声明面
+	// 自洽先于 typed 解析——compose-go 的引用校验报错不带平台路径上下文）。
 
 	// ── 无 healthcheck 警告（health_gate=none 显式降级，release-semantics
 	// §2.8 健康门解析）──
@@ -222,6 +228,7 @@ func normalize(abs string, project *types.Project) (*Spec, []Warning, error) {
 		Volumes:  volumes,
 		Networks: networks,
 		Secrets:  secrets,
+		Configs:  configs,
 	}
 	return spec, ws.items, nil
 }
@@ -271,6 +278,13 @@ func normalizeService(workDir, name string, svc *types.ServiceConfig, ws *warnin
 		out.Secrets = append(out.Secrets, ServiceSecret{Source: s.Source, Target: target})
 	}
 	sort.Slice(out.Secrets, func(i, j int) bool { return out.Secrets[i].Source < out.Secrets[j].Source })
+
+	// config 挂载（T 线 OT-3）：target 必填（dict 层已拒短语法与缺失
+	// target——平台不默认 /<source>）；只读与 uid/gid/mode 平台受管。
+	for _, cfg := range svc.Configs {
+		out.Configs = append(out.Configs, ServiceConfig{Source: cfg.Source, Target: cfg.Target})
+	}
+	sort.Slice(out.Configs, func(i, j int) bool { return out.Configs[i].Source < out.Configs[j].Source })
 
 	for _, v := range svc.Volumes {
 		// 危险挂载语义（Coolify CVE-2025-34159 根因类）：宿主 bind 与

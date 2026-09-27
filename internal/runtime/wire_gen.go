@@ -199,6 +199,7 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	cronService := NewCronService(store, cronManager)
 	apiDatabaseService := NewDatabaseService(store, box, databaseManager)
 	apiSecretsService := NewSecretsService(store, box)
+	configsService := NewConfigsService(store)
 	execService := NewExecService(store, hub, execrelayManager)
 	authService := NewAuthService(appConfig, store)
 	usersService := NewUsersService(store)
@@ -206,7 +207,7 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	teamsService := NewTeamsService(store)
 	projectsService := NewProjectsService(store, engine, databaseManager, ingressManager)
 	systemService := NewSystemService(appConfig, store, nodeIdentity, observer, box, ingressManager, manager, rustfsManager, client, logsManager, victorialogsManager, metricsManager, notifyManager, execrelayManager, gitTriggers, version)
-	grpcServer, err := NewGRPCServer(app, appConfig, controlPlaneTLS, authenticator, appsService, deploymentsService, revisionsService, buildsService, driftService, domainsService, envService, apiLogsService, apiMetricsService, alertingService, notificationsService, eventsService, placementService, tokensService, gitKeysService, cronService, apiDatabaseService, apiSecretsService, execService, authService, usersService, auditService, teamsService, projectsService, systemService)
+	grpcServer, err := NewGRPCServer(app, appConfig, controlPlaneTLS, authenticator, appsService, deploymentsService, revisionsService, buildsService, driftService, domainsService, envService, apiLogsService, apiMetricsService, alertingService, notificationsService, eventsService, placementService, tokensService, gitKeysService, cronService, apiDatabaseService, apiSecretsService, configsService, execService, authService, usersService, auditService, teamsService, projectsService, systemService)
 	if err != nil {
 		cleanup10()
 		cleanup9()

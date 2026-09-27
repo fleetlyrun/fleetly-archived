@@ -250,7 +250,7 @@ func (e *Engine) runRollbackPreparing(ctx context.Context, rec state.DeployRecor
 // 不在 env_vars（引用移除后的清理拍等）的条目保留快照原值——重物化归一
 // 发生在下一次常规部署（prepareInputs 重物化 + 合并），重放路径不做物化。
 // 调用点 = restoreSnapshot 共享原语头部：kind=rollback 回滚、失败归位
-//（recovery=replay）、release 失败回退、漂移收敛四条重放路径统一过此
+// （recovery=replay）、release 失败回退、漂移收敛四条重放路径统一过此
 // 修正（验收裁决：D-REL-9 是全路径纪律，不设单路径豁免）。
 //
 // 解密失败 = 密钥/密文损坏：显式失败（E_RUNTIME_UNAVAILABLE）不静默降级
@@ -326,6 +326,11 @@ func (e *Engine) preflightRollback(ctx context.Context, rec state.DeployRecord, 
 	// 3. secret 存在（挂载名 → app_secrets 现值解析；快照携带 secret 为
 	//    E4 起的合法形态——验证替代原 v0.1 整体拒绝）。
 	if err := e.ensureSnapshotSecrets(ctx, rec, specs); err != nil {
+		return err
+	}
+	// 3b. config 存在（挂载名 → app_configs 现值解析；内容换版 → 名悬空 →
+	//    E_CONFIG_NOT_FOUND——快照不可变纪律，OT-3 同款）。
+	if err := e.ensureSnapshotConfigs(ctx, rec, specs); err != nil {
 		return err
 	}
 	// 2. 约束可满足（放置前哨：绑定节点 ready / 卷归属一致；取当前绑定）。

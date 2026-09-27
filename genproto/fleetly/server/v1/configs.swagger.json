@@ -1,0 +1,301 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "fleetly/server/v1/configs.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ConfigsService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/apps/{app}/configs": {
+      "get": {
+        "summary": "ListConfigs 该 app 全部 config（按 name 字典序；只投影名称/指纹/时间锚\n——值只在 GetConfig 的 admin 回读路径出现）。",
+        "operationId": "ConfigsService_ListConfigs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListConfigsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ConfigsService"
+        ]
+      },
+      "post": {
+        "summary": "SetConfig 写入（覆盖即换版）：值明文落 app_configs；审计 config.set\n（diff 只带名称与 hash8 指纹）。",
+        "operationId": "ConfigsService_SetConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "description": "归属 app 名（或限定形/id）。",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ConfigsServiceSetConfigBody"
+            }
+          }
+        ],
+        "tags": [
+          "ConfigsService"
+        ]
+      }
+    },
+    "/v1/apps/{app}/configs/{name}": {
+      "get": {
+        "summary": "GetConfig 明文回读（admin scope——与 GetEnv 同级信任面）。",
+        "operationId": "ConfigsService_GetConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ConfigsService"
+        ]
+      },
+      "delete": {
+        "summary": "RemoveConfig 删除单条（幂等不做：不存在 404）。已被运行中服务引用的\nremoval 不追写部署——引用方下次部署 preflight E_CONFIG_NOT_FOUND 诚实\n失败（移除声明再部署的既有语义，与 RemoveSecret 同口径）。",
+        "operationId": "ConfigsService_RemoveConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RemoveConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ConfigsService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ConfigsServiceSetConfigBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "config 声明名（compose 服务级 configs 引用的短名；合法标识符字符集\n^[A-Za-z0-9][A-Za-z0-9._-]*$——与 internal/compose 的 config 名校验同\n规则，注释锚互指）。"
+        },
+        "value": {
+          "type": "string",
+          "title": "值（明文；上限 64KiB sanity——与 secrets 口径一致：swarm config 单对象\n上界 500KB 的宽松内档；长度进形状层即拒）。"
+        }
+      }
+    },
+    "v1ConfigView": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "hash8": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "ConfigView 是配置资源的只读投影（值零出现——值只在 GetConfig 的显式\nadmin 回读路径；hash8 是内容寻址与「是不是那一版」比对面）。"
+    },
+    "v1ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "title": "稳定错误码字符串（如 \"E_COMPOSE_INVALID\"），注册表校验只增。"
+        },
+        "message": {
+          "type": "string",
+          "title": "人读错误信息（面向运维/集成方，不承诺文案稳定）。"
+        },
+        "stage": {
+          "type": "string",
+          "title": "失败所处管线阶段（如 resolve / build / deploy / serve；勿与部署子状态\nphase 混用——该字段 2026-09-20 命名审查由 phase 更名 stage）。"
+        },
+        "deployment_id": {
+          "type": "string",
+          "title": "关联的部署 ID（无关联时为空）。"
+        },
+        "suggestion": {
+          "type": "string",
+          "title": "可执行的修复建议（面向用户展示）。"
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "结构化附加上下文（machine-readable 键值对）。"
+        },
+        "docs": {
+          "type": "string",
+          "title": "相关文档 URL（错误码文档锚点）。"
+        }
+      },
+      "title": "ErrorResponse 是 fleetly 对外错误信封的唯一契约定义（发布专项 §2.7、\n架构 D21）：gateway HTTPErrorHandler（阶段 3 落地）将 gRPC 错误统一渲染\n为本结构，snake_case JSON 输出；code 与 T0.2 错误码注册表（唯一真源，\n只增不复用）对齐。"
+    },
+    "v1GetConfigResponse": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "title": "配置内容明文（admin scope；与 GetEnv 的回读信任同级）。"
+        },
+        "hash8": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1ListConfigsResponse": {
+      "type": "object",
+      "properties": {
+        "configs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ConfigView"
+          }
+        }
+      }
+    },
+    "v1RemoveConfigResponse": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetConfigResponse": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "hash8": {
+          "type": "string",
+          "title": "内容指纹（sha256 前 8 hex——swarm config 对象名的内容寻址尾缀）。"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

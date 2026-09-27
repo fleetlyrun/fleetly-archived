@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 
@@ -20,13 +21,15 @@ import (
 // topLevelWhitelist 是顶层键白名单（§2.4 支持清单；version 为 compose 规范
 // 废弃键、loader 在 schema 校验后删除，此处天然不可见；x-* 扩展键为
 // compose 标准扩展位、loader 移入 Extensions，同样不可见；secrets 自 E4
-// managed-databases 起入白名单——受控形态见 validateSecretsDict）。
+// managed-databases 起入白名单——受控形态见 validateSecretsDict；configs
+// 自 T 线 OT-3/IMPL-T1-4 起入白名单——受控形态见 validateConfigsDict）。
 var topLevelWhitelist = map[string]bool{
 	"name":     true,
 	"services": true,
 	"networks": true,
 	"volumes":  true,
 	"secrets":  true,
+	"configs":  true,
 }
 
 // topLevelRejectList 是顶层键显式拒绝清单（优先于白名单缺省拒绝，message
@@ -48,7 +51,10 @@ var serviceRejectList = map[string]string{
 	"extends":    "rejected field in v0.1 (service reuse is unsupported)",
 	"include":    "rejected field in v0.1 (multi-file merge is unsupported)",
 	"profiles":   "rejected field in v0.1 (services deploy in full; no profile gating)",
-	"configs":    "rejected field in v0.1 (config injection is carried by environment/secrets)",
+	// 服务级 configs 的 v0.1 拒绝条目已随 T 线 OT-3/IMPL-T1-4 移除（原理由
+	// 「config injection is carried by environment/secrets」被 Config 资源
+	// 取代：compose 标准 configs 节 + 平台明文配置资源，受控形态见
+	// validateServiceConfigsDict——顶层 configs 只接受 external: true）。
 	// S16-C1 的 secrets 拒绝条目已随 E4 W4-S4 移除（C1 预授权的显式解除，
 	// 见 topLevelRejectList 注释）；secrets 入 serviceWhitelist，受控形态
 	// 校验在 validateServiceSecretsDict（短语法 / {source,target}，
@@ -84,6 +90,7 @@ var serviceWhitelist = map[string]bool{
 	"stop_signal":       true,
 	"stop_grace_period": true,
 	"secrets":           true, // E4 W4-S4：external secret 挂载（受控形态见 validateServiceSecretsDict）
+	"configs":           true, // T 线 OT-3/IMPL-T1-4：external config 挂载（受控形态见 validateServiceConfigsDict）
 }
 
 // buildWhitelist：build 段仅保留平台消费子键（§2.4 build 注释只定义
@@ -159,6 +166,20 @@ var topLevelSecretWhitelist = map[string]bool{"name": true, "external": true}
 // 安全 + naming.SecretName 组件字符集 [A-Za-z0-9._-]；首字符限字母数字，
 // 防点文件/分隔符歧义）。
 func validSecretName(name string) bool {
+	return validComposeIdentifier(name)
+}
+
+// validConfigName 判定 config 声明名是否合法（与 secret 同字符集；config
+// 不落 /run/secrets 文件语义——它只进 swarm config 对象名与容器内 target
+// 路径）。
+func validConfigName(name string) bool {
+	return validComposeIdentifier(name)
+}
+
+// validComposeIdentifier 是 secret/config 声明名的公共字符集契约
+// （^[A-Za-z0-9][A-Za-z0-9._-]*$，≤63；naming 组件字符集 + 文件名字符集
+// 的交集；首字符限字母数字，防点文件/分隔符歧义）。
+func validComposeIdentifier(name string) bool {
 	if name == "" || len(name) > 63 {
 		return false
 	}
@@ -271,6 +292,147 @@ func validateServiceSecretsDict(name, prefix string, secretsAny any) error {
 // envFileLongWhitelist 是 env_file 长语法允许的子键。
 var envFileLongWhitelist = map[string]bool{"path": true, "required": true, "format": true}
 
+// configs 开放（T 线 OT-3 / IMPL-T1-4 Config 资源）：顶层 `configs:` 仅
+// 接受 `{name?}` 空定义或 `{name?, external: true}`（external 必须是字面
+// 布尔 true——平台 app_configs 是唯一值来源，值进 git 仓库是硬边界，与
+// secrets 的 external-only 口径同族）；服务级 `configs:` 仅 `{source,
+// target}`（uid/gid/mode 拒绝——文件属主/权限由平台固定 0:0/0444；config
+// 恒只读）。形态裁决：**载体用 compose 标准 configs 节**（设计档 OT-3 字面
+// 的 `volumes: type: config` 被 compose-go v2.15.0 的卷 type 枚举硬拒——
+// bind/volume/tmpfs/cluster/npipe/image 不含 config，见 IMPL-T1-4 审查记录；
+// 标准 configs 节与 secrets 面 1:1 同构且是 docker stack 原生形状）。
+//
+// target 契约（票面：绝对路径、只读、禁撞 /run/secrets 前缀）：必须显式
+// 声明（不默认 `/<source>`——隐式根内文件挂载是「劣化 bind」的温床）；
+// 绝对路径、不以 '/' 结尾（单文件，不映射目录级文件树）；`/run/secrets`
+// 及其子路径拒绝（secret 固定根不可撞）。
+
+// topLevelConfigWhitelist 是顶层 config 定义允许的子键（external-only）。
+var topLevelConfigWhitelist = map[string]bool{"name": true, "external": true}
+
+// configLongWhitelist 是服务级 config 长语法允许的子键。
+var configLongWhitelist = map[string]bool{"source": true, "target": true}
+
+// validConfigTarget 判定 config 挂载目标是否合法（规范化的绝对路径、单
+// 文件、不撞 /run/secrets 固定根）。规范化校验（path.Clean 恒等）拒绝
+// `/run//secrets/x`、`/etc/../etc/x` 这类以非规范形态绕过前缀禁撞的书写。
+func validConfigTarget(target string) bool {
+	if target == "" || !strings.HasPrefix(target, "/") {
+		return false
+	}
+	if path.Clean(target) != target {
+		return false
+	}
+	if strings.HasSuffix(target, "/") {
+		return false
+	}
+	if target == secretMountRoot || strings.HasPrefix(target, secretMountRoot+"/") {
+		return false
+	}
+	return true
+}
+
+// secretMountRoot 是 secret 固定挂载根（/run/secrets；config target 禁撞）。
+const secretMountRoot = "/run/secrets"
+
+// validateConfigsDict 校验顶层 configs 定义：external-only（value 不进仓库
+// 是硬边界；本地 file/content/environment 来源拒绝）。
+func validateConfigsDict(dict map[string]any) error {
+	cfgsAny, ok := dict["configs"]
+	if !ok || cfgsAny == nil {
+		return nil
+	}
+	cfgs, ok := cfgsAny.(map[string]any)
+	if !ok {
+		return errCompose("top-level configs must be a mapping").WithContext("path", "configs")
+	}
+	for _, name := range sortedKeys(cfgs) {
+		path := "configs." + name
+		if !validConfigName(name) {
+			return errCompose("config name %q is not a valid config identifier (must match ^[A-Za-z0-9][A-Za-z0-9._-]*$, max 63 chars)", name).
+				WithContext("path", path)
+		}
+		def, ok := cfgs[name].(map[string]any)
+		if !ok || def == nil {
+			// `configs: {name:}` 裸键（缺 external）——拒绝：无 external 即
+			// 本地内容生命周期，平台不承载。
+			return errCompose("config %q must declare external: true (values come from the platform config store: set them with the configs API; local file/content sources are a hard boundary)", name).
+				WithContext("path", path)
+		}
+		for _, key := range sortedKeys(def) {
+			if strings.HasPrefix(key, "x-") {
+				continue
+			}
+			if !topLevelConfigWhitelist[key] {
+				return errCompose("config %q, field %q: config content never lives in the repository (file/content/environment sources are a hard boundary; the platform config store is the only source — declare external: true and set the value via the configs API)", name, key).
+					WithContext("path", path+"."+key)
+			}
+		}
+		ext, present := def["external"]
+		if !present {
+			return errCompose("config %q must declare external: true (values come from the platform config store; declare the name only and set the value via the configs API)", name).
+				WithContext("path", path+".external")
+		}
+		if b, isBool := ext.(bool); !isBool || !b {
+			return errCompose("config %q declares external=%v: only the literal boolean true is accepted (external names a value held by the platform config store, not a local resource)", name, fmt.Sprint(ext)).
+				WithContext("path", path+".external")
+		}
+	}
+	return nil
+}
+
+// validateServiceConfigsDict 校验服务级 configs 挂载形态：canonical transform
+// 把短语法字符串归一为 `{source}`（无 target）；平台要求显式 {source,
+// target} 长语法（uid/gid/mode 拒绝——平台固定 0:0/0444，config 恒只读）。
+func validateServiceConfigsDict(name, prefix string, configsAny any) error {
+	if configsAny == nil {
+		return nil
+	}
+	items, ok := configsAny.([]any)
+	if !ok {
+		return errCompose("configs of service %q must be a list", name).WithContext("path", prefix+".configs")
+	}
+	for i, item := range items {
+		path := fmt.Sprintf("%s.configs[%d]", prefix, i)
+		v, isMap := item.(map[string]any)
+		if !isMap {
+			// 短语法（字符串，canonical 化为 {source}）与任何非映射形态：
+			// 显式 target 是平台契约（不默认 /<source>）。
+			return errCompose("config mount of service %q must be the long syntax {source: <config>, target: <absolute path>} (a bare config reference has no target path and is not in the controlled subset)", name).
+				WithContext("path", path)
+		}
+		for _, key := range sortedKeys(v) {
+			if strings.HasPrefix(key, "x-") {
+				continue
+			}
+			if !configLongWhitelist[key] {
+				return errCompose("config mount of service %q, field %q: uid/gid/mode are managed by the platform (files are mounted root-owned 0444 and configs are always read-only); only source and target are accepted", name, key).
+					WithContext("path", path+"."+key)
+			}
+		}
+		source, _ := v["source"].(string)
+		if !validConfigName(source) {
+			return errCompose("config mount of service %q has an invalid or missing source (must match ^[A-Za-z0-9][A-Za-z0-9._-]*$, max 63 chars)", name).
+				WithContext("path", path+".source")
+		}
+		target, present := v["target"]
+		t, _ := target.(string)
+		if !present || t == "" {
+			return errCompose("config mount of service %q must declare an absolute target path (configs mount a single read-only file at an explicit path; no implicit target)", name).
+				WithContext("path", path+".target")
+		}
+		if !validConfigTarget(t) {
+			if t == secretMountRoot || strings.HasPrefix(t, secretMountRoot+"/") {
+				return errCompose("config mount target %q of service %q hits the secret mount root %s (secrets are mounted at fixed /run/secrets paths; configs must use a different absolute path)", t, name, secretMountRoot).
+					WithContext("path", path+".target")
+			}
+			return errCompose("config mount target %q of service %q must be an absolute single-file path in canonical form (starts with '/', no trailing '/', no '../duplicate separators': configs do not map directory trees)", t, name).
+				WithContext("path", path+".target")
+		}
+	}
+	return nil
+}
+
 // networkDefReject：顶层网络定义拒绝的键（外部网络在 v0.1 拒绝清单；name
 // 覆写与平台命名纪律冲突——网络名由平台按 app 专属命名）。
 // 其余 compose 标准网络键（driver/driver_opts/ipam/internal/attachable/
@@ -322,7 +484,7 @@ func validateDict(abs string, dict map[string]any) error {
 				WithContext("path", key)
 		}
 		if !topLevelWhitelist[key] {
-			return errCompose("compose top-level field %q is not in the controlled subset (supported: name/services/networks/volumes/secrets)", key).
+			return errCompose("compose top-level field %q is not in the controlled subset (supported: name/services/networks/volumes/secrets/configs)", key).
 				WithContext("path", key)
 		}
 	}
@@ -338,6 +500,14 @@ func validateDict(abs string, dict map[string]any) error {
 	if secs, ok := dict["secrets"].(map[string]any); ok {
 		for name := range secs {
 			declaredSecrets[name] = true
+		}
+	}
+	// 顶层 configs 声明名集合（T 线 OT-3：服务级引用的声明面自洽哨兵；
+	// app_configs 值的存在性在发布引擎 preparing 期前哨 E_CONFIG_NOT_FOUND）。
+	declaredConfigs := map[string]bool{}
+	if cfgs, ok := dict["configs"].(map[string]any); ok {
+		for name := range cfgs {
+			declaredConfigs[name] = true
 		}
 	}
 
@@ -366,6 +536,18 @@ func validateDict(abs string, dict map[string]any) error {
 					WithContext("path", fmt.Sprintf("services.%s.secrets[%d]", name, i))
 			}
 		}
+		// 引用完整性哨兵：服务级 config 的 source 必须在顶层 configs 声明
+		//（compose 引用语义；app_configs 缺失 → 部署 preflight
+		// E_CONFIG_NOT_FOUND，此处只校验声明面自洽——secrets 同款分层）。
+		cfgItems, _ := svcDict["configs"].([]any)
+		for i, item := range cfgItems {
+			v, _ := item.(map[string]any)
+			source, _ := v["source"].(string)
+			if !declaredConfigs[source] {
+				return errCompose("service %q references config %q which is not declared in the top-level configs section (declare it as %q: {external: true} and set the value via the configs API)", name, source, source).
+					WithContext("path", fmt.Sprintf("services.%s.configs[%d]", name, i))
+			}
+		}
 	}
 
 	if err := validateNetworksDict(dict); err != nil {
@@ -375,6 +557,9 @@ func validateDict(abs string, dict map[string]any) error {
 		return err
 	}
 	if err := validateSecretsDict(dict); err != nil {
+		return err
+	}
+	if err := validateConfigsDict(dict); err != nil {
 		return err
 	}
 	return nil
@@ -445,6 +630,9 @@ func validateServiceDict(name string, svc map[string]any) error {
 		return err
 	}
 	if err := validateServiceSecretsDict(name, prefix, svc["secrets"]); err != nil {
+		return err
+	}
+	if err := validateServiceConfigsDict(name, prefix, svc["configs"]); err != nil {
 		return err
 	}
 	if err := validateDeployDict(name, prefix, svc); err != nil {

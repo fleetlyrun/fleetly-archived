@@ -145,6 +145,7 @@ func newGatewayMuxWithTLS(grpcEndpoint string, tlsCfg *tls.Config) (http.Handler
 		serverv1.RegisterGitKeysServiceHandlerFromEndpoint,  // M4-2：与 gRPC 侧注册清单对齐
 		serverv1.RegisterDatabaseServiceHandlerFromEndpoint, // E4 W4-S2：库实例资源面（生命周期 RPC；连接投影脱敏）
 		serverv1.RegisterSecretsServiceHandlerFromEndpoint,  // E4 W4-S4：平台密钥库面（D-DB-7；无值读回——list 只出名称/指纹）
+		serverv1.RegisterConfigsServiceHandlerFromEndpoint,  // T 线 OT-3/IMPL-T1-4：明文配置资源面（Get 明文 = admin）
 		serverv1.RegisterAuthServiceHandlerFromEndpoint,     // v0.3 W1：认证面（注册/登录/会话；Register/Login/GetRegistrationState 豁免鉴权）
 		serverv1.RegisterUsersServiceHandlerFromEndpoint,    // v0.3 W1：平台用户管理面（平台管理员判定在 handler）
 		serverv1.RegisterAuditServiceHandlerFromEndpoint,    // v0.3 W3-S1：审计读面（平台管理员判定在 handler——D-W0-6）
@@ -163,7 +164,7 @@ func newGatewayMuxWithTLS(grpcEndpoint string, tlsCfg *tls.Config) (http.Handler
 // 不可信（直连方可伪造链首值，使 api 面 IP 键限流按任意自报地址分桶）。
 // 此处删除客户端携带的 XFF 头；grpc-gateway v2 的 annotateContext 随后把
 // 真实 TCP 对端地址（RemoteAddr host）并入 x-forwarded-for metadata
-//（v2.30 语义：client 头拼接链尾再追加 RemoteAddr——client 侧已删，故
+// （v2.30 语义：client 头拼接链尾再追加 RemoteAddr——client 侧已删，故
 // metadata 恰为单一真实 peer 值）。api 侧（internal/api/authservice.go
 // clientIPFromContext）只在 gRPC 对端为环回时采信该 metadata——环回 =
 // gateway 回拨（gateway 与 gRPC 同进程同主机），远程直连 gRPC 方自带的

@@ -50,13 +50,16 @@ services:
     profiles: [debug]
 `, "E_COMPOSE_UNSUPPORTED", "services.web.profiles", "pos_multi_service"},
 
-		{"reject_configs", `
+		// configs 的 v0.1 整键拒绝已随 T 线 OT-3/IMPL-T1-4 解除（配置资源
+		// 开放）：短语法（canonical 化为 {source}，无 target）按受控形态
+		// 拒绝——平台要求显式 {source, target} 长语法。
+		{"reject_configs_short_syntax", `
 name: my-api
 services:
   web:
     image: nginx
     configs: [app_conf]
-`, "E_COMPOSE_UNSUPPORTED", "services.web.configs", "pos_multi_service"},
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0]", "pos_configs_long"},
 
 		{"reject_external_network", `
 name: my-api
@@ -465,6 +468,141 @@ services:
         constraints: [node.role == worker]
 `, "E_COMPOSE_UNSUPPORTED", "services.web.deploy.placement.constraints[0]", "pos_placement_constraint"},
 
+		// ── configs 契约（T 线 OT-3/IMPL-T1-4）──
+		// 守卫①（解析期半边）：服务引用的 config 必须在顶层 configs 声明
+		// （external-only）——声明面自洽哨兵；值的存在性归引擎 preflight。
+		{"reject_config_source_undeclared", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/app/config.yaml }]
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0]", "pos_configs_long"},
+
+		// 值的本地来源一律拒绝（值不进仓库是硬边界）。注：compose-go 的
+		// checkConsistency 要求 config 定义至少有 file|environment|content
+		// 之一，「definition 存在但缺 external」的形态在 loader 期即被拒
+		//（本层缺 external 分支为防御性兜底，见 validateConfigsDict）。
+		{"reject_config_inline_content", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/app/config.yaml }]
+configs:
+  app_conf:
+    content: "inline"
+`, "E_COMPOSE_UNSUPPORTED", "configs.app_conf.content", "pos_configs_long"},
+
+		{"reject_config_null_definition", `
+name: my-api
+services:
+  web: { image: nginx }
+configs:
+  app_conf:
+`, "E_COMPOSE_UNSUPPORTED", "", ""}, // compose schema 的 config 定义必须是对象（null 在 parse 期即拒）
+
+		{"reject_config_local_file_source", `
+name: my-api
+services:
+  web: { image: nginx }
+configs:
+  app_conf:
+    file: ./config.yaml
+`, "E_COMPOSE_UNSUPPORTED", "configs.app_conf.file", ""},
+
+		{"reject_config_external_false", `
+name: my-api
+services:
+  web: { image: nginx }
+configs:
+  app_conf:
+    external: false
+`, "E_COMPOSE_UNSUPPORTED", "configs.app_conf.external", ""},
+
+		// 守卫④：target 撞 /run/secrets 前缀（secret 固定根不可撞）。
+		{"reject_config_target_secret_root", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /run/secrets/app_conf }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_target_secret_prefix", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /run/secrets }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_target_relative", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: etc/app/config.yaml }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_target_directory", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/app/ }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_target_missing", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		// 非规范路径形态（path.Clean 恒等契约）——堵住 /run//secrets/x 这类
+		// 绕过前缀禁撞的书写。
+		{"reject_config_target_secret_nonclean", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: //run/secrets/app_conf }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_target_dotdot", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/../run/secrets/app_conf }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].target", "pos_configs_long"},
+
+		{"reject_config_uid_gid_mode", `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/app/config.yaml, mode: 0644 }]
+configs:
+  app_conf: { external: true }
+`, "E_COMPOSE_UNSUPPORTED", "services.web.configs[0].mode", "pos_configs_long"},
+
 		{"reject_empty_services", `
 name: my-api
 services: {}
@@ -665,6 +803,22 @@ services:
     secrets: [{ source: db_url, target: db_url.txt }]
 secrets:
   db_url: { name: whatever, external: true }
+`,
+	// configs 受控开放正例（T 线 OT-3/IMPL-T1-4）：顶层 external-only 声明 +
+	// 服务级显式 {source, target} 长语法（绝对单文件路径）必须通过。
+	"pos_configs_long": `
+name: my-api
+services:
+  web:
+    image: nginx
+    configs: [{ source: app_conf, target: /etc/app/config.yaml }]
+  worker:
+    image: my/worker
+    configs:
+      - source: app_conf
+        target: /etc/worker/config.yaml
+configs:
+  app_conf: { name: whatever, external: true }
 `,
 }
 

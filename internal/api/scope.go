@@ -162,9 +162,9 @@ var methodScopes = map[string]string{
 	// 按「平台管理员等价」读全列，写面须 admin scope，AddGitKey 恒要求
 	// 用户 principal）。teams/projects 同款切面（scope 门只承担「凭据至少
 	// 持有最小 read」的形状约束）；纪律：改登记 = 改测试。
-	"/fleetly.server.v1.TokensService/CreateToken": ScopeRead,
-	"/fleetly.server.v1.TokensService/ListTokens":  ScopeRead,
-	"/fleetly.server.v1.TokensService/RevokeToken": ScopeRead,
+	"/fleetly.server.v1.TokensService/CreateToken":   ScopeRead,
+	"/fleetly.server.v1.TokensService/ListTokens":    ScopeRead,
+	"/fleetly.server.v1.TokensService/RevokeToken":   ScopeRead,
 	"/fleetly.server.v1.GitKeysService/AddGitKey":    ScopeRead,
 	"/fleetly.server.v1.GitKeysService/ListGitKeys":  ScopeRead,
 	"/fleetly.server.v1.GitKeysService/RemoveGitKey": ScopeRead,
@@ -204,6 +204,14 @@ var methodScopes = map[string]string{
 	"/fleetly.server.v1.SecretsService/SetSecret":    ScopeAdmin,
 	"/fleetly.server.v1.SecretsService/ListSecrets":  ScopeRead,
 	"/fleetly.server.v1.SecretsService/RemoveSecret": ScopeAdmin,
+	// ConfigsService（T 线 OT-3 / IMPL-T1-4）：set/get/remove = admin（明文
+	// 配置的写面与回读面同门——与 SecretsService 写面同级信任；票面默认
+	// 对齐 secrets 口径，实施记录第 7 条载裁决理由）；list = read（只出
+	// 名称/指纹/时间锚，与 ListSecrets 同口径）。
+	"/fleetly.server.v1.ConfigsService/SetConfig":    ScopeAdmin,
+	"/fleetly.server.v1.ConfigsService/ListConfigs":  ScopeRead,
+	"/fleetly.server.v1.ConfigsService/GetConfig":    ScopeAdmin,
+	"/fleetly.server.v1.ConfigsService/RemoveConfig": ScopeAdmin,
 	// NotificationsService（E6 W5-S4，observability §5；W4-S3 通道扩展 §8）：
 	// 读面 = read（端点视图与投递台账是事实面——指纹非凭据，与 token 哈希
 	// 前缀同口径）；写面 = admin（端点是平台级凭据面——创建/更新/删除/轮
@@ -265,22 +273,22 @@ var methodScopes = map[string]string{
 	// 语义 §2.3），平台管理员用户只读放行、写面 403（不代写）。W2-S4 通用
 	// 角色门（ResolvePermission 单点，ownership.go）已落地，本组登记维持
 	// 形状门角色。
-	"/fleetly.server.v1.TeamsService/CreateTeam":              ScopeRead,
-	"/fleetly.server.v1.TeamsService/ListTeams":               ScopeRead,
-	"/fleetly.server.v1.TeamsService/GetTeam":                 ScopeRead,
-	"/fleetly.server.v1.TeamsService/UpdateTeam":              ScopeRead,
-	"/fleetly.server.v1.TeamsService/DeleteTeam":              ScopeRead,
-	"/fleetly.server.v1.TeamsService/ListTeamMembers":         ScopeRead,
-	"/fleetly.server.v1.TeamsService/SetTeamMemberRole":       ScopeRead,
-	"/fleetly.server.v1.TeamsService/RemoveTeamMember":        ScopeRead,
-	"/fleetly.server.v1.TeamsService/CreateInvite":            ScopeRead,
-	"/fleetly.server.v1.TeamsService/ListTeamInvites":         ScopeRead,
-	"/fleetly.server.v1.TeamsService/RevokeInvite":            ScopeRead,
+	"/fleetly.server.v1.TeamsService/CreateTeam":        ScopeRead,
+	"/fleetly.server.v1.TeamsService/ListTeams":         ScopeRead,
+	"/fleetly.server.v1.TeamsService/GetTeam":           ScopeRead,
+	"/fleetly.server.v1.TeamsService/UpdateTeam":        ScopeRead,
+	"/fleetly.server.v1.TeamsService/DeleteTeam":        ScopeRead,
+	"/fleetly.server.v1.TeamsService/ListTeamMembers":   ScopeRead,
+	"/fleetly.server.v1.TeamsService/SetTeamMemberRole": ScopeRead,
+	"/fleetly.server.v1.TeamsService/RemoveTeamMember":  ScopeRead,
+	"/fleetly.server.v1.TeamsService/CreateInvite":      ScopeRead,
+	"/fleetly.server.v1.TeamsService/ListTeamInvites":   ScopeRead,
+	"/fleetly.server.v1.TeamsService/RevokeInvite":      ScopeRead,
 	// AuditService（v0.3 W3-S1 审计读面，rbac-teams §5/§6 D-W0-6）：整体
 	// admin scope（机具令牌面——平台管理员等价，§2.3）+ handler 内平台管理
 	// 员判定（requirePlatformAdminPrincipal 共享门——UsersService 同门）。
 	// 读台账是平台敏感事实面（操作者全量动作流），不随 read/deploy 下放。
-	"/fleetly.server.v1.AuditService/ListAudit": ScopeAdmin,
+	"/fleetly.server.v1.AuditService/ListAudit":               ScopeAdmin,
 	"/fleetly.server.v1.ProjectsService/CreateProject":        ScopeRead,
 	"/fleetly.server.v1.ProjectsService/ListProjects":         ScopeRead,
 	"/fleetly.server.v1.ProjectsService/GetProject":           ScopeRead,

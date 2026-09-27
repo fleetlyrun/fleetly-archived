@@ -31,6 +31,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   logs: "Logs",
   env: "Env",
   secrets: "Secrets",
+  configs: "Configs",
   domains: "Domains",
   terminal: "Terminal",
   "git-keys": "Git push keys",

@@ -80,6 +80,7 @@ type driftSpec struct {
 	StopSignal        string             `json:"stop_signal,omitempty"`
 	StopGracePeriod   time.Duration      `json:"stop_grace_period,omitempty"`
 	Secrets           []SecretMount      `json:"secrets,omitempty"`
+	Configs           []ConfigMount      `json:"configs,omitempty"`
 	UpdateOrder       string             `json:"update_order"`
 	UpdateParallelism uint64             `json:"update_parallelism"`
 	UpdateDelay       time.Duration      `json:"update_delay,omitempty"`
@@ -112,6 +113,7 @@ func driftProjection(s ServiceSpec) driftSpec {
 		StopSignal:        s.StopSignal,
 		StopGracePeriod:   s.StopGracePeriod,
 		Secrets:           append([]SecretMount{}, s.Secrets...),
+		Configs:           append([]ConfigMount{}, s.Configs...),
 		ContainerLabels:   filterLabels(s.ContainerLabels, nil),
 		ServiceLabels:     filterLabels(s.ServiceLabels, LabelBookkeeping),
 		UpdateOrder:       s.UpdateOrder,
@@ -326,6 +328,9 @@ func diffDrift(expected, actual driftSpec) []FieldDiff {
 	}
 	if jsonStr(expected.Secrets) != jsonStr(actual.Secrets) {
 		add("secrets", jsonStr(expected.Secrets), jsonStr(actual.Secrets))
+	}
+	if jsonStr(expected.Configs) != jsonStr(actual.Configs) {
+		add("configs", jsonStr(expected.Configs), jsonStr(actual.Configs))
 	}
 	// A8：UpdateConfig 三字段（外部 docker service update --update-* 篡改）。
 	if expected.UpdateOrder != actual.UpdateOrder {

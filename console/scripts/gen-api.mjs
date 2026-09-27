@@ -58,6 +58,10 @@ const SPEC_FILES = [
   "cron.swagger.json",
   "database.swagger.json",
   "secrets.swagger.json",
+  // configs 随 T 线 OT-3/IMPL-T1-4（Config 资源）进清单：明文配置资源面
+  //（Set/List/Get/Remove）是 AppConfigsPage 的数据源（Get 明文回读按 admin
+  // 门；写面 admin scope）。
+  "configs.swagger.json",
   "notifications.swagger.json",
   "terminal.swagger.json",
 ];

@@ -233,6 +233,13 @@ var builtins = []Code{
 	{ID: "E_SECRET_NOT_FOUND", HTTP: 422,
 		Summary:    "a compose-declared external secret is not in the platform secret store (deploy preflight)",
 		Suggestion: "Create the secret first (fleetly secrets set) with the exact declared name, then deploy again; compose secrets must declare external: true."},
+	// T 线 OT-3/IMPL-T1-4（注册表只增）：明文配置资源的缺失哨兵（compose
+	// configs 声明的声明名不在平台 app_configs）。消费点 =
+	// internal/engine/configinject.go preparing 期前哨与快照重放的悬空名
+	// （内容换版后旧对象名不再解析——诚实失败不静默改写）。
+	{ID: "E_CONFIG_NOT_FOUND", HTTP: 422,
+		Summary:    "a compose-declared external config is not in the platform config store (deploy preflight)",
+		Suggestion: "Create the config first (fleetly configs set) with the exact declared name, then deploy again; compose configs must declare external: true."},
 	{ID: "E_ENV_KEY_RESERVED", HTTP: 422,
 		Summary:    "user wrote into the reserved FLEETLY_ env namespace (template connection-string materialization keys)",
 		Suggestion: "FLEETLY_* env keys are platform-reserved (database connection materialization): rename the key without the FLEETLY_ prefix; system-source platform writes are unaffected."},

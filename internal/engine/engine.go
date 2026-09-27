@@ -64,6 +64,14 @@ type Engine struct {
 	// nil = 未接线——reap 扫尾如实跳过告警）。实现 = substrate.Client
 	//（WithSecretReaper）。
 	secretReap SecretReaper
+	// configEnsure 是 Swarm config 对象的确保端口（T 线 OT-3/IMPL-T1-4
+	// compose configs 注入链；nil = 未接线——带 config 声明的部署规划期显式
+	// 失败）。实现 = substrate.Client（WithConfigEnsurer）。
+	configEnsure ConfigEnsurer
+	// configReap 是 Swarm config 对象的清场端口（换版旧对象 GC 与 app 删除
+	// reap 的扫尾面；nil = 未接线——清场如实跳过告警）。实现 =
+	// substrate.Client（WithConfigReaper）。
+	configReap ConfigReaper
 	// waterMarks 是副本水位不足判定的进程内计时（观察窗辅助信号；引擎
 	// 重启后重摆——窗口本身持久化，重启代价可接受）。
 	waterMarks map[string]time.Time
@@ -422,6 +430,9 @@ type prepareResult struct {
 	// secretMounts 是服务级 secret 挂载面（E4 §2.7：compose secrets 声明 →
 	// 已解析的 SecretMount 列表；nil = 本发布无 secret 声明）。
 	secretMounts map[string][]SecretMount
+	// configMounts 是服务级 config 挂载面（OT-3/IMPL-T1-4：compose configs
+	// 声明 → 已解析的 ConfigMount 列表；nil = 本发布无 config 声明）。
+	configMounts map[string][]ConfigMount
 	// warnings 是 preparing 期产出的计划警告（E4 库引用
 	// W_DB_REFERENCE_NOT_READY 等）——随 planAndRelease 以 deployment.warning
 	// 事件披露（与 plan.Warnings 同管道）。
@@ -583,6 +594,13 @@ func (e *Engine) prepareInputs(ctx context.Context, rec state.DeployRecord) (*pr
 	if err != nil {
 		return nil, err
 	}
+	// config 挂载面（OT-3/IMPL-T1-4）：compose configs 声明 → app_configs
+	// 存在性哨兵（E_CONFIG_NOT_FOUND fail-fast）+ Swarm config 确保（内容
+	// 寻址对象名）+ ConfigMount 装配（值零进规划产物）。
+	configMounts, err := e.resolveConfigMounts(ctx, app, spec)
+	if err != nil {
+		return nil, err
+	}
 	// 平台层读取（含上一步物化的 pending 行——pending 参与合并，S16-C4）。
 	platform, err := e.platformEnvForMerge(ctx, rec.AppID)
 	if err != nil {
@@ -599,6 +617,7 @@ func (e *Engine) prepareInputs(ctx context.Context, rec state.DeployRecord) (*pr
 		attachRustfs: attachRustfs,
 		dbNetworks:   dbNetworks,
 		secretMounts: secretMounts,
+		configMounts: configMounts,
 		warnings:     dbWarnings,
 	}, nil
 }
@@ -632,6 +651,7 @@ func (e *Engine) planAndRelease(ctx context.Context, rec state.DeployRecord, pre
 		AttachRustfsNetwork: pre.attachRustfs,
 		DBNetworks:          pre.dbNetworks,
 		SecretMounts:        pre.secretMounts,
+		ConfigMounts:        pre.configMounts,
 		Images:              images,
 		Decision:            pre.decision,
 		Volumes:             volumes,
@@ -865,6 +885,13 @@ func (e *Engine) applyDesired(ctx context.Context, rec state.DeployRecord, desir
 	if err := e.ensureSnapshotSecrets(ctx, rec, desired); err != nil {
 		return appErrOf(err, rec.ID)
 	}
+	// config 底座对象确保（OT-3/IMPL-T1-4）：快照重放路径的挂载名先对
+	// app_configs 现值解析并确保在位（内容换版 → 名字悬空 →
+	// E_CONFIG_NOT_FOUND 诚实失败）；发布路径的 ensure 已在 resolveConfigMounts
+	// 完成，此处幂等重入无害。
+	if err := e.ensureSnapshotConfigs(ctx, rec, desired); err != nil {
+		return appErrOf(err, rec.ID)
+	}
 	// 归属识别面从期望 spec 自身推导（v0.3 W2-S3：spec 的服务 label 携带
 	// 三段限定形 app 值与 fleetly.team/fleetly.project 两键——快照重放路径
 	// 与规划路径同源同构，不再以 rec.AppName 二次推导）。对账的 label 过滤
@@ -949,6 +976,11 @@ func (e *Engine) applyDesired(ctx context.Context, rec state.DeployRecord, desir
 			}
 		}
 	}
+	// config 旧对象回收（OT-3/IMPL-T1-4）：服务收敛完成后，保留本次期望面
+	// 引用的对象（长驻集 + 快照内 Job 模板），其余内容寻址旧版 best-effort
+	// 清场（真机实证：引用换版后 daemon 即允许删除；in-use 拒绝 = 留待下一
+	// 拍，绝不阻塞收敛）。
+	e.gcAppConfigs(ctx, appLabel, e.configKeepSet(rec, desired))
 	return nil
 }
 
@@ -997,6 +1029,24 @@ func (e *Engine) decodeSpecs(rec state.DeployRecord) ([]ServiceSpec, error) {
 		specs = append(specs, s)
 	}
 	return specs, nil
+}
+
+// decodeAllSpecs 解出快照全量模板（含 Job——cron/init 服务的执行形态来源；
+// config keep-set 汇总用：init job 引用的 config 对象属本 revision 期望引用
+// 面，见 configinject.go configKeepSet）。
+func (e *Engine) decodeAllSpecs(rec state.DeployRecord) ([]ServiceSpec, error) {
+	if rec.DesiredSpec == "" {
+		return nil, fmt.Errorf("engine: deployment %s has no desired-spec snapshot", rec.ID)
+	}
+	plain, err := e.box.Decrypt([]byte(rec.DesiredSpec))
+	if err != nil {
+		return nil, fmt.Errorf("engine: decrypt desired-spec %s: %w", rec.ID, err)
+	}
+	var all []ServiceSpec
+	if err := json.Unmarshal(plain, &all); err != nil {
+		return nil, fmt.Errorf("engine: decode desired-spec %s: %w", rec.ID, err)
+	}
+	return all, nil
 }
 
 // now 是时钟出口（单测注入）。

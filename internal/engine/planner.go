@@ -71,6 +71,12 @@ type PlanInput struct {
 	// E_SECRET_NOT_FOUND 拒绝，此处只做纯装配，键缺省 = 该服务无挂载）。
 	// 按 target 字典序（desired-hash 确定性）。
 	SecretMounts map[string][]SecretMount
+	// ConfigMounts 是服务级 config 挂载面（OT-3/IMPL-T1-4：带 compose
+	// configs 声明的服务 → 已解析的 ConfigMount 列表——声明名在 app_configs
+	// 缺失时 resolveConfigMounts 已在 preparing 期 E_CONFIG_NOT_FOUND 拒绝；
+	// 底座对象已 ensure；键缺省 = 该服务无挂载）。按 target 字典序
+	//（desired-hash 确定性）。
+	ConfigMounts map[string][]ConfigMount
 	// Images 是服务 → digest 钉定镜像引用（building 阶段产出）。
 	Images map[string]string
 	// Decision 是放置裁决（绑定约束编译结果）。
@@ -272,6 +278,11 @@ func buildServiceSpec(in PlanInput, svc *compose.Service, image string, volByKey
 	// 哨兵与底座确保，E_SECRET_NOT_FOUND fail-fast；本层纯装配，值只以
 	// Swarm secret 名引用进投影与 desired-hash——换名即换 hash，轮换随
 	// 下次部署换挂——明文零出现）。
+	//
+	// config 挂载（OT-3/IMPL-T1-4）：同款装配（ConfigMounts——config 名是
+	// 内容寻址对象名，内容变更即换名换引用，随 desired-hash 触发服务滚动；
+	// 值零出现——快照只带对象名）。init job 模板与长驻服务共用本函数，
+	// config/secret 投影天然同源。
 
 	// 更新顺序：有卷 / global 强制 stop-first；其余 compose 声明照用（缺省
 	// start-first）。
@@ -294,10 +305,10 @@ func buildServiceSpec(in PlanInput, svc *compose.Service, image string, volByKey
 	}
 
 	spec := ServiceSpec{
-		Name:  swarmName,
-		Image: image,
+		Name:    swarmName,
+		Image:   image,
 		Command: append([]string{}, svc.Command...),
-		Env:  envList,
+		Env:     envList,
 		ContainerLabels: map[string]string{
 			// 容器 label 仅 fleetly.app，值 = 三段限定形（流标签口径）。
 			state.LabelApp: qualifiedAppName(in),
@@ -308,6 +319,7 @@ func buildServiceSpec(in PlanInput, svc *compose.Service, image string, volByKey
 		Networks:          networks,
 		Mounts:            mounts,
 		Secrets:           append([]SecretMount{}, in.SecretMounts[svc.Name]...),
+		Configs:           append([]ConfigMount{}, in.ConfigMounts[svc.Name]...),
 		Healthcheck:       composeHealthcheck(svc.Healthcheck),
 		UpdateOrder:       order,
 		UpdateParallelism: composeParallelism(svc),

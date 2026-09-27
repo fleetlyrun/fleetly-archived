@@ -157,12 +157,13 @@ func (c *Client) NetworkEnsure(ctx context.Context, name string) error {
 }
 
 // buildSwarmSpec 把引擎核心 ServiceSpec 翻译为 swarm.ServiceSpec（第三方
-// 类型不越过本函数）。secretIDs 是「secret 名 → 底座对象 ID」的已解析引用
-// 集（EnsureSecret 确保在位后按名解析——SecretReference 必须携带 SecretID
-// 与完整 File UID/GID/Mode：W3 真机教训，留空会让 swarm agent 在任务启动
-// 期 strconv 解析空串直接失败；internal/database 收敛器同注）。缺 ID 的
-// 声明 = 引擎未先行确保（对账层编码错误），显式报错。
-func buildSwarmSpec(spec engine.ServiceSpec, secretIDs map[string]string) (swarm.ServiceSpec, error) {
+// 类型不越过本函数）。secretIDs / configIDs 是「对象名 → 底座对象 ID」的
+// 已解析引用集（EnsureSecret / EnsureConfig 确保在位后按名解析——
+// SecretReference/ConfigReference 必须携带 ID 与完整 File UID/GID/Mode：
+// W3 真机教训，留空会让 swarm agent 在任务启动期 strconv 解析空串直接
+// 失败；internal/database 收敛器与 internal/metrics anchorSpec 同注）。
+// 缺 ID 的声明 = 引擎未先行确保（对账层编码错误），显式报错。
+func buildSwarmSpec(spec engine.ServiceSpec, secretIDs, configIDs map[string]string) (swarm.ServiceSpec, error) {
 	container := &swarm.ContainerSpec{
 		Image:  spec.Image,
 		Labels: spec.ContainerLabels,
@@ -200,6 +201,20 @@ func buildSwarmSpec(spec engine.ServiceSpec, secretIDs map[string]string) (swarm
 			// UID/GID/Mode 显式置零值安全形态（0:0/0444——docker CLI 同款缺
 			// 省；留空会让 swarm agent 启动期解析失败，W3 真机实证）。
 			File: &swarm.SecretReferenceFileTarget{Name: s.Target, UID: "0", GID: "0", Mode: 0o444},
+		})
+	}
+	for _, cfg := range spec.Configs {
+		id, ok := configIDs[cfg.ConfigName]
+		if !ok {
+			return swarm.ServiceSpec{}, fmt.Errorf("substrate: config %s not ensured before service convergence (engine ordering bug)", cfg.ConfigName)
+		}
+		container.Configs = append(container.Configs, &swarm.ConfigReference{
+			ConfigID:   id,
+			ConfigName: cfg.ConfigName,
+			// config 恒只读（swarm ConfigReference 无 ReadOnly 位）；UID/GID/
+			// Mode 显式落 0:0/0444（docker CLI config 缺省形态；File 缺省在
+			// swarm agent 启动期解析失败，secret 同族实证）。
+			File: &swarm.ConfigReferenceFileTarget{Name: cfg.Target, UID: "0", GID: "0", Mode: 0o444},
 		})
 	}
 
@@ -305,6 +320,29 @@ func (c *Client) resolveSecretIDs(ctx context.Context, spec engine.ServiceSpec) 
 	return ids, nil
 }
 
+// resolveConfigIDs 按名解析服务 spec 引用的 Swarm config 对象 ID（服务
+// create/update 前置：引擎已先行 EnsureConfig——此处缺失 = 引擎未确保或
+// 对象被外部清理，如实报错不静默丢引用）。
+func (c *Client) resolveConfigIDs(ctx context.Context, spec engine.ServiceSpec) (map[string]string, error) {
+	if len(spec.Configs) == 0 {
+		return nil, nil
+	}
+	ids := make(map[string]string, len(spec.Configs))
+	for _, cfg := range spec.Configs {
+		if _, done := ids[cfg.ConfigName]; done {
+			continue
+		}
+		cctx, ccancel := withCallTimeout(ctx) // D2：非流式 per-call 超时（逐调用）
+		res, err := c.cli.ConfigInspect(cctx, cfg.ConfigName, mobyclient.ConfigInspectOptions{})
+		ccancel()
+		if err != nil {
+			return nil, fmt.Errorf("substrate: config %s inspect: %w (the engine must ensure configs before service convergence)", cfg.ConfigName, err)
+		}
+		ids[cfg.ConfigName] = res.Config.ID
+	}
+	return ids, nil
+}
+
 // swarmHealthcheck 翻译健康检查（平台缺省已由引擎规划层补齐）。
 func swarmHealthcheck(hc engine.HealthcheckSpec) *container.HealthConfig {
 	out := &container.HealthConfig{
@@ -328,7 +366,11 @@ func (c *Client) ServiceCreate(ctx context.Context, spec engine.ServiceSpec) err
 	if err != nil {
 		return err
 	}
-	sw, err := buildSwarmSpec(spec, secretIDs)
+	configIDs, err := c.resolveConfigIDs(ctx, spec)
+	if err != nil {
+		return err
+	}
+	sw, err := buildSwarmSpec(spec, secretIDs, configIDs)
 	if err != nil {
 		return err
 	}
@@ -359,7 +401,11 @@ func (c *Client) ServiceUpdate(ctx context.Context, name string, spec engine.Ser
 	if err != nil {
 		return err
 	}
-	sw, err := buildSwarmSpec(spec, secretIDs)
+	configIDs, err := c.resolveConfigIDs(ctx, spec)
+	if err != nil {
+		return err
+	}
+	sw, err := buildSwarmSpec(spec, secretIDs, configIDs)
 	if err != nil {
 		return err
 	}
@@ -513,6 +559,13 @@ func serviceToState(svc swarm.Service) engine.ServiceState {
 				target = s.File.Name
 			}
 			out.Secrets = append(out.Secrets, engine.SecretMount{SecretName: s.SecretName, Target: target})
+		}
+		for _, cfg := range c.Configs {
+			target := ""
+			if cfg.File != nil {
+				target = cfg.File.Name
+			}
+			out.Configs = append(out.Configs, engine.ConfigMount{ConfigName: cfg.ConfigName, Target: target})
 		}
 	}
 	for _, n := range task.Networks {

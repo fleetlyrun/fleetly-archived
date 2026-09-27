@@ -32,6 +32,10 @@ type Spec struct {
 	// 仅 {external: true} 形态——平台密钥库是唯一值来源，归一化形态只留
 	// 声明名，值零出现）。
 	Secrets []string `json:"secrets,omitempty"`
+	// Configs 是顶层 configs 声明名的排序集合（T 线 OT-3/IMPL-T1-4：仅
+	// {external: true} 形态——平台 app_configs 是唯一值来源，归一化形态只
+	// 留声明名，值零出现）。
+	Configs []string `json:"configs,omitempty"`
 	// SpecHash 是 CanonicalJSON 的 sha256 hex（载入时填定）。
 	SpecHash string `json:"spec_hash"`
 }
@@ -113,6 +117,12 @@ type Service struct {
 	// 归一化时显式落位）。按 source 排序。声明名进快照与 spec_hash；值
 	// 永不进归一化形态（值在平台密钥库，发布引擎按名装载）。
 	Secrets []ServiceSecret `json:"secrets,omitempty"`
+	// Configs 是服务级 config 挂载（T 线 OT-3/IMPL-T1-4：external config
+	// 引用，source 必须在顶层 configs 声明；target 是显式绝对路径——平台
+	// 不默认 /<source>）。按 source 排序。声明名与 target 进快照与
+	// spec_hash；值永不进归一化形态（值在平台 app_configs，发布引擎按内容
+	// 寻址装载到 swarm config 对象）。
+	Configs []ServiceConfig `json:"configs,omitempty"`
 	// Volumes 是命名卷挂载（v0.1 受控子集：仅命名卷；bind/tmpfs 拒绝），
 	// 保持声明顺序（挂载点集合有语义）。
 	Volumes  []Mount  `json:"volumes,omitempty"`
@@ -161,6 +171,16 @@ type Mount struct {
 // Target 是容器内文件名（/run/secrets/<target>；缺省 = Source，归一化时
 // 显式落位）。uid/gid/mode 平台受管（0:0/0444），不进归一化形态。
 type ServiceSecret struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+// ServiceConfig 是一次服务级 config 挂载引用（T 线 OT-3/IMPL-T1-4）：Source
+// 是平台 app_configs 声明名（顶层 configs 的 external 条目），Target 是
+// 容器内绝对路径（显式声明，只读——swarm config 恒只读）。uid/gid/mode
+// 平台受管（0:0/0444），不进归一化形态；目录级文件树不映射（target 是
+// 单文件路径）。
+type ServiceConfig struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
 }

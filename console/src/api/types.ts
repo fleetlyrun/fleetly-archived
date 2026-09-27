@@ -331,6 +331,14 @@ export type ListSecretsResponse = Schemas["v1ListSecretsResponse"];
 export type SetSecretResponse = Schemas["v1SetSecretResponse"];
 export type RemoveSecretResponse = Schemas["v1RemoveSecretResponse"];
 
+// ── app configs（T 线 OT-3 明文配置资源；Get 明文回读按 admin 门）─────────
+
+export type ConfigView = Schemas["v1ConfigView"];
+export type ListConfigsResponse = Schemas["v1ListConfigsResponse"];
+export type SetConfigResponse = Schemas["v1SetConfigResponse"];
+export type GetConfigResponse = Schemas["v1GetConfigResponse"];
+export type RemoveConfigResponse = Schemas["v1RemoveConfigResponse"];
+
 // ── events ───────────────────────────────────────────────────────────────
 
 export type EventView = Schemas["v1EventView"];

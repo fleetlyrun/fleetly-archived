@@ -41,6 +41,7 @@ const AppBuildsPage = lazyPage(() => import("@/pages/AppBuildsPage"), "AppBuilds
 const AppLogsPage = lazyPage(() => import("@/pages/AppLogsPage"), "AppLogsPage");
 const AppEnvPage = lazyPage(() => import("@/pages/AppEnvPage"), "AppEnvPage");
 const AppSecretsPage = lazyPage(() => import("@/pages/AppSecretsPage"), "AppSecretsPage");
+const AppConfigsPage = lazyPage(() => import("@/pages/AppConfigsPage"), "AppConfigsPage");
 const AppDomainsPage = lazyPage(() => import("@/pages/AppDomainsPage"), "AppDomainsPage");
 const AppTerminalPage = lazyPage(() => import("@/pages/AppTerminalPage"), "AppTerminalPage");
 const DatabasesPage = lazyPage(() => import("@/pages/DatabasesPage"), "DatabasesPage");
@@ -121,6 +122,7 @@ function AuthedRoutes() {
             <Route path="logs" element={<AppLogsPage />} />
             <Route path="env" element={<AppEnvPage />} />
             <Route path="secrets" element={<AppSecretsPage />} />
+            <Route path="configs" element={<AppConfigsPage />} />
             <Route path="domains" element={<AppDomainsPage />} />
             <Route path="terminal" element={<AppTerminalPage />} />
           </Route>

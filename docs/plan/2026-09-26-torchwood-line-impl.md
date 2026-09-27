@@ -446,3 +446,143 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构结果；
 - 迁移时长校准：torchwood migrate 类长任务在真机上验证 `fleetly.job.timeout` 预算取值与超时事件的可行动性。
 - init job 瞬态窗口（秒级到分钟级）内日志经 VL 的采集完整性（零点全量回读在真实 substrates 上的归属与保留）。
 - 控制面真重启窗口的 `phase=init_jobs` 续跑（确定性命名服务寻址与任务判定续跑）；清相位后、applyDesired 前崩溃的安全失败路径（E_DEPLOY_INTERRUPTED + 归位旧版本，不重跑迁移）演练。
+
+### IMPL-T1-4 方案可行性审查（2026-09-26，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 票面一处机制载体（compose `volumes: type: config`）被 compose-go schema 硬拒——**裁决改用标准 compose `configs:` 节（external 形态）承载同一语义**，理由与证据见下（这是设计字面的载体修正，不是语义降级；OT-3 的全部约束——任意绝对 target、只读、禁撞 /run/secrets、值不进仓库——逐条保留）；一处配额口径与设计字面不符（secrets 现无「每 app 条数」上限）——按「读 secrets 的现行上限照搬」指令照实现，登记为偏离项待设计档裁决。
+
+现状锚点核实（票内 file:line 逐条）：
+- `internal/api/secrets.go`（secrets 资源面形态）✓：`SetSecret/ListSecrets/RemoveSecret` 三 RPC、只写不回读（值与密文零出响应）、`maxSecretValueBytes = 64KiB`（handler 兜底，与 proto `max_len` 镜像）、`secretAudit`（secret.set/secret.removed，diff 只带 hash8）、`requireAppAccess` 角色门；scope 登记 `SetSecret/RemoveSecret = admin`、`ListSecrets = read`（scope.go:204-206）。
+- `internal/compose/validate.go:256-263`（secret target 非空校验先例）✓ 现行 257-263（`/run/secrets/<target>` 固定根）；`:663-668`（volume type 白名单）✓ 现行 663-667（`type != "volume"` 即拒，bind/tmpfs 同款拒绝文案）。
+- `internal/metrics/spec.go:35-36`（swarm config 内容寻址分发先例）✓：`fleetly-vm-scrape-<hash8>`/`fleetly-vmalert-rules-<hash8>` 内容寻址对象 + `ConfigEnsure`（返回 ID）+ `anchorSpec` 补 `ConfigID` + `gcScrapeConfigs`（按自描述 label 列族、除当前版外 best-effort 删除）+ mode 关闭全族清场——本票的内容寻址/GC 语义与其实证结论同族复用（`internal/metrics/docker.go:219-233` 的 ensure 幂等形态、`:277-300` 的 GC 读面）。
+
+必查项取证：
+
+1. **swarm config 引用形态（ConfigReference 必须携什么）**：本地 Docker 29.7.2 / swarm active 真机探针（`internal/substrate/configinject_manual_test.go`，`FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/substrate -run TestManualSwarmConfigLifecycle -v`，2026-09-26 一手）结果矩阵：
+   - `{ConfigID, ConfigName}`（缺 File）→ daemon 拒绝：`invalid Config: either File or Runtime should be set`；
+   - `{ConfigID, File}`（缺 ConfigName）→ 拒绝：`malformed config reference`；
+   - `{ConfigName, File}`（缺 ConfigID）→ 拒绝：`malformed config reference`；
+   - `{ConfigID, ConfigName, File{Uid,Gid,Mode}}` → 接受，且服务实况（`ServiceInspect` 投影）可读回 name+target。
+   ⇒ 三者全必填：**ID 与 Name 双写 + File 完整（Uid/Gid/Mode）**——W3 secret-ID 同族教训在 config 上逐条命中（比票面「必须携 ConfigID/File」更强：Name 也不可缺）。实现按此组装（engine 侧 ensure 取对象存在性，substrate 侧 `resolveConfigIDs` 按名 inspect 取 ID 再翻译）。
+2. **引用整体替换 → 服务滚动**：同一探针，长驻服务（`sleep 600`，start-first）引用 config A（内容 `value-a`）→ `ServiceUpdate` 以 config B（`value-b`）整体换引用 → 新任务以新内容运行（任务容器内 `cat /etc/probe/cfg` = `value-b`，stdcopy 解复用实证），旧任务进入 `running/desired=shutdown`；服务滚动语义成立（task template 变更即触发滚动，与 metrics VM 滚动同链）。
+3. **旧对象 GC 时机**：同一探针，引用在位时 `ConfigRemove(A)` 被 daemon 拒绝（`config '…-a' is in use by the following service: fleetly-probe-t1-4-config`）；**换引用后立即删除成功**——且删除时旧任务仍处 `running/desired=shutdown`（start-first 并存窗口）——⇒ 底座 in-use 判定基于**服务 spec 引用**而非任务态：引用换版即进入可清场态，已物化到任务内的文件不受对象删除影响。**GC 设计据此落位**：引擎在 `applyDesired` 服务收敛后按 app 归属 label 列举 config 对象、保留本次期望引用的集合、其余 best-effort 删除（daemon 拒绝 = 留待下一拍）；app 删除走 reap 全清（secrets 同款）。**不做**「创建时刻即删旧版」的激进路径（滚动窗口内旧 spec 仍可能引用，且并发部署语义应以收敛拍为界）。
+4. **compose 载体（设计字面 vs schema 现实）**：compose-go v2.15.0 schema（module cache `schema/compose-spec.json` `$defs.service.properties.volumes.items.oneOf[1].properties.type.enum`）的卷 type 枚举 = bind/volume/tmpfs/cluster/npipe/image——**不含 config**；loader 默认开启 schema 校验（`internal/compose/load.go:46` 未设 `SkipValidation`），实测 `volumes: [{type: config, …}]` 直接被拒：`services.web.volumes.0.type value must be one of 'bind', 'volume', 'tmpfs', 'cluster', 'npipe', 'image'`。可行替代只有两条：① `SkipValidation = true` 放行整个 schema 层（把全部 compose 形状校验交给本仓 dict 白名单——回归面远超本票，**不可接受**）；② 用 **compose 标准 `configs:` 节**（顶层 `{name: {external: true}}` + 服务级 `[{source, target}]`），schema 原生支持、typed 解码 `ServiceConfigObjConfig{Source,Target,UID,GID,Mode}` 齐备（同探针实测通过）。裁决取 ②：语义与 secrets 面 1:1 同构（顶层 external 声明 = 值不进仓库 + 引用完整性哨兵在解析期、uid/gid/mode 平台受管、服务级 target 任意绝对路径、config 恒只读），且与 docker stack 原生 configs 形态一致（torchwood/messageloop 割接票的 compose 改写可直接写标准形态）。`/run/secrets` 前缀禁撞在解析期显式拒绝（secret 固定根不可撞）。
+5. **source 存在性判定时机**（票面授权裁决项）：按 secrets 的 external 先例——compose 解析/校验期只做**声明面自洽**（服务引用必须在顶层 `configs` 声明且 external: true；source 形态校验），**值的存在性在引擎 preparing 期前哨**（app_configs 缺行 → `E_CONFIG_NOT_FOUND` 422 点名全部缺失名，一次暴露全量缺口；底座零 ensure/零服务写）。理由：解析层是纯函数（无 app 上下文，不读 state），secrets 先例同构；快照重放（回滚/归位/init 续跑）走同一存在性解析链（`ensureSnapshotConfigs`——config 名内嵌内容指纹，值轮换后旧名悬空 → E_CONFIG_NOT_FOUND 诚实失败，不静默改写）。
+6. **配额口径**（读 secrets 现行上限）：secrets **现行只有值大小上限**（proto `max_len: 65536` + handler `maxSecretValueBytes = 64KiB` 镜像；名形态 `^[A-Za-z0-9][A-Za-z0-9._-]*$` ≤63），**无每 app 条数上限**（`internal/state/appsecrets.go` 全量通读：写通道无 count 门；`internal/api/secrets.go` 亦无）。config 照搬 = 64KiB 值上限 + 同一名形态 + 无条数上限（新增条数上限会与 secrets 口径分叉，且需新错误语义——登记为偏离项，设计档若要条数上限应两族同步加）。
+7. **scope 裁决**（票面授权裁决项）：默认对齐 secrets 口径——`Set/Remove = admin`、`List = read`、`Get（明文回读）= admin`。理由：与 `SetSecret/RemoveSecret` 同级（明文配置是 app 行为的外置输入，可携带任意内容；写面与读面同门避免「可写不可读」的错位信任），票面默认即 admin，无足够硬理由降 deploy（若未来要降，应 env 先例同步评估，登记为设计档可选）。
+8. **init job 投影同源**（T1-3 审查第 4 条的落地核对）：config 挂载在 `BuildPlan.buildServiceSpec`（planner.go:228-328）同一装配点——init job 模板经同函数编译（`svc.InitJob` 分支只加 `Job/InitJob` 标记），config 挂载自动同源；回归测试加显式断言（`TestInitJobConfigProjectionSharedSource` 形态）。
+9. **对账/漂移/删除面**（不查即误伤，T1-3 同款纪律核对）：config 纯数据对象（非服务），不触 engine 对账删除扫描/漂移 Extra/MoveApp 豁免面；`ServiceState` 反解与 `driftSpec` 投影需补 `Configs`（外部篡改/对象漂移的判定面）——本票补齐。
+
+审查新增的交互面（实现中必须接线/落测试）：
+- `internal/substrate` 的 ensure/list/remove 三原语（engine `ConfigEnsurer/ConfigReaper` 端口实现）与 `buildSwarmSpec` 的 config 投影（ID 解析 + File 完整）；
+- app 删除 reap 第二面（config 全清，secrets 同款 best-effort）；
+- 快照重放面（`ensureSnapshotConfigs`，init 续跑/回滚/归位共用）；
+- 错误码只增：`E_CONFIG_NOT_FOUND`（422，E_SECRET_NOT_FOUND 同族）——注册表 + docCodes + 计数 + golden 显式再生成；
+- Console 新页/新路由/新页签 + `pnpm gen:api` 再生成；CLI `fleetly configs <set|get|ls|rm>`。
+
+结论：全部锚点成立；进入实现。载体修正（标准 `configs:` 节）与配额偏离（无条数上限）按纪律登记，实现中的其余决策记入实施记录。
+
+### IMPL-T1-4 实施记录（2026-09-26/27，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 五条守卫与补充面回归全绿；审查期的真机探针（Docker 29.7.2 / swarm active）与全部静态门禁证据见下。
+
+变更文件清单（每文件一句）：
+
+- `internal/state/migrations/00024_app_configs.sql`（新）：app_configs 表（明文 value + hash8 内容指纹；UNIQUE (app_id, name) 承载覆盖即换版）；加法迁移 + Down 演练。
+- `internal/state/appconfigs.go`（新）：`AppConfig` 与 `Upsert/Get/List/Remove` 的 Store/Tx 双面 CRUD（写通道校验、`ErrAppConfigNotFound` 哨兵）。
+- `internal/state/appconfigs_test.go`（新）：明文往返/覆盖换版/列表序/删除哨兵/写通道校验 + 迁移 00024 Up/Down 演练。
+- `internal/state/testdata/migrations.golden`：00024 行显式再生成（加性纪律）。
+- `internal/compose/validate.go`：顶层 `configs` 入白名单、服务级 `configs` 拒条目解除；`validateConfigsDict`（external-only）与 `validateServiceConfigsDict`（显式 `{source, target}` 长语法；uid/gid/mode 拒；target 绝对单文件路径且 `path.Clean` 恒等〔拒 `//run/secrets/x`、`/etc/../run/secrets/x` 等非规范绕写〕；`/run/secrets` 前缀拒绝）；声明面引用完整性哨兵；`validComposeIdentifier` 抽公共字符集（secret/config 共用）。
+- `internal/compose/spec.go`：`Spec.Configs`（顶层声明集合）与 `Service.Configs []ServiceConfig`（{source,target}，进快照与 spec_hash）。
+- `internal/compose/normalize.go`：typed 层归一化（顶层声明排序 + 服务级挂载按 source 排序、target 原样）。
+- `internal/compose/validate_test.go`：拒绝矩阵新增 configs 十一例（未声明 source/本地来源/无 external/null 定义/`/run/secrets` 两形态/非规范绕写两形态/相对路径/目录尾斜杠/缺 target/uid-gid-mode）+ `pos_configs_long` 对照正例；旧 `reject_configs` 整键拒绝用例改写为短语法拒绝。
+- `internal/compose/configs_test.go`（新）：归一化形态/target 变更进 spec_hash 与 plan diff/名称形态校验。
+- `internal/compose/testdata/whitelist.golden`：白名单键集显式再生成（顶层与服务级各增 `configs`）。
+- `internal/naming/naming.go`：`ConfigName`（`fleetly-<team>-<prj>-<app>-config-<name>-<hash8>`）与包注公式表扩行。
+- `internal/naming/naming_test.go`：表驱动公式行 + 换版换名 + 组件校验用例。
+- `internal/engine/ports.go`：`ConfigMount`、`ServiceSpec.Configs`、`ServiceState.Configs`、`serviceSpecOf` 投影。
+- `internal/engine/configinject.go`（新）：`ConfigEnsurer/ConfigReaper` 端口与 With 注入；`resolveConfigMounts`（preparing：存在性哨兵 E_CONFIG_NOT_FOUND + 内容寻址 ensure + 挂载装配）；`ensureSnapshotConfigs`（重放解析）；`gcAppConfigs` + `configKeepSet`（换版旧对象回收，长驻集 + 快照含 Job 模板）；`reapAppConfigs`（app 删除全清）；`configLabels`。
+- `internal/engine/planner.go`：`PlanInput.ConfigMounts` 与 `buildServiceSpec` 的 Configs 装配（init job 模板自动同源）。
+- `internal/engine/engine.go`：preparing 调 `resolveConfigMounts`；plan 传递 `ConfigMounts`；`decodeAllSpecs`（keep-set 汇总用）；applyDesired 头部 `ensureSnapshotConfigs` + 尾部 `gcAppConfigs`。
+- `internal/engine/initjobs.go`：init job 建服务前 `ensureSnapshotConfigs`（与 secret 同拍）。
+- `internal/engine/rollback.go`：回滚 preflight 增 config 存在性解析（悬空名 E_CONFIG_NOT_FOUND）。
+- `internal/engine/appdelete.go`：tombstone 第二拍增 `reapAppConfigs`。
+- `internal/engine/drift.go`：driftSpec/投影/diffDrift 补 `configs`（外部篡改判定面）。
+- `internal/engine/move.go`：MoveApp 旧名 config 孤儿的口径注释扩行（诚实挂账，secrets 同款）。
+- `internal/engine/fakes_test.go`：假底座 config 引用变更即任务替换（真机同语义）；`stateOf` 投影 Configs。
+- `internal/engine/configinject_test.go`（新）：守卫①/②回归、快照重放、init job 同源、app 删除 reap、漂移篡改七测 + 三假实现。
+- `internal/substrate/configs.go`（新）：`EnsureConfig/ConfigList/ConfigRemove` 三原语（幂等/归属 label 选择器/缺失即成功）。
+- `internal/substrate/services.go`：`buildSwarmSpec` 增 configIDs 参数与 ConfigReference 投影（ID+Name+File{Uid,Gid,Mode}）；`resolveConfigIDs`；`serviceToState` 投影 Configs。
+- `internal/substrate/services_test.go`：调用面签名随动。
+- `internal/substrate/configs_test.go`（新）：ConfigReference 完整形态/缺 ID 显式报错/实况投影三测。
+- `internal/substrate/configinject_manual_test.go`（新，默认不跑）：本地 swarm 真机探针（引用形态矩阵/换引用滚动/GC 时机）。
+- `internal/api/configs.go`（新）：ConfigsService 四 RPC（Set 覆盖换版 + 审计 config.set；List 只投影名称/指纹；Get 明文回读；Remove 404 语义 + 审计 config.removed；`configAudit` target=`config:<app>/<name>`）。
+- `internal/api/configs_test.go`（新）：CRUD/回读/审计脱敏/守卫③配额 4xx 点名/守卫⑤ scope 矩阵与真拦截链读 token 负面四测。
+- `internal/api/scope.go`：ConfigsService 四方法登记（set/get/remove=admin、list=read）。
+- `proto/fleetly/server/v1/configs.proto`（新）+ `genproto/fleetly/server/v1/configs.{pb,pb.gw,grpc.pb,swagger.json}`：ConfigsService 契约（buf generate 生成物）。
+- `internal/runtime/grpc.go` / `gateway.go` / `provides.go` / `wire_gen.go`：ConfigsService 注册（gRPC + REST 两链）、wire provider、引擎 config 端口注入（`WithConfigEnsurer/WithConfigReaper`，wire 再生成）。
+- `internal/apitest/apitest.go`：测试装配注册 ConfigsService（CLI/集成同路径）。
+- `sdk/go/fleetly/client.go`：`Configs()` 访问器与字段。
+- `cmd/fleetly/cmd/configs.go`（新）：`fleetly configs set`（`--value` | `--from-file`）、`get`（明文逐字输出）、`ls`、`rm`。
+- `cmd/fleetly/cmd/configs_test.go`（新）+ `app.go` 注册：CLI 全链与用法错误回归。
+- `internal/errcode/codes.go` + `errcode_test.go` + `testdata/codes.golden`：`E_CONFIG_NOT_FOUND`（422）只增登记（80 E + 5 W）与 golden 显式再生成。
+- `console/src/api/{schema.d.ts,endpoints.ts,types.ts}`：`pnpm gen:api` 再生成（+228 行）+ 四端点封装与类型导出。
+- `console/scripts/gen-api.mjs`：configs.swagger.json 进合并清单。
+- `console/src/pages/AppConfigsPage.tsx` + `.test.tsx`（新）：列表/新增/编辑（同名锁定）/删除确认/明文查看对话框（admin 门）/空态/只读态七测；`data-testid` 沿用 `config-*` 前缀。
+- `console/src/App.tsx` / `pages/AppDetailLayout.tsx` / `components/breadcrumbs.tsx`：路由、页签与面包屑接线。
+- `docs/plan/2026-09-26-torchwood-line-impl.md`：审查小节 + 本实施记录。
+
+测试清单与票面五条守卫逐条对应表（新增测试，除注明外）：
+
+| 守卫/补充面 | 回归测试 |
+|---|---|
+| ① 未知 config source 解析/规划期拒绝 | 解析期：`TestValidationRejectMatrix/reject_config_source_undeclared`（服务引用未在顶层声明 → E_COMPOSE_UNSUPPORTED + 路径）；规划期：`TestDeployConfigMissingPreflight`（声明名不在 app_configs → `E_CONFIG_NOT_FOUND` 点名 app_conf，底座零 ensure/零服务写） |
+| ② 内容变更 → 新对象 + 服务滚动 + 旧对象回收 | `TestConfigContentChangeCreatesNewObjectAndRollsService`（v1→v2：新内容寻址名 ensure、服务 spec 指向新名、假底座任务替换=滚动、旧对象清场且当前版保留）；命名侧 `TestHash8RotationIsNewName`（config 段）；真机探针 `TestManualSwarmConfigLifecycle`（换引用滚动 + 内容断言 + 换版后旧对象可删） |
+| ③ 配额超限 4xx 点名 | `TestConfigsNameAndQuotaValidation`（空值/`>64KiB` → InvalidArgument 且文案点名 65536；名称形态 handler 兜底） |
+| ④ target 撞 /run/secrets 拒绝 | `TestValidationRejectMatrix/reject_config_target_secret_root`、`/reject_config_target_secret_prefix`、`/reject_config_target_secret_nonclean`（`//run/secrets/...` 绕写拒绝）、`/reject_config_target_dotdot`（`/etc/../run/secrets/...` 拒绝）；另含相对路径/目录尾斜杠/缺 target 三例 |
+| ⑤ 权限矩阵与 secrets 同构（List 不出值、Get 明文 admin、写面 admin） | `TestConfigsScopeMatrixMatchesSecrets`（登记面逐对与 SecretsService 对齐 + Get=admin）；`TestConfigsReadTokenRejectedOnWriteAndPlaintextRead`（真拦截链：read token set/get/remove 拒、list 放行）；`TestConfigsSetListGetRemove`（list 响应串零内容、Get 明文回读） |
+| 补充：init job 投影同源（T1-3 审查第 4 条） | `TestInitJobConfigProjectionSharedSource`（job 服务与 web 同一内容寻址挂载、target 各自显式、跨模板 ensure 去重一次） |
+| 补充：快照重放解析 | `TestSnapshotConfigResolution`（匹配 → 通过 + ensure；内容换版 → `E_CONFIG_NOT_FOUND` 悬空诚实失败） |
+| 补充：app 删除 reap / 端口未接线不阻塞 | `TestReapDeletingAppsSweepsAppConfigs` / `TestReapDeletingAppsConfigSweepNotWired` |
+| 补充：运行域漂移篡改可见 | `TestDriftDetectsConfigReferenceTamper`（平台形态零误报；外部改写 config 引用 → drift + `configs` 字段 diff） |
+| 补充：compose 归一化/哈希/差分/白名单 | `TestConfigsNormalization` / `TestConfigsTargetChangeHashesAndDiffs` / `TestConfigsNameValidation` / `TestWhitelistGolden`（再生成） |
+| 补充：底座投影形态 | `TestBuildSwarmSpecConfigFileTargetFullValues`（ID+Name+File 0:0/0444）/`TestBuildSwarmSpecConfigNotEnsuredFailsExplicitly`/`TestServiceToStateProjectsConfigs` |
+| 补充：state/CLI/Console | `TestAppConfigsStore` / `TestAppConfigsMigrationUpDown`；`TestConfigsCRUDSurface`（CLI 全链 + 用法错误）；`AppConfigsPage.test.tsx`（7 测：列表/新增/编辑锁定/删除确认/明文查看/空态/viewer 只读） |
+| 事件/错误码只增纪律 | `TestDocCodeSetMatchesRegistry` / `TestRegisteredCountByKind`（80 E + 5 W）/ `TestGoldenSnapshot`（显式再生成）/ `TestRegistryCodesReferencedInProduction`（E_CONFIG_NOT_FOUND 有生产发出来源） |
+
+一手验证证据：
+
+- 全量 `go test ./... -count=1` 全绿（含新包内全部新测）。
+- 变更包 `go test -race -count=1` 全绿：state / compose / engine / substrate / api / runtime / errcode / naming / apitest / cmd/fleetly/cmd。
+- `go test ./sdk/go/... -count=1` 绿；`go vet ./...` 净（exit 0）。
+- `bash deploy/check-image-pins.sh`：`OK — 28 image reference(s) digest-pinned, 0 exempt`（本票零新增镜像引用）。
+- `golangci-lint run --new --whole-files`：5 条全部为**未触行**的存量 gosec（`internal/engine/move.go:134` G115、`internal/errcode/errcode_test.go:16` G101、`internal/runtime/provides.go:983` G402、`internal/substrate/services_test.go:140/176` G101——对应行均不在本票 diff hunk 内，逐条核对）；新文件零问题；触文件 gofmt 干净（触前 3 处既有注释缩进随 gofmt 归一）。
+- proto/console 再生成：`mise exec -- buf lint` 净、`buf generate` 生成 `configs.{pb,pb.gw,grpc.pb,swagger.json}`；`mise run console:gen-api` 再生成 `schema.d.ts`（+228 行）。
+- Console 四脚本：`pnpm test` 328 全绿（54 文件；基线 321 + 新 7）、`pnpm typecheck` / `pnpm lint` / `pnpm build` 全净。
+- 本地真机探针（一手；Docker 29.7.2 / swarm active / 单节点）：`FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/substrate -run TestManualSwarmConfigLifecycle -v`：
+  - 引用形态矩阵：`{ConfigID,ConfigName}`（缺 File）→ `invalid Config: either File or Runtime should be set`；`{ConfigID,File}` 与 `{ConfigName,File}` → `malformed config reference`；三写齐备 → 接受且 inspect 可读回 name+target；
+  - 换引用滚动：start-first 下新任务运行且容器内 `cat /etc/probe/cfg` = 新内容，旧任务 `running/desired=shutdown`；
+  - GC 时机：引用在位时 `ConfigRemove` 被拒（`config '…-a' is in use by the following service: …`）；换引用后立即删除成功（旧任务仍 running/desired=shutdown——底座 in-use 判定基于服务 spec 引用）。
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **compose 载体：标准 `configs:` 节（设计字面 `volumes: type: config` 不可行）**：compose-go v2.15.0 schema 卷 type 枚举不含 config（实测拒绝；`SkipValidation` 会整体关闭 schema 层，不可接受）——审查记录第 4 条详载证据与替代裁决；平台语义逐条保留（显式 `target` 绝对单文件路径、恒只读、`/run/secrets` 前缀拒、external-only 值来源）。**这是用户可见 compose 契约的差异，请验收时明确追认**；后续割接票（T1-5/T2-4）按标准 configs 形态书写。
+2. **配额：无每 app 条数上限**：secrets 现行只有值大小上限（64KiB）与名形态，无 count 门——config 照搬实际口径（审查记录第 6 条）；如设计档确需条数上限，建议两族同步加（新错误语义）。
+3. **写面 scope = admin**（票面默认）：与 `SetSecret/RemoveSecret` 同门；明文读面（Get）同门，避免「可写不可读」的错位信任（审查记录第 7 条）。
+4. **CLI `set` 增 `--from-file`**：配置内容多为多行文件体，`--value "$(cat …)"` 的 shell 转义/历史污染不可取；`--value` 与 `--from-file` 恰给其一（用法错误点名）。`get` 逐字输出明文（无附加换行，可管道）。
+5. **GC 落点 = applyDesired 尾部（keep-set）+ app 删除 reap**：keep-set = 本次期望长驻集 ∪ 快照内全部模板（含 Job——init-only config 不因 Job 清场被误删/反复重建）；in-use 删除由底座拒绝 → 留待下一拍（真机实证：引用换版后即允许删除，判定基于服务 spec 而非任务态）。不做「变更时刻即时删旧版」（并发/滚动窗口语义以收敛拍为界）。
+6. **`E_CONFIG_NOT_FOUND` 新码（422，只增）**：注册表 + docCodes + 计数（79→80 E）+ golden 显式再生成；生产引用点 = `internal/engine/configinject.go`（preparing 前哨 + 快照重放悬空名）。
+7. **运行时接线面**：`NewEngine` 增 `WithConfigEnsurer/WithConfigReaper`（substrate.Client 双端口）；gRPC + REST 两链注册 ConfigsService；wire 显式再生成（`mise run generate:wire`）；apitest 与 SDK 访问器同步。
+8. **漂移投影补 `Configs`**（`driftSpec`/`serviceSpecOf`/`ServiceState`/`diffDrift`）：外部 `docker service update --config-*` 篡改可见（回归 `TestDriftDetectsConfigReferenceTamper`）；无此补齐会成漂移盲区。
+9. **MoveApp 旧名 config 孤儿**：与 secrets 同款诚实挂账（`SweepMovedServices` 注释扩行）——旧 label 值选择器扫不到，窗口 = MoveApp 与 DeleteApp 罕见叠加；不在本票扩面。
+10. **假底座语义对齐真机**：`fakeSubstrate.ServiceUpdate` 把 config 引用变更视为任务替换（同镜像也滚动），使守卫②的「滚动」断言有实义；`stateOf` 同步投影 Configs（否则 config 挂载会永久假漂移）。
+11. **gofmt 归一**：变更文件内两处既有注释缩进（`internal/runtime/provides.go`）随 gofmt 修正；不影响语义（`--new` 检查触文件 gofmt 干净）。
+
+**验收追认（2026-09-27）**：用户以「提交推送」指示验收，偏离 1（标准 `configs:` 节替代设计字面的 `volumes: type: config`）与偏离 2（无每 app 条数上限——与 secrets 现行口径一致）视为追认；后续割接票（T1-5/T2-4）按标准 `configs:` 形态书写。
+
+staging/真机待执行项（本环境无 staging 访问权，未虚构结果；本票已做单节点真机探针）：
+
+- 多节点 config 分发与滚动（swarm config 逐节点物化；本票单节点实证 + 平台台账归 T2-0② 同窗口）。
+- init job 挂 config 的真机端到端（`migrate` 类服务挂 bootstrap SQL；本票以假底座断言同源投影，真机归 T2-4 割接前的 compose 验证）。
+- Console AppConfigsPage 真机走查（列表/新建/明文查看/删除；staging 窗口）。
+- 与 IMPL-T1-5（messageloop：`mlbridge.yaml` → Config）与 IMPL-T2-4（torchwood：`config.yaml`×3 + `bootstrap-roles.sql` → Config）的 compose 改写联动（按标准 `configs:` 形态）。

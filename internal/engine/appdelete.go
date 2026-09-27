@@ -86,6 +86,10 @@ func (e *Engine) reapDeletingApp(ctx context.Context, app state.App) {
 	// 而孤儿 secret 只是无害的底座残留——诚实告警优于删除不可用），下拍
 	// 重扫幂等重试直至清完。
 	e.reapAppSecrets(ctx, app.QualifiedName())
+	// Swarm config 扫尾（OT-3/IMPL-T1-4）：与服务同拍——内容寻址对象在
+	// 发布对账里已按 keep-set 回收，此处兜底清尽 app 归属残留（单条失败
+	// 不阻塞 tombstone 第二拍，下拍重扫幂等重试）。
+	e.reapAppConfigs(ctx, app.QualifiedName())
 	// 全部受管服务已移除 → tombstone 第二拍 + 终局事件（app.deleted，注册	// 表词）与审计同事务（fail-closed；CAS 失败 = 并发已推进，幂等跳过）。
 	// E4 managed-databases §2.4「引用 app 删除 = 行级联清理」：db_references
 	// 倒排随 tombstone 第二拍同事务清空（库删除守卫的引用面不再悬挂）。

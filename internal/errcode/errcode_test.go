@@ -110,6 +110,12 @@ var docCodes = map[string]string{ // code → 文档出处
 	"E_SECRET_NOT_FOUND":        "E4 managed-databases §5.2 (compose-declared external secret missing; preflight)",
 	"E_ENV_KEY_RESERVED":        "E4 managed-databases §5.2 (reserved FLEETLY_ env namespace; wired with the S1 SetAppEnv guard)",
 
+	// T 线 OT-3/IMPL-T1-4（注册表只增）：明文配置资源的缺失哨兵。消费点 =
+	// internal/engine/configinject.go（compose configs 声明的声明名不在
+	// app_configs：preparing 期前哨 + 快照重放悬空名，与 E_SECRET_NOT_FOUND
+	// 同分层）。
+	"E_CONFIG_NOT_FOUND": "v0.3 T-line OT-3/IMPL-T1-4 (compose-declared external config missing from the platform config store; deploy preflight and snapshot replay)",
+
 	// E6 观测（observability 设计 §3.1，W5-S1 接线，注册表只增）。
 	"E_LOGS_BACKEND_UNAVAILABLE": "E6 observability §3.1 (search face unavailable: backend=jsonl or VictoriaLogs unreachable; live tail unaffected)",
 	// E6 观测（observability 设计 §4.2，W5-S3 接线，注册表只增）：opt-in
@@ -224,10 +230,11 @@ func TestDocCodeSetMatchesRegistry(t *testing.T) {
 // 库引用守卫，部署受理面）→ 67 E + 5 W；W5-S2 增告警面七码（B 线
 // b-line-w5 设计 §2，D-V3W5-1：E_ALERTS_METRICS_REQUIRED 前置门 +
 // E_ALERT_RULE_* 六码）→ 74 E + 5 W；W5-S3 增 ACME DNS-01 通配证书面三码
-//（b-line-w5 设计 §3，D-V3W5-3/D-V3W5-4：E_ACME_WILDCARD_REQUIRES_PROVIDER /
+// （b-line-w5 设计 §3，D-V3W5-3/D-V3W5-4：E_ACME_WILDCARD_REQUIRES_PROVIDER /
 // E_ACME_WILDCARD_REQUIRES_BASE_DOMAIN 联动门 + E_ACME_DNS_TEST_FAILED
 // 探针失败）→ 77 E + 5 W。DT-4（IMPL-T1-3）增 E_INIT_JOB_FAILED /
-// E_INIT_JOB_TIMED_OUT（部署期 init job 失败/超时归因）→ 79 E + 5 W。
+// E_INIT_JOB_TIMED_OUT（部署期 init job 失败/超时归因）→ 79 E + 5 W；
+// IMPL-T1-4（OT-3）增 E_CONFIG_NOT_FOUND（明文配置资源缺失哨兵）→ 80 E + 5 W。
 func TestRegisteredCountByKind(t *testing.T) {
 	errCount, warnCount := 0, 0
 	for _, c := range Default().All() {
@@ -237,8 +244,8 @@ func TestRegisteredCountByKind(t *testing.T) {
 			warnCount++
 		}
 	}
-	if errCount != 79 || warnCount != 5 {
-		t.Fatalf("E_ = %d (want 79), W_ = %d (want 5)", errCount, warnCount)
+	if errCount != 80 || warnCount != 5 {
+		t.Fatalf("E_ = %d (want 80), W_ = %d (want 5)", errCount, warnCount)
 	}
 }
 

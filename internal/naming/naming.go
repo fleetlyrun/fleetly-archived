@@ -30,6 +30,8 @@ import (
 //	Swarm 服务名   fleetly-<team>-<prj>-<app>-<service>
 //	Secret 名      fleetly-<team>-<prj>-<app>-<name>-<hash8>（hash8 = 内容
 //	               sha256 前 8）
+//	Config 名      fleetly-<team>-<prj>-<app>-config-<name>-<hash8>（OT-3：
+//	               明文配置的 swarm config 对象，内容寻址同 Secret）
 //	卷名           fleetly-<app>-<key>-<appid8>   （v0.3 不变；appid8 = app
 //	               ID 前 8）
 //	网络名         fleetly-<team>-<prj>-<app>-net （每 app 专属 overlay；
@@ -109,6 +111,31 @@ func SecretName(team, prj, app, name, hash8 string) (string, error) {
 		return "", err
 	}
 	return joinName(team, prj, app, name, hash8), nil
+}
+
+// ConfigName 返回 Swarm config 名
+// `fleetly-<team>-<prj>-<app>-config-<name>-<hash8>`（OT-3/IMPL-T1-4：明文
+// 配置资源的内容寻址底座对象名）。hash8 由调用方经 Hash8(内容) 计算——
+// **内容变更即换名换引用**（architecture §2.4 密钥行同款语义：引用进
+// desired-hash，变更随下次部署换挂并触发服务滚动）。config 段是公式内的
+// 固定标识位（name 成分字符集不含 '-' 之外的分隔符，段位无歧义）。
+func ConfigName(team, prj, app, name, hash8 string) (string, error) {
+	if err := validateComponent("team", team); err != nil {
+		return "", err
+	}
+	if err := validateComponent("prj", prj); err != nil {
+		return "", err
+	}
+	if err := validateComponent("app", app); err != nil {
+		return "", err
+	}
+	if err := validateComponent("name", name); err != nil {
+		return "", err
+	}
+	if err := validateHash8(hash8); err != nil {
+		return "", err
+	}
+	return joinName(team, prj, app, "config", name, hash8), nil
 }
 
 // VolumeName 返回平台卷名 `fleetly-<app>-<key>-<appid8>`（**v0.3 公式不变**
@@ -197,7 +224,7 @@ func IsCronJobName(name string) bool {
 // initJobNamePrefix 是部署期 init job 服务名的固定前缀（DT-4）：完整名
 // `fleetly-init-<team>-<prj>-<app>-<service>-<deployid8>`。**独立于 cron
 // 前缀族**——一次性 job 服务的瞬时性必须可按名识别：cron 孤儿清扫
-//（internal/cron sweepOrphanJobs 只认 fleetly-cron-）、引擎对账（删除扫描
+// （internal/cron sweepOrphanJobs 只认 fleetly-cron-）、引擎对账（删除扫描
 // 与漂移 Extra 判定按此前缀豁免）、MoveApp 摘旧名（在途 job 让位）与日志
 // 管线（JobServiceStates 两族并列）都按前缀/label 边界识别；与 cron 共享
 // 前缀会被对方的清扫误伤（在途 init job 被当 cron 残留删除 = 迁移静默
