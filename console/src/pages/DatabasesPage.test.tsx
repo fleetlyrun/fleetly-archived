@@ -3,7 +3,7 @@
 // 空态。data-testid 锚点为冻结契约（只增）。
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -169,6 +169,60 @@ describe("DatabasesPage create dialog", () => {
     // 成功后对话框关闭。
     await waitFor(() => {
       expect(screen.queryByTestId("database-create-dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("offers the PG 18 templates (incl. the percona/pgvector distribution) and posts the percona selection", async () => {
+    setToken("flt_test");
+    const posted: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        if (url.includes("/databases") && method === "POST") {
+          posted.push(JSON.parse(String(init?.body ?? "{}")));
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: "",
+            json: () => Promise.resolve({ database: { id: "dbx", name: "pg-vec" } }),
+          });
+        }
+        if (url.includes("/databases")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            statusText: "",
+            json: () => Promise.resolve({ databases: DBS }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "",
+          json: () => Promise.resolve({ backups: [] }),
+        });
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderAt("/databases");
+    await screen.findByText("pg-prod");
+
+    await user.click(screen.getByTestId("database-create-button"));
+    // 模板选择器列出两新条目（与 server 词表一致）；radix Select 在 jsdom
+    // 下用 fireEvent 驱动（交互纪律同 s3-settings-card 用例）。
+    fireEvent.keyDown(screen.getByTestId("database-template-select"), { key: "ArrowDown" });
+    expect(await screen.findByRole("option", { name: "postgres-18" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "percona-postgresql-18" }));
+
+    await user.type(screen.getByTestId("database-name-input"), "pg-vec");
+    await user.click(screen.getByTestId("database-create-submit"));
+    await waitFor(() => {
+      expect(posted).toHaveLength(1);
+      expect(posted[0].name).toBe("pg-vec");
+      expect(posted[0].template).toBe("percona-postgresql-18");
     });
   });
 

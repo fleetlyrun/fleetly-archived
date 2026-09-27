@@ -4079,8 +4079,11 @@ export interface components {
              */
             name?: string;
             /**
-             * 模板 ID（平台内置注册表：postgres-16 / redis-7 / mysql-8.4 /
-             *     mongodb-8.0；未知 → 400）。
+             * 模板 ID（平台内置注册表：postgres-16 / postgres-18 /
+             *     percona-postgresql-18 / redis-7 / mysql-8.4 / mongodb-8.0；未知 → 400）。
+             *     **大版本升级不做**（创建时钉死）：升 major = dump/restore 到新实例；
+             *     minor 由镜像 digest 钉定、随平台 release 以同卷受控重建演进
+             *     （UpgradeDatabase）。
              */
             template?: string;
             limits?: components["schemas"]["v1DatabaseLimits"];

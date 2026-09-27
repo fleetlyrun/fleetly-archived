@@ -2,24 +2,26 @@
 
 package database
 
-// IMPL-DB-0 真机探针（默认不跑）：dbtools 双工具面在真实 PG16/PG18 实例上
-// 跑通 dump → verify（pg_restore --list）→ restore 原地重放全链——**不依赖
-// DB-1 词表**（PG18 侧用合成模板走同一批 adapter 原语脚本）。
+// IMPL-DB-0/DB-1 真机探针（默认不跑）：dbtools 的工具面（vanilla 16/18 +
+// percona 发行版面）在真实 PG 实例上跑通 dump → verify（pg_restore --list）
+// → restore 原地重放全链——**读 DB-1 注册表真值**（postgres-16 / postgres-18 /
+// percona-postgresql-18；DB-0 期的合成模板已退役）。percona 腿额外覆盖
+// pgvector（CREATE EXTENSION vector + vector(3) 数据写入与恢复后回读——
+// DT-9「含 pgvector」的真机事实）。
 //
-//	FLEETLY_MANUAL_DBTOOLS=1 go test -tags manual ./internal/database -run TestManualDbtoolsPostgresMultiMajor -v
+//	FLEETLY_MANUAL_DBTOOLS=1 go test -tags manual ./internal/database -run TestManualDbtoolsToolFaces -v
 //
 // 镜像：缺省 = DefaultDatabaseToolsImage（需本机已 pull 或可匿名拉取）；本地
-// 验证双工具面时指向本地构建：
+// 验证新工具面（发布挂账期）时指向本地构建：
 //
 //	docker buildx build --load -t fleetly-dbtools:local -f deploy/Dockerfile.dbtools deploy
 //	FLEETLY_MANUAL_DBTOOLS=1 FLEETLY_MANUAL_DBTOOLS_IMAGE=fleetly-dbtools:local \
-//	  go test -tags manual ./internal/database -run TestManualDbtoolsPostgresMultiMajor -v
+//	  go test -tags manual ./internal/database -run TestManualDbtoolsToolFaces -v
 //
 // 执行形态：docker run 直接承载 adapter 拼装的 job 脚本（strings.Join(script,
 // "\n") 逐字——原语级等价命令，见票面「adapter 原语级 job 脚本或等价命令」），
-// restic repo = 本地卷（RESTIC_REPOSITORY=/repo，免 S3 依赖）。PG18 引擎镜像
-// 字面 = postgres:18 钉定 digest（DB-1 的 vanilla 条目候选；DB-1 落模板常量
-// 后本探针可换读模板）。staging/多节点腿不在此探针范围。
+// restic repo = 本地卷（RESTIC_REPOSITORY=/repo，免 S3 依赖）。staging/多节点
+// 腿不在此探针范围。
 
 import (
 	"context"
@@ -33,26 +35,26 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
 )
 
-// manualPostgres18Image 是 PG18 引擎镜像钉定引用（多架构 index；与
-// deploy/Dockerfile.dbtools 的 postgres-engine-18 同 digest）。
-const manualPostgres18Image = "postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722"
-
-// manualProbeLeg 是一条大版本腿的探针参数。
+// manualProbeLeg 是一条模板腿的探针参数（工具面路径由 pgToolDir 按
+// 发行版 × major 选择，探针不重复写路径）。
 type manualProbeLeg struct {
-	major       int
+	name        string
 	engineImage string
 	template    dbtemplate.Template
+	// vector 为真时额外覆盖 pgvector（CREATE EXTENSION vector + vector(3)
+	// 数据写入与恢复后回读；percona 发行版面）。
+	vector bool
 }
 
-func TestManualDbtoolsPostgresMultiMajor(t *testing.T) {
+func TestManualDbtoolsToolFaces(t *testing.T) {
 	if os.Getenv("FLEETLY_MANUAL_DBTOOLS") != "1" {
-		t.Skip("set FLEETLY_MANUAL_DBTOOLS=1 to run the dbtools multi-major probe")
+		t.Skip("set FLEETLY_MANUAL_DBTOOLS=1 to run the dbtools tool-face probe")
 	}
 	toolsImage := os.Getenv("FLEETLY_MANUAL_DBTOOLS_IMAGE")
 	if toolsImage == "" {
 		toolsImage = DefaultDatabaseToolsImage
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	run(t, ctx, "docker", "version", "--format", "{{.Server.Version}}")
@@ -63,37 +65,44 @@ func TestManualDbtoolsPostgresMultiMajor(t *testing.T) {
 		}
 	}
 
-	// 工具面自证：镜像内两代二进制并存且版本号正确。
-	for _, want := range []string{"16.", "18."} {
-		out := run(t, ctx, "docker", "run", "--rm", toolsImage, "/usr/lib/postgresql/"+strings.TrimSuffix(want, ".")+"/bin/pg_dump", "--version")
-		if !strings.Contains(out, want) {
-			t.Fatalf("tools image pg_dump for %s reported %q", want, out)
+	// 工具面自证：三个面（vanilla 16、vanilla 18、percona 18）二进制并存且
+	// 版本号正确。
+	for _, face := range []struct{ dir, want string }{
+		{"/usr/lib/postgresql/16/bin", "16."},
+		{"/usr/lib/postgresql/18/bin", "18."},
+		{"/usr/pgsql-18/bin", "18."},
+	} {
+		out := run(t, ctx, "docker", "run", "--rm", toolsImage, face.dir+"/pg_dump", "--version")
+		if !strings.Contains(out, face.want) {
+			t.Fatalf("tools image %s pg_dump reported %q, want %s", face.dir, out, face.want)
 		}
-		t.Logf("tools face pg_dump %s: %s", want, strings.TrimSpace(out))
+		t.Logf("tools face %s pg_dump: %s", face.dir, strings.TrimSpace(out))
 	}
 
 	legs := []manualProbeLeg{
-		{major: 16, engineImage: dbtemplate.DefaultPostgresImage, template: mustTemplate(t, dbtemplate.TemplatePostgres16)},
-		{major: 18, engineImage: manualPostgres18Image, template: syntheticPostgresTemplate(18, "/var/lib/postgresql/data")},
+		{name: "vanilla16", engineImage: dbtemplate.DefaultPostgresImage, template: mustTemplate(t, dbtemplate.TemplatePostgres16)},
+		{name: "vanilla18", engineImage: dbtemplate.DefaultPostgres18Image, template: mustTemplate(t, dbtemplate.TemplatePostgres18)},
+		{name: "percona18", engineImage: dbtemplate.DefaultPerconaPostgresql18Image, template: mustTemplate(t, dbtemplate.TemplatePerconaPostgresql18), vector: true},
 	}
 	for _, leg := range legs {
 		leg := leg
-		t.Run(fmt.Sprintf("major%d", leg.major), func(t *testing.T) {
-			probeMajorLeg(t, ctx, toolsImage, leg)
+		t.Run(leg.name, func(t *testing.T) {
+			probeToolFaceLeg(t, ctx, toolsImage, leg)
 		})
 	}
 }
 
-// probeMajorLeg 跑通一条大版本的 dump → verify → restore 全链（含重放断言：
-// 备份后新增的行在恢复后消失、备份时的行在场）。
-func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg manualProbeLeg) {
+// probeToolFaceLeg 跑通一条模板腿的 dump → verify → restore 全链（含重放
+// 断言：备份后新增的行在恢复后消失、备份时的行在场；vector 腿另断言
+// vector 数据与扩展版本）。
+func probeToolFaceLeg(t *testing.T, ctx context.Context, toolsImage string, leg manualProbeLeg) {
 	t.Helper()
-	suffix := fmt.Sprintf("db0p%d", leg.major)
+	suffix := "db1p-" + leg.name
 	network := "fleetly-" + suffix + "-net"
 	serverName := "fleetly-" + suffix + "-server"
 	dataVolume := "fleetly-" + suffix + "-data"
 	repoVolume := "fleetly-" + suffix + "-repo"
-	instance := suffix
+	instance := strings.ReplaceAll(suffix, "-", "")
 	mountPath := leg.template.VolumeMountPath
 	password := "probe-pass-0123456789"
 
@@ -130,7 +139,7 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 			}
 			if time.Now().After(deadline) {
 				logs, _ := tryRun(context.Background(), "docker", "logs", "--tail", "30", serverName)
-				t.Fatalf("pg%s server not ready; logs:\n%s", fmt.Sprint(leg.major), logs)
+				t.Fatalf("%s server not ready; logs:\n%s", leg.name, logs)
 			}
 			time.Sleep(2 * time.Second)
 		}
@@ -142,12 +151,21 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 	startServer()
 	waitReady()
 	version := strings.TrimSpace(sql("select version()"))
-	t.Logf("leg major%d server: %s", leg.major, version)
-	if !strings.Contains(version, fmt.Sprintf(" %d.", leg.major)) {
-		t.Fatalf("server version %q does not match leg major %d", version, leg.major)
+	t.Logf("leg %s server: %s", leg.name, version)
+	if !strings.Contains(version, fmt.Sprintf(" %d.", leg.template.Major)) {
+		t.Fatalf("server version %q does not match leg major %d", version, leg.template.Major)
 	}
 	run(t, ctx, "docker", "exec", serverName, "psql", "-U", "fleetly", "-d", dbtemplate.DatabaseName(instance), "-c",
 		"create table probe_t(id int primary key, v text); insert into probe_t values (1, 'at-backup-time');")
+	if leg.vector {
+		run(t, ctx, "docker", "exec", serverName, "psql", "-U", "fleetly", "-d", dbtemplate.DatabaseName(instance), "-v", "ON_ERROR_STOP=1", "-c",
+			"create extension vector; create table vec_t(id int primary key, v vector(3)); insert into vec_t values (1, '[1,2,3]');")
+		ext := strings.TrimSpace(sql("select extversion from pg_extension where extname='vector'"))
+		if ext == "" {
+			t.Fatal("vector extension missing on the percona leg instance")
+		}
+		t.Logf("leg %s vector extension: %s", leg.name, ext)
+	}
 
 	// ── adapter 原语脚本（逐字承载）──
 	backupScript, err := backupJobScript(leg.template, dbtemplate.BackupInput{Instance: instance, TemplateID: leg.template.ID})
@@ -160,7 +178,7 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 	if snap == "" {
 		t.Fatalf("backup produced no restic snapshot id; raw output:\n%s", backupOut)
 	}
-	t.Logf("leg major%d backup snapshot=%s size=%d", leg.major, snap, size)
+	t.Logf("leg %s backup snapshot=%s size=%d", leg.name, snap, size)
 
 	outcome := dbtemplate.BackupOutcome{Instance: instance, TemplateID: leg.template.ID, SnapshotID: snap}
 	verifyScript, err := verifyJobScript(leg.template, outcome)
@@ -169,11 +187,15 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 	}
 	verifyOut := runJobScript(t, ctx, toolsImage, network, verifyScript, repoVolume,
 		"RESTIC_PASSWORD=probe-repo-pass", "RESTIC_REPOSITORY=/repo", "HOME=/tmp")
-	t.Logf("leg major%d verify ok: %s", leg.major, strings.TrimSpace(verifyOut))
+	t.Logf("leg %s verify ok: %s", leg.name, strings.TrimSpace(verifyOut))
 
 	// 备份后新增行（重放后必须消失——证明恢复真重放而非空转）。
 	run(t, ctx, "docker", "exec", serverName, "psql", "-U", "fleetly", "-d", dbtemplate.DatabaseName(instance), "-c",
 		"insert into probe_t values (2, 'after-backup');")
+	if leg.vector {
+		run(t, ctx, "docker", "exec", serverName, "psql", "-U", "fleetly", "-d", dbtemplate.DatabaseName(instance), "-c",
+			"insert into vec_t values (2, '[4,5,6]');")
+	}
 
 	// ── 恢复：停实例 → 挂数据卷重放 → 重启断言 ──
 	run(t, ctx, "docker", "stop", serverName)
@@ -185,7 +207,7 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 	}
 	restoreOut := runJobScriptWithMount(t, ctx, toolsImage, network, restoreScript, repoVolume, dataVolume, mountPath,
 		"RESTIC_PASSWORD=probe-repo-pass", "RESTIC_REPOSITORY=/repo", "HOME=/tmp")
-	t.Logf("leg major%d restore ok: %s", leg.major, strings.TrimSpace(restoreOut))
+	t.Logf("leg %s restore ok: %s", leg.name, strings.TrimSpace(restoreOut))
 
 	run(t, ctx, "docker", "rm", "-f", serverName)
 	startServer()
@@ -194,7 +216,16 @@ func probeMajorLeg(t *testing.T, ctx context.Context, toolsImage string, leg man
 	if rows != "1:at-backup-time" {
 		t.Fatalf("replayed data = %q, want exactly the backup-time row (post-backup row must be gone)", rows)
 	}
-	t.Logf("leg major%d replayed rows: %s", leg.major, rows)
+	t.Logf("leg %s replayed rows: %s", leg.name, rows)
+	if leg.vector {
+		vecRows := strings.TrimSpace(sql("select count(*) from vec_t"))
+		vec := strings.TrimSpace(sql("select v::text from vec_t where id=1"))
+		ext := strings.TrimSpace(sql("select extversion from pg_extension where extname='vector'"))
+		if vecRows != "1" || vec != "[1,2,3]" {
+			t.Fatalf("replayed vector data = %s rows, %q (want 1 row and [1,2,3])", vecRows, vec)
+		}
+		t.Logf("leg %s replayed vector: rows=%s v=%s extversion=%s", leg.name, vecRows, vec, ext)
+	}
 }
 
 // runJobScript 以 docker run 承载 job 脚本（repo 卷挂载；实例网络内按名可达）。

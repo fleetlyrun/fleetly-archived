@@ -34,6 +34,12 @@ if (typeof globalThis.ResizeObserver !== "function") {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = SetupResizeObserverStub;
 }
 
+// scrollIntoView 同属 jsdom 缺失面（radix Select 键盘导航高亮候选时调用
+// ——空实现即可：测试断言选项存在与选中结果，不关心滚动位置）。
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();

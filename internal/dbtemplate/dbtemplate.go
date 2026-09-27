@@ -7,7 +7,14 @@
 //
 // 镜像受管（§2.2）：用户不可改库镜像/引擎参数（设置面只有限额与备份计划
 // ——违规 → E_DB_TEMPLATE_UNSUPPORTED，S2 映射本包 ErrUnknownTemplate 与
-// 受管面拒绝）。主版本升级（16→17）与引擎切换不做（§7）。
+// 受管面拒绝）。目录机制按引擎通用设计（Engine/Distribution/Major 身份
+// 字段——PG 首个消费者；IMPL-DB-0/DB-1）：同族发行版与大版本共享适配器/
+// 渲染器，仅镜像与默认参数层按条目携带。
+//
+// **大版本升级不做**（创建时钉死；DT-9/§7）：升 major = dump/restore 到
+// 新实例（跨大版本的工具面是硬语义边界，见 internal/database pgToolDir
+// 注），不提供原地跨 major 升级；minor 由 digest 钉定、随平台 release 以
+// 同卷重建演进（§2.2 升级语义）。
 package dbtemplate
 
 import (
@@ -22,6 +29,17 @@ import (
 const (
 	// DefaultPostgresImage 是 postgres:16（16.15-trixie）的钉定引用。
 	DefaultPostgresImage = "postgres:16@sha256:a3b7f434b2dc57ce85a67e171163eb8ab1a1ebcb39d27484661f26b1dfbe30d6"
+	// DefaultPostgres18Image 是 postgres:18（18.6-trixie）的钉定引用
+	// （IMPL-DB-1；台账 docs/runbooks/image-prepull.md #23——2026-09-27
+	// 解析，多架构 index digest 经 amd64 拉取 RepoDigest 一致 + buildx
+	// imagetools 逐平台 manifest 核对交付 arm64 双验）。
+	DefaultPostgres18Image = "postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722"
+	// DefaultPerconaPostgresql18Image 是 percona/percona-distribution-postgresql:18
+	// （Percona Server for PostgreSQL 18.6.1，含 pgvector 0.8.6）的钉定引用
+	// （IMPL-DB-1；台账 #24——双验方法同 #23）。发行版差异按条目携带：
+	// 卷挂载点 /data/db（uid 26 + PGDATA 子目录约定），工具面
+	// /usr/pgsql-18/bin（内部 dbtools 镜像契约）。
+	DefaultPerconaPostgresql18Image = "percona/percona-distribution-postgresql:18@sha256:dae47360e8137cafc1e8d66f9a1be348f1405e3cf51daa383b94e6c277e6b256"
 	// DefaultRedisImage 是 redis:7 的钉定引用。
 	DefaultRedisImage = "redis:7@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f"
 	// DefaultMySQLImage 是 mysql:8.4（8.4 LTS）的钉定引用（v0.3 W4
@@ -38,6 +56,12 @@ const (
 const (
 	// TemplatePostgres16 是 PostgreSQL 16 首发模板。
 	TemplatePostgres16 = "postgres-16"
+	// TemplatePostgres18 是 PostgreSQL 18 模板（IMPL-DB-1；官方镜像）。
+	TemplatePostgres18 = "postgres-18"
+	// TemplatePerconaPostgresql18 是 Percona Server for PostgreSQL 18 模板
+	// （IMPL-DB-1；含 pgvector，torchwood 现役发行版——线协议同 postgres，
+	// 零新增适配器，仅卷路径/工具面按发行版携带）。
+	TemplatePerconaPostgresql18 = "percona-postgresql-18"
 	// TemplateRedis7 是 Redis 7 首发模板。
 	TemplateRedis7 = "redis-7"
 	// TemplateMySQL84 是 MySQL 8.4 LTS 模板（v0.3 W4，D-W4-1）。
@@ -222,6 +246,44 @@ var registry = map[string]Template{
 		// 子目录约定由模板处理 initdb lost+found 问题」的实现落点）。
 		VolumeKey:          "data",
 		VolumeMountPath:    "/var/lib/postgresql/data",
+		CredentialDelivery: CredentialSecretFile,
+		HealthGate:         pgHealthGate(),
+		DefaultLimits:      Limits{CPUSeconds: 1.0, MemoryBytes: 1 << 30}, // 1GiB
+	},
+	// PostgreSQL 18（官方镜像，IMPL-DB-1）：与 postgres-16 同款形态（挂载点/
+	// 子目录约定/健康门/端口/缺省限额），仅镜像与 Major 不同；镜像 digest
+	// 与 internal/database/dbtools_manual_test.go 的引擎腿同源。
+	TemplatePostgres18: {
+		ID:                 TemplatePostgres18,
+		Engine:             EnginePostgres,
+		Distribution:       DistributionVanilla,
+		Major:              18,
+		Image:              DefaultPostgres18Image,
+		ServiceName:        "postgres",
+		EnginePort:         5432,
+		VolumeKey:          "data",
+		VolumeMountPath:    "/var/lib/postgresql/data",
+		CredentialDelivery: CredentialSecretFile,
+		HealthGate:         pgHealthGate(),
+		DefaultLimits:      Limits{CPUSeconds: 1.0, MemoryBytes: 1 << 30}, // 1GiB
+	},
+	// Percona Server for PostgreSQL 18（IMPL-DB-1，DT-9：含 pgvector 的
+	// torchwood 现役发行版）。发行版差异只有两处、都按条目携带：①原生卷
+	// 挂载点 /data/db（uid 26 + 空卷 root-owned——postgres-16 同款挂载路径
+	// 实测 mkdir Permission denied，见 §4「IMPL-DB-1 方案可行性审查（2026-
+	// 09-27 续）」）；②dbtools 内的工具面目录 /usr/pgsql-18/bin（发行版面
+	// ——internal/database pgToolDir 按发行版选择）。其余字段与 vanilla 18
+	// 逐字同款（线协议/凭据投递/健康门/限额——「发行版不新增适配器」）。
+	TemplatePerconaPostgresql18: {
+		ID:                 TemplatePerconaPostgresql18,
+		Engine:             EnginePostgres,
+		Distribution:       DistributionPercona,
+		Major:              18,
+		Image:              DefaultPerconaPostgresql18Image,
+		ServiceName:        "postgres",
+		EnginePort:         5432,
+		VolumeKey:          "data",
+		VolumeMountPath:    "/data/db",
 		CredentialDelivery: CredentialSecretFile,
 		HealthGate:         pgHealthGate(),
 		DefaultLimits:      Limits{CPUSeconds: 1.0, MemoryBytes: 1 << 30}, // 1GiB

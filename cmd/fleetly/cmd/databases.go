@@ -99,12 +99,12 @@ func (c *databaseCreateCmd) Synopsis() string {
 	return "create a managed database instance (accepted as provisioning; the platform converges it to ready)"
 }
 func (c *databaseCreateCmd) Usage() string {
-	return "databases create [--template postgres-16|redis-7|mysql-8.4|mongodb-8.0] [--cpu ...] [--memory-bytes ...] [--addr <host:port>] [--token <tok>] [--json] <name>"
+	return "databases create [--template postgres-16|postgres-18|percona-postgresql-18|redis-7|mysql-8.4|mongodb-8.0] [--cpu ...] [--memory-bytes ...] [--addr <host:port>] [--token <tok>] [--json] <name>"
 }
 
 func (c *databaseCreateCmd) SetFlags(fs *flag.FlagSet) {
 	c.conn.register(fs)
-	fs.StringVar(&c.template, "template", "postgres-16", "engine template id (postgres-16, redis-7, mysql-8.4 or mongodb-8.0)")
+	fs.StringVar(&c.template, "template", "postgres-16", "engine template id (postgres-16, postgres-18, percona-postgresql-18, redis-7, mysql-8.4 or mongodb-8.0)")
 	c.limits.register(fs)
 	fs.BoolVar(&c.jsonOut, "json", false, "output machine-readable JSON")
 }

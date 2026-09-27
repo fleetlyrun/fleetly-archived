@@ -17,37 +17,23 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
 )
 
-// syntheticPostgresTemplate 构造 DB-1 词表就绪前的合成 PG 条目（只进测试，
-// 不注册进 dbtemplate 注册表）。
-func syntheticPostgresTemplate(major int, mountPath string) dbtemplate.Template {
-	return dbtemplate.Template{
-		ID:                 fmt.Sprintf("postgres-%d", major),
-		Engine:             dbtemplate.EnginePostgres,
-		Distribution:       dbtemplate.DistributionVanilla,
-		Major:              major,
-		ServiceName:        "postgres",
-		EnginePort:         5432,
-		VolumeKey:          "data",
-		VolumeMountPath:    mountPath,
-		CredentialDelivery: dbtemplate.CredentialSecretFile,
-	}
-}
-
-// TestPostgresToolFaceSelectedByInstanceMajor 工具面版本纪律（IMPL-DB-0 守卫
-// 核心）：dump/verify/restore 三段脚本的 PG 二进制全部取模板 major 的显式
-// 路径；恢复 PGDATA 取 VolumeTarget + /pgdata；缺面前置点名。
+// TestPostgresToolFaceSelectedByInstanceMajor 工具面版本/发行版纪律（IMPL-DB-0/
+// DB-1 守卫核心）：dump/verify/restore 三段脚本的 PG 二进制全部取模板
+// （发行版 × major）的显式路径；恢复 PGDATA 取 VolumeTarget + /pgdata；
+// 缺面前置点名；脚本不得出现别代/别发行版的工具路径（混版面零容忍）。
 func TestPostgresToolFaceSelectedByInstanceMajor(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		tpl       dbtemplate.Template
+		wantDir   string
 		mountPath string
 	}{
-		{"major16", mustTemplate(t, dbtemplate.TemplatePostgres16), "/var/lib/postgresql/data"},
-		{"major18", syntheticPostgresTemplate(18, "/var/lib/postgresql/data"), "/var/lib/postgresql/data"},
-		{"percona-like-major18", syntheticPostgresTemplate(18, "/data/db"), "/data/db"},
+		{"vanilla16", mustTemplate(t, dbtemplate.TemplatePostgres16), "/usr/lib/postgresql/16/bin", "/var/lib/postgresql/data"},
+		{"vanilla18", mustTemplate(t, dbtemplate.TemplatePostgres18), "/usr/lib/postgresql/18/bin", "/var/lib/postgresql/data"},
+		{"percona18", mustTemplate(t, dbtemplate.TemplatePerconaPostgresql18), "/usr/pgsql-18/bin", "/data/db"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := fmt.Sprintf("/usr/lib/postgresql/%d/bin", tc.tpl.Major)
+			dir := tc.wantDir
 			instance := "pgface"
 			backupIn := dbtemplate.BackupInput{Instance: instance, TemplateID: tc.tpl.ID}
 			backupScript, err := backupJobScript(tc.tpl, backupIn)
@@ -56,7 +42,7 @@ func TestPostgresToolFaceSelectedByInstanceMajor(t *testing.T) {
 			}
 			wantDump := fmt.Sprintf("%s/pg_dump -h %s -U fleetly -d %s -Fc", dir, instance, dbtemplate.DatabaseName(instance))
 			if !strings.Contains(strings.Join(backupScript, " "), wantDump) {
-				t.Fatalf("backup script missing the major-selected pg_dump %q:\n%s", wantDump, strings.Join(backupScript, " "))
+				t.Fatalf("backup script missing the selected pg_dump %q:\n%s", wantDump, strings.Join(backupScript, " "))
 			}
 
 			outcome := dbtemplate.BackupOutcome{Instance: instance, TemplateID: tc.tpl.ID, SnapshotID: "snap-face"}
@@ -66,7 +52,7 @@ func TestPostgresToolFaceSelectedByInstanceMajor(t *testing.T) {
 			}
 			wantRestoreList := fmt.Sprintf("%s/pg_restore --list /tmp/v.dump", dir)
 			if !strings.Contains(strings.Join(verifyScript, " "), wantRestoreList) {
-				t.Fatalf("verify script missing the major-selected pg_restore %q:\n%s", wantRestoreList, strings.Join(verifyScript, " "))
+				t.Fatalf("verify script missing the selected pg_restore %q:\n%s", wantRestoreList, strings.Join(verifyScript, " "))
 			}
 
 			restoreScript, err := restorePostgresJobScript(tc.tpl, dbtemplate.RestoreInput{
@@ -89,13 +75,27 @@ func TestPostgresToolFaceSelectedByInstanceMajor(t *testing.T) {
 					t.Fatalf("restore script missing %q:\n%s", want, joined)
 				}
 			}
-			// 反向钉：脚本不得出现别代 major 的工具路径（混版面零容忍）。
-			other := "/usr/lib/postgresql/16/bin"
-			if tc.tpl.Major == 16 {
-				other = "/usr/lib/postgresql/18/bin"
-			}
-			if strings.Contains(joined, other) {
-				t.Fatalf("restore script carries the other major's tool face %s:\n%s", other, joined)
+			// 反向钉：脚本不得出现另一发行版的工具面路径（混版面零容忍）；
+			// 同发行版另代 major 路径同样不得出现。
+			switch tc.tpl.Distribution {
+			case dbtemplate.DistributionPercona:
+				if strings.Contains(joined, "/usr/lib/postgresql/") {
+					t.Fatalf("percona restore script carries the vanilla tool face:\n%s", joined)
+				}
+				if strings.Contains(joined, "/usr/pgsql-16/") {
+					t.Fatalf("percona restore script carries the other major's percona face:\n%s", joined)
+				}
+			case dbtemplate.DistributionVanilla:
+				if strings.Contains(joined, "/usr/pgsql-") {
+					t.Fatalf("vanilla restore script carries the percona tool face:\n%s", joined)
+				}
+				other := "/usr/lib/postgresql/16/bin"
+				if tc.tpl.Major == 16 {
+					other = "/usr/lib/postgresql/18/bin"
+				}
+				if strings.Contains(joined, other) {
+					t.Fatalf("restore script carries the other major's tool face %s:\n%s", other, joined)
+				}
 			}
 		})
 	}
@@ -185,6 +185,12 @@ func TestEngineDispatchUnknownEngineAndMissingMajorFailLoud(t *testing.T) {
 	}
 	if _, err := pgToolDir(dbtemplate.Template{ID: "postgres-x", Engine: dbtemplate.EnginePostgres}); err == nil {
 		t.Fatal("pgToolDir accepted a postgres template without a major")
+	}
+	if _, err := pgToolDir(dbtemplate.Template{ID: "postgres-18", Engine: dbtemplate.EnginePostgres, Major: 18}); err == nil {
+		t.Fatal("pgToolDir accepted a postgres template without a distribution")
+	}
+	if _, err := pgToolDir(dbtemplate.Template{ID: "postgres-18", Engine: dbtemplate.EnginePostgres, Major: 18, Distribution: dbtemplate.Distribution("supabase")}); err == nil {
+		t.Fatal("pgToolDir accepted an unknown distribution")
 	}
 }
 

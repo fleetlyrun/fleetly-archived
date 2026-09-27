@@ -485,15 +485,20 @@ jobs:
     # + dbtools psql 引导）与 FLEETLY_DB_* 注入 → D9 备份 verified →
     # D10-D11 破坏清空/原地恢复 → D12-D15 轮换 + 引用 app 自动重部署 +
     # 新凭据写路径 → D16-D20 平台密钥库（挂载/移除诚实失败/重设恢复）→
-    # D21-D22 暂停恢复 → D23-D27 删除守卫 + 默认留卷删除。
+    # D21-D22 暂停恢复 → D23-D27 删除守卫 + 默认留卷删除；M/G 腿同链
+    # （mysql-8.4/mongodb-8.0）。
+    # IMPL-DB-1 P 段（DT-9 目录矩阵）：postgres-18 与 percona-postgresql-18
+    # 各跑 create→ready→引用 app→backup verified→清空→原地恢复→行回来；
+    # percona 腿含 CREATE EXTENSION vector + vector(3) 数据回读。
     # 与其他 e2e job 的唯一编排差异：dbtools 是 PRIVATE ghcr 包，且钉定
     # ref 是 tag@digest 形态——必须由真实 pull 落下 RepoDigests 才能本地
-    # 解析（save|load 拷贝解析不了），故凭据经 DB_GHCR_USER/DB_GHCR_TOKEN
-    # 传入脚本、由 dind 内 docker login + 直拉完成注入（GITHUB_TOKEN 对同
-    # org 私有包具备 packages: read，已加进 workflow 级 permissions）。
+    # 解析（save|load 拷贝解析不了 digest 引用），故凭据经 DB_GHCR_USER/
+    # DB_GHCR_TOKEN 传入脚本、由 dind 内 docker login + 直拉完成注入
+    # （GITHUB_TOKEN 对同 org 私有包具备 packages: read，已加进 workflow
+    # 级 permissions）。P 段的本地矩阵复跑路径见脚本头（DB_DBTOOLS_IMG）。
     name: databases e2e (dind)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 70
     env:
       DB_GHCR_USER: ${{ github.actor }}
       DB_GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

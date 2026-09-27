@@ -70,13 +70,14 @@ func TestPinnedDigests(t *testing.T) {
 		t.Fatalf("redis default limits = %+v, want 0.5 CPU / 256MiB (D-DB-9)", rd.DefaultLimits)
 	}
 
-	// 注册表 = 四模板（v0.3 W4 扩 mysql-8.4/mongodb-8.0）；未知 ID →
-	// ErrUnknownTemplate（S2 映射 E_DB_TEMPLATE_UNSUPPORTED）。
+	// 注册表 = 六模板（v0.3 W4 扩 mysql-8.4/mongodb-8.0；IMPL-DB-1 扩
+	// postgres-18/percona-postgresql-18）；未知 ID → ErrUnknownTemplate
+	//（S2 映射 E_DB_TEMPLATE_UNSUPPORTED）。
 	list := List()
-	if len(list) != 4 {
-		t.Fatalf("registry list = %+v, want 4 templates", list)
+	if len(list) != 6 {
+		t.Fatalf("registry list = %+v, want 6 templates", list)
 	}
-	for i, want := range []string{"mongodb-8.0", "mysql-8.4", "postgres-16", "redis-7"} {
+	for i, want := range []string{"mongodb-8.0", "mysql-8.4", "percona-postgresql-18", "postgres-16", "postgres-18", "redis-7"} {
 		if list[i].ID != want {
 			t.Fatalf("registry list[%d] = %s, want %s (sorted)", i, list[i].ID, want)
 		}
@@ -86,6 +87,102 @@ func TestPinnedDigests(t *testing.T) {
 	}
 	if _, err := Get("mongo-8.0"); !errors.Is(err, ErrUnknownTemplate) {
 		t.Fatalf("unknown template err = %v, want ErrUnknownTemplate (the mongodb key is mongodb-8.0)", err)
+	}
+	if _, err := Get("postgres-17"); !errors.Is(err, ErrUnknownTemplate) {
+		t.Fatalf("unknown template err = %v, want ErrUnknownTemplate (only 16/18 are catalogued)", err)
+	}
+}
+
+// TestPostgres18AndPerconaTemplateFields 两新 PG 条目字段逐字（IMPL-DB-1，
+// DT-9；台账 #23/#24 双锚）：digest、发行版、卷挂载点（percona 原生 /data/db）、
+// 端口/服务名/secret 投递、健康门与缺省限额（沿 PG 家族逐字）。
+func TestPostgres18AndPerconaTemplateFields(t *testing.T) {
+	pg18, err := Get(TemplatePostgres18)
+	if err != nil {
+		t.Fatalf("get postgres-18: %v", err)
+	}
+	if pg18.Image != "postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722" {
+		t.Fatalf("postgres-18 image = %s, want the pinned multi-arch digest (#23)", pg18.Image)
+	}
+	if pg18.Engine != EnginePostgres || pg18.Distribution != DistributionVanilla || pg18.Major != 18 {
+		t.Fatalf("postgres-18 identity = (%s, %s, %d), want (postgres, vanilla, 18)", pg18.Engine, pg18.Distribution, pg18.Major)
+	}
+	if pg18.ServiceName != "postgres" || pg18.EnginePort != 5432 ||
+		pg18.VolumeKey != "data" || pg18.VolumeMountPath != "/var/lib/postgresql/data" {
+		t.Fatalf("postgres-18 fields drifted: %+v", pg18)
+	}
+
+	percona, err := Get(TemplatePerconaPostgresql18)
+	if err != nil {
+		t.Fatalf("get percona-postgresql-18: %v", err)
+	}
+	if percona.Image != "percona/percona-distribution-postgresql:18@sha256:dae47360e8137cafc1e8d66f9a1be348f1405e3cf51daa383b94e6c277e6b256" {
+		t.Fatalf("percona image = %s, want the pinned multi-arch digest (#24)", percona.Image)
+	}
+	if percona.Engine != EnginePostgres || percona.Distribution != DistributionPercona || percona.Major != 18 {
+		t.Fatalf("percona identity = (%s, %s, %d), want (postgres, percona, 18)", percona.Engine, percona.Distribution, percona.Major)
+	}
+	if percona.ServiceName != "postgres" || percona.EnginePort != 5432 ||
+		percona.VolumeKey != "data" || percona.VolumeMountPath != "/data/db" {
+		t.Fatalf("percona fields drifted: %+v", percona)
+	}
+
+	// 健康门/凭据投递/缺省限额沿 PG 家族逐字（「发行版不新增适配器」的
+	// 字段面：两新条目与 postgres-16 只差身份/镜像/挂载点）。
+	pg16, err := Get(TemplatePostgres16)
+	if err != nil {
+		t.Fatalf("get postgres-16: %v", err)
+	}
+	for _, tpl := range []Template{pg18, percona} {
+		if tpl.CredentialDelivery != CredentialSecretFile {
+			t.Fatalf("%s credential delivery = %s, want secret-file", tpl.ID, tpl.CredentialDelivery)
+		}
+		if !reflect.DeepEqual(tpl.HealthGate.Test, []string{"CMD", "pg_isready", "-U", "fleetly"}) {
+			t.Fatalf("%s health gate = %v, want the PG family pg_isready gate", tpl.ID, tpl.HealthGate.Test)
+		}
+		if !reflect.DeepEqual(tpl.HealthGate, pg16.HealthGate) {
+			t.Fatalf("%s health gate timing = %+v, want postgres-16's %+v", tpl.ID, tpl.HealthGate, pg16.HealthGate)
+		}
+		if tpl.DefaultLimits != pg16.DefaultLimits {
+			t.Fatalf("%s default limits = %+v, want postgres-16's %+v", tpl.ID, tpl.DefaultLimits, pg16.DefaultLimits)
+		}
+	}
+}
+
+// TestRenderPostgres18AndPerconaCatalogued 两新条目的渲染：挂载点与 PGDATA
+// 子目录约定按条目派生（percona /data/db → /data/db/pgdata）、连接串投影
+// 走 PG 家族零新增代码、要求 = 库服务的确定性投影。
+func TestRenderPostgres18AndPerconaCatalogued(t *testing.T) {
+	for _, tc := range []struct {
+		templateID string
+		wantMount  string
+		wantData   string
+	}{
+		{TemplatePostgres18, "/var/lib/postgresql/data", "/var/lib/postgresql/data/pgdata"},
+		{TemplatePerconaPostgresql18, "/data/db", "/data/db/pgdata"},
+	} {
+		in := renderInput(tc.templateID)
+		spec, err := Render(in)
+		if err != nil {
+			t.Fatalf("render %s: %v", tc.templateID, err)
+		}
+		if !containsString(spec.Env, "PGDATA="+tc.wantData) {
+			t.Fatalf("%s env = %v, want PGDATA=%s", tc.templateID, spec.Env, tc.wantData)
+		}
+		if len(spec.Mounts) != 1 || spec.Mounts[0].Target != tc.wantMount {
+			t.Fatalf("%s mounts = %+v, want the data volume at %s", tc.templateID, spec.Mounts, tc.wantMount)
+		}
+		if spec.Image == "" || !strings.Contains(spec.Image, "@sha256:") {
+			t.Fatalf("%s image not digest-pinned: %s", tc.templateID, spec.Image)
+		}
+		vars, err := ConnectionVars(tc.templateID, testInstance, testPassword)
+		if err != nil {
+			t.Fatalf("ConnectionVars(%s): %v", tc.templateID, err)
+		}
+		if got, want := vars[EnvPrefix(testInstance)+"_URL"],
+			"postgres://fleetly:"+testPassword+"@"+testInstance+":5432/pg_prod"; got != want {
+			t.Fatalf("%s URL = %q, want %q", tc.templateID, got, want)
+		}
 	}
 }
 
@@ -149,10 +246,12 @@ func TestTemplateIdentityFields(t *testing.T) {
 		distribution Distribution
 		major        int
 	}{
-		TemplatePostgres16: {EnginePostgres, DistributionVanilla, 16},
-		TemplateRedis7:     {EngineRedis, DistributionVanilla, 7},
-		TemplateMySQL84:    {EngineMySQL, DistributionVanilla, 8},
-		TemplateMongoDB80:  {EngineMongo, DistributionVanilla, 8},
+		TemplatePostgres16:          {EnginePostgres, DistributionVanilla, 16},
+		TemplatePostgres18:          {EnginePostgres, DistributionVanilla, 18},
+		TemplatePerconaPostgresql18: {EnginePostgres, DistributionPercona, 18},
+		TemplateRedis7:              {EngineRedis, DistributionVanilla, 7},
+		TemplateMySQL84:             {EngineMySQL, DistributionVanilla, 8},
+		TemplateMongoDB80:           {EngineMongo, DistributionVanilla, 8},
 	}
 	list := List()
 	if len(list) != len(want) {
@@ -186,17 +285,10 @@ func TestRenderEnvPGDataFollowsTemplateMountPath(t *testing.T) {
 		t.Fatalf("postgres-16 env = %v, want the unchanged PGDATA value", env)
 	}
 
-	// 合成 percona 条目（DB-1 词表就绪前的参数化钉）：原生挂载点 /data/db。
-	percona := Template{
-		ID:                 "percona-postgresql-18",
-		Engine:             EnginePostgres,
-		Distribution:       DistributionPercona,
-		Major:              18,
-		ServiceName:        "postgres",
-		EnginePort:         5432,
-		VolumeKey:          "data",
-		VolumeMountPath:    "/data/db",
-		CredentialDelivery: CredentialSecretFile,
+	// percona 条目读注册表真值（IMPL-DB-1 入册后；原生挂载点 /data/db）。
+	percona, err := Get(TemplatePerconaPostgresql18)
+	if err != nil {
+		t.Fatalf("get percona-postgresql-18: %v", err)
 	}
 	if got, want := pgDataDirectory(percona), "/data/db/pgdata"; got != want {
 		t.Fatalf("percona PGDATA = %q, want %q", got, want)

@@ -31,8 +31,11 @@ type CreateDatabaseRequest struct {
 	// fleetly-db-* 与 app 名族解耦，app 与库实例可重名）。project 内唯一
 	// （D-W0-4 二修——跨项目同名实例合法）。
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// 模板 ID（平台内置注册表：postgres-16 / redis-7 / mysql-8.4 /
-	// mongodb-8.0；未知 → 400）。
+	// 模板 ID（平台内置注册表：postgres-16 / postgres-18 /
+	// percona-postgresql-18 / redis-7 / mysql-8.4 / mongodb-8.0；未知 → 400）。
+	// **大版本升级不做**（创建时钉死）：升 major = dump/restore 到新实例；
+	// minor 由镜像 digest 钉定、随平台 release 以同卷受控重建演进
+	// （UpgradeDatabase）。
 	Template string `protobuf:"bytes,2,opt,name=template,proto3" json:"template,omitempty"`
 	// 资源限额（零值字段回落模板缺省——PG 1C/1Gi、Redis 0.5C/256Mi、
 	// MySQL/Mongo 1C/1Gi）。

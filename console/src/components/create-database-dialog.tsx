@@ -29,8 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// 模板选项（与 server 注册表词表一致；IMPL-DB-1 增两 PG 条目——
+// postgres-18 官方镜像与 percona-postgresql-18 发行版面（含 pgvector））。
 const TEMPLATES = [
   { value: "postgres-16", label: "postgres-16" },
+  { value: "postgres-18", label: "postgres-18" },
+  { value: "percona-postgresql-18", label: "percona-postgresql-18" },
   { value: "redis-7", label: "redis-7" },
   { value: "mysql-8.4", label: "mysql-8.4" },
   { value: "mongodb-8.0", label: "mongodb-8.0" },

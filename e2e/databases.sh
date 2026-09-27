@@ -57,7 +57,15 @@
 #   G9-G12 轮换 updateUser → 指纹变化 + 自动重部署 + 新凭据写 count=2。
 #   G13-G15 解除引用重部署 → 删除（实例 reap + 服务移除）。
 #
-# 断言风格与 e2e/s3-rustfs.sh 一致（D*/M*/G*: PASS/FAIL 行 + NL_FAIL 计数 +
+#   IMPL-DB-1 P 段（DT-9 目录矩阵——同一段脚本对两个 PG 18 条目各跑
+#   create→backup→restore；percona 腿含 pgvector）：
+#   P1  postgres-18（vanilla）：create → ready → 卷/放置 → 引用 app（psql 引导）
+#       → FLEETLY_DB_* 注入断言 → backup verified → 破坏清空 → 原地恢复 →
+#       行回来（备份时刻态）。
+#   P2  percona-postgresql-18（发行版面）：同上，另含 `CREATE EXTENSION vector`
+#       + vector(3) 数据写入与恢复后回读（「含 pgvector」的真机事实钉）。
+#
+# 断言风格与 e2e/s3-rustfs.sh 一致（D*/M*/G*/P*: PASS/FAIL 行 + NL_FAIL 计数 +
 # finish）。
 # usage: e2e/databases.sh
 # env:
@@ -65,6 +73,11 @@
 #   DB_SKIP_BUILD  1 = 跳过交叉编译，改用 DB_BIN_DIR 下的现成二进制
 #   DB_BIN_DIR     DB_SKIP_BUILD=1 时的二进制来源（需含 fleetlyd 与 fleetly）
 #   DB_VERSION     注入的版本串（默认 v0.2.0-db-e2e）
+#   DB_DBTOOLS_IMG dbtools 镜像引用覆盖（默认 = 已发布钉定引用；**本地矩阵
+#                  复跑路径**：指向无 `@sha256:` 的本地 tag 时跳过 registry
+#                  拉取、改宿主 save→dind load——发布挂账期验证新工具面用，
+#                  须配合把平台常量指到同一 tag 的本地构建二进制，见
+#                  docs/plan/2026-09-26-torchwood-line-impl.md §4）
 #
 # 私有镜像注意（dbtools）：备份 job 与 dbapp 的运行载体 ghcr.io/fleetlyrun/
 # dbtools 引用为 tag@digest 钉定形态（CI 首推 2026-09-23）——digest 钉定引用
@@ -85,10 +98,19 @@ ALPINE_IMG='alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be121
 # curl helper（v0.3 fixture：REST 注册/铸 PAT 面——auth.sh 同源钉版）。
 CURL_IMAGE='curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69'
 PG_IMG='postgres:16@sha256:a3b7f434b2dc57ce85a67e171163eb8ab1a1ebcb39d27484661f26b1dfbe30d6'
+# PG18 与 percona 引擎镜像（IMPL-DB-1 P 腿；与 internal/dbtemplate
+# DefaultPostgres18Image/DefaultPerconaPostgresql18Image 及 deploy/
+# Dockerfile.dbtools 的 FROM 同串——台账 docs/runbooks/image-prepull.md
+# #23/#24）。
+PG18_IMG='postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722'
+PERCONA_IMG='percona/percona-distribution-postgresql:18@sha256:dae47360e8137cafc1e8d66f9a1be348f1405e3cf51daa383b94e6c277e6b256'
 REDIS_IMG='redis:7@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f'
 RESTIC_IMG='restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510'
 # dbtools（私有 ghcr 包）：internal/database DefaultDatabaseToolsImage 同串。
-DBTOOLS_IMG='ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382'
+# DB_DBTOOLS_IMG 覆盖仅服务本地矩阵复跑（发布挂账期验证新工具面）：无
+# `@sha256:` 的本地 tag 不走 registry 拉取，改宿主 save→dind load（见头注
+# env 段）。
+DBTOOLS_IMG="${DB_DBTOOLS_IMG:-ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382}"
 # mysql/mongo 引擎镜像（v0.3 W4 D-W4-1/2，M/G 腿）：与 internal/dbtemplate
 # DefaultMySQLImage/DefaultMongoImage 同串（台账 docs/runbooks/image-prepull.md
 # #19/#20）——预拉沿 postgres 形态（公网镜像，3 次重试抗 registry 抖动）。
@@ -313,8 +335,9 @@ stage "$DIND" "$TMP/config.yaml" /opt/fleetly/etc/config.yaml
 nl 'pre-pulling fixture images (public pinned digests; 3 attempts each)'
 # PG/REDIS/RESTIC 同时是本地构建 dbtools（无凭据腿）的基底/COPY 来源——
 # 预拉后 dind 内 build 离线可解析 FROM 与 COPY --from（build 腿退役后保留
-# 为既有防抖形态）。MYSQL/MONGO = M/G 腿引擎镜像（模板钉 digest 同串）。
-for img in "$ALPINE_IMG" "$PG_IMG" "$REDIS_IMG" "$RESTIC_IMG" "$MYSQL_IMG" "$MONGO_IMG"; do
+# 为既有防抖形态）。MYSQL/MONGO = M/G 腿引擎镜像；PG18/PERCONA = P 腿
+# 引擎镜像（模板钉 digest 同串）。
+for img in "$ALPINE_IMG" "$PG_IMG" "$PG18_IMG" "$PERCONA_IMG" "$REDIS_IMG" "$RESTIC_IMG" "$MYSQL_IMG" "$MONGO_IMG"; do
     ok=0
     for attempt in 1 2 3; do
         if docker exec "$DIND" docker pull -q "$img" >/dev/null; then
@@ -331,19 +354,31 @@ done
 # 解析不了 digest 钉定引用，W4 实测教训）。有凭据 → dind 内登录 + 直拉；
 # 无凭据 → 匿名直拉（2026-09-24 实证该包匿名可读——本地复跑路径）；拉取
 # 失败 → 诚实 fatal（包转私/网络问题时本地与 CI 同样快速红）。
-if [ -n "${DB_GHCR_USER:-}" ] && [ -n "${DB_GHCR_TOKEN:-}" ]; then
-    docker exec -e GHCR_USER="$DB_GHCR_USER" -e GHCR_TOKEN="$DB_GHCR_TOKEN" \
-        "$DIND" sh -c 'printf %s "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null' ||
-        fatal 'docker login ghcr.io (inside dind) failed'
-    docker exec "$DIND" docker pull -q "$DBTOOLS_IMG" >/dev/null ||
-        fatal "pull $DBTOOLS_IMG (inside dind) failed — check the ghcr credential and its packages:read access to this private image"
-    docker exec "$DIND" docker logout ghcr.io >/dev/null 2>&1 || true
-    nl "dbtools image pulled inside dind with ghcr credentials ($DBTOOLS_IMG)"
-else
-    docker exec "$DIND" docker pull -q "$DBTOOLS_IMG" >/dev/null ||
-        fatal "pull $DBTOOLS_IMG (inside dind, anonymous) failed — set DB_GHCR_USER/DB_GHCR_TOKEN (a ghcr credential with packages:read on fleetlyrun/dbtools) if the package is private for your principal. In CI the databases-e2e job passes GITHUB_TOKEN automatically."
-    nl "dbtools image pulled inside dind anonymously ($DBTOOLS_IMG)"
-fi
+# DB_DBTOOLS_IMG 指向无 `@sha256:` 的本地 tag（本地矩阵复跑路径）时：不做
+# registry 交互，宿主 save → dind load（tag 引用在 dind 内可解析）。
+case "$DBTOOLS_IMG" in
+*@sha256:*)
+    if [ -n "${DB_GHCR_USER:-}" ] && [ -n "${DB_GHCR_TOKEN:-}" ]; then
+        docker exec -e GHCR_USER="$DB_GHCR_USER" -e GHCR_TOKEN="$DB_GHCR_TOKEN" \
+            "$DIND" sh -c 'printf %s "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null' ||
+            fatal 'docker login ghcr.io (inside dind) failed'
+        docker exec "$DIND" docker pull -q "$DBTOOLS_IMG" >/dev/null ||
+            fatal "pull $DBTOOLS_IMG (inside dind) failed — check the ghcr credential and its packages:read access to this private image"
+        docker exec "$DIND" docker logout ghcr.io >/dev/null 2>&1 || true
+        nl "dbtools image pulled inside dind with ghcr credentials ($DBTOOLS_IMG)"
+    else
+        docker exec "$DIND" docker pull -q "$DBTOOLS_IMG" >/dev/null ||
+            fatal "pull $DBTOOLS_IMG (inside dind, anonymous) failed — set DB_GHCR_USER/DB_GHCR_TOKEN (a ghcr credential with packages:read on fleetlyrun/dbtools) if the package is private for your principal. In CI the databases-e2e job passes GITHUB_TOKEN automatically."
+        nl "dbtools image pulled inside dind anonymously ($DBTOOLS_IMG)"
+    fi
+    ;;
+*)
+    docker image inspect "$DBTOOLS_IMG" >/dev/null || fatal "local dbtools image $DBTOOLS_IMG not present on the host (build it with: docker buildx build --load -t $DBTOOLS_IMG -f deploy/Dockerfile.dbtools deploy)"
+    docker save "$DBTOOLS_IMG" | docker exec -i "$DIND" docker load >/dev/null ||
+        fatal "docker save | dind docker load for $DBTOOLS_IMG failed"
+    nl "dbtools image loaded into dind from the host (local matrix replay, no registry pull): $DBTOOLS_IMG"
+    ;;
+esac
 
 docker exec "$DIND" docker swarm init --advertise-addr eth0 >/dev/null || fatal 'swarm init'
 
@@ -1249,5 +1284,171 @@ else
     m docker service ls || true
     assert "DB-G15 DB_SERVICE_REMOVED" 1 "managed mongo service still present after reap"
 fi
+
+# ═══════════════ IMPL-DB-1 P 段（DT-9 目录矩阵）：postgres-18 与
+# percona-postgresql-18 各跑 create→backup→restore；percona 腿含 pgvector
+# （CREATE EXTENSION vector + vector(3) 数据写入与恢复后回读/距离计算）。
+# 复用同一 dind/控制面/rustfs 备份目标；断言前缀 = DB-P1*/DB-P2*。 ═══════════
+
+P1_DB=pg18-prod
+P1_APP=pg18app
+P2_DB=pc-prod
+P2_APP=pcapp
+
+# p_app_ctr <app> — 该 app 当前 writer 任务容器 id（重部署后逐次现查）。
+p_app_ctr() { # <app>
+    msh "docker ps -q --filter label=com.docker.swarm.service.name=fleetly-$FOUNDER_TEAM-$FOUNDER_PRJ-$1-writer | head -n 1" | tr -d '\r'
+}
+# p_psql <app> <envsuffix> <sql> — 经该 app 容器的 psql 走注入 URL（FLEETLY_DB_
+# <envsuffix>_URL——注入链与凭据正确性的端到端证据；<envsuffix> = 实例名大写
+# 下划线形，如 PG18_PROD）。**SQL 经 stdin（`-f -`）传入**——不经任何一层
+# shell 解析，含单引号字面量（vector 距离/扩展名查询）零引号 hazard。
+p_psql() { # <app> <envsuffix> <sql>
+    CTR=$(p_app_ctr "$1")
+    [ -n "$CTR" ] || return 1
+    printf '%s\n' "$3" | docker exec -i "$DIND" docker exec -i "$CTR" sh -c "psql \$FLEETLY_DB_$2_URL -t -A -q -f -" |
+        tr -d '\r' | tr -d ' '
+}
+
+# pg_leg <n> <db> <app> <template> <envsuffix> <vector>
+#   一条 PG 18 目录条目的 create→backup→restore 矩阵腿；vector=1 时含
+#   pgvector 数据（percona 发行版面）。
+pg_leg() {
+    N="$1"
+    LDB="$2"
+    LAPP="$3"
+    LTPL="$4"
+    LENV="$5"
+    LVEC="$6"
+
+    nl "=== P${N}: create $LDB -> provisioning -> ready (template $LTPL) ==="
+    CREATE_OUT=$(fcli databases create --json --template "$LTPL" "$LDB")
+    case "$CREATE_OUT" in
+    *'"status": "provisioning"'*) assert "DB-P${N}1 CREATE_ACCEPTED_PROVISIONING" 0 ;;
+    *) fail "DB-P${N}1 CREATE_ACCEPTED_PROVISIONING" "create output: $(printf '%s' "$CREATE_OUT" | tail -3)" ;;
+    esac
+    if poll_until 300 instance_ready "$LDB"; then
+        assert "DB-P${N}2 HEALTH_GATE_READY" 0
+    else
+        fcli databases show --json "$LDB" || true
+        assert "DB-P${N}2 HEALTH_GATE_READY" 1 "instance never became ready within 300s"
+    fi
+
+    # 卷登记 + 放置钉住（show json = volume active + placement 非空）。
+    SHOW_JSON=$(fcli databases show --json "$LDB")
+    printf '%s' "$SHOW_JSON" | grep -q '"name": "fleetly-db-'"$LDB"'-data-' &&
+        printf '%s' "$SHOW_JSON" | grep -q '"status": "active"' &&
+        printf '%s' "$SHOW_JSON" | grep -q '"placement": "[^"]'
+    assert "DB-P${N}3 VOLUME_REGISTERED_PLACEMENT_PINNED" $? \
+        "show json must carry fleetly-db-$LDB-data-* volume (active) and a non-empty placement"
+
+    # 引用 app（psql 引导写入；percona 腿加 vector 扩展与 vector(3) 数据）。
+    VECLABEL=""
+    [ "$LVEC" = "1" ] && VECLABEL=" + pgvector"
+    nl "=== P${N}: referencing app deploys (fleetly.databases label, psql bootstrap$VECLABEL) ==="
+    DBURL="\$FLEETLY_DB_${LENV}_URL"
+    BOOTCMD="psql \\\"$DBURL\\\" -c 'CREATE TABLE IF NOT EXISTS w4 (id int)' && psql \\\"$DBURL\\\" -c 'INSERT INTO w4 VALUES (1)'"
+    if [ "$LVEC" = "1" ]; then
+        BOOTCMD="$BOOTCMD && psql \\\"$DBURL\\\" -c 'CREATE EXTENSION IF NOT EXISTS vector' && psql \\\"$DBURL\\\" -c 'CREATE TABLE IF NOT EXISTS vec (id int primary key, v vector(3))' && psql \\\"$DBURL\\\" -c 'INSERT INTO vec VALUES (1, ARRAY[1,2,3])'"
+    fi
+    BOOTCMD="$BOOTCMD && sleep infinity"
+    cat >"$TMP/p${N}app-compose.yaml" <<EOF
+name: $LAPP
+services:
+  writer:
+    image: $DBTOOLS_IMG
+    command: ["sh", "-c", "$BOOTCMD"]
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 2s
+      timeout: 1s
+      retries: 100
+      start_period: 0s
+    labels:
+      fleetly.databases: "$LDB"
+EOF
+    stage "$DIND" "$TMP/p${N}app-compose.yaml" "/opt/fleetly/p${N}app-compose.yaml"
+    docker exec -d -e FLEETLY_ADDR=127.0.0.1:8421 -e FLEETLY_TOKEN="$DB_TOKEN" -e FLEETLY_PROJECT="$FOUNDER_PROJECT" \
+        "$DIND" sh -c "/opt/fleetly/bin/fleetly deploy --timeout 300s /opt/fleetly/p${N}app-compose.yaml > /tmp/db-p${N}app-deploy.log 2>&1"
+    papp_succeeded() {
+        [ "$(latest_dep_status "$LAPP")" = '"status": "succeeded"' ]
+    }
+    if poll_until 300 papp_succeeded; then
+        assert "DB-P${N}4 APP_DEPLOY_SUCCEEDED" 0
+    else
+        fcli deployments list --json "$LAPP" || true
+        msh "cat /tmp/db-p${N}app-deploy.log" || true
+        assert "DB-P${N}4 APP_DEPLOY_SUCCEEDED" 1 "referencing app never succeeded (psql bootstrap or plan failed)"
+    fi
+
+    # 注入断言（容器 env 实在——URL 形态 = PG 家族）。
+    CTR=$(p_app_ctr "$LAPP")
+    [ -n "$CTR" ] || fatal "P${N} app container not found"
+    URL=$(msh "docker exec $CTR printenv FLEETLY_DB_${LENV}_URL" | tr -d '\r')
+    HOSTV=$(msh "docker exec $CTR printenv FLEETLY_DB_${LENV}_HOST" | tr -d '\r')
+    PW=$(msh "docker exec $CTR printenv FLEETLY_DB_${LENV}_PASSWORD" | tr -d '\r')
+    case "$URL" in
+    postgres://fleetly:*@"$LDB":5432/*) INJ=0 ;;
+    *) INJ=1 ;;
+    esac
+    [ "$HOSTV" = "$LDB" ] && [ -n "$PW" ] && [ "$INJ" = "0" ]
+    assert "DB-P${N}5 INJECTED_ENV_VALUES" $? "url=$URL host=$HOSTV pw_set=$([ -n "$PW" ] && echo yes || echo no)"
+
+    CNT=$(p_psql "$LAPP" "$LENV" 'SELECT count(*) FROM w4')
+    [ "$CNT" = "1" ]
+    assert "DB-P${N}6 BOOTSTRAP_ROW_COUNT" $? "want 1 row after the app bootstrap insert, got '$CNT'"
+
+    # 备份 → verified（真 restic 往返；工具面按模板发行版 × major 选择）。
+    nl "=== P${N}: manual backup -> verified (real restic roundtrip) ==="
+    fcli databases backup "$LDB" >/dev/null 2>&1 || fatal "databases backup (P${N} trigger)"
+    if poll_until 300 backup_verified_of "$LDB"; then
+        assert "DB-P${N}7 BACKUP_VERIFIED" 0
+    else
+        fcli databases backups --json "$LDB" || true
+        assert "DB-P${N}7 BACKUP_VERIFIED" 1 "no verified backup row within 300s"
+    fi
+
+    # 破坏性清空 → 原地恢复 → 行回来（+ vector 回读）。
+    nl "=== P${N}: destructive clear, then in-place restore brings the rows back ==="
+    p_psql "$LAPP" "$LENV" 'DELETE FROM w4' >/dev/null || fatal "P${N} psql DELETE"
+    CNT=$(p_psql "$LAPP" "$LENV" 'SELECT count(*) FROM w4')
+    [ "$CNT" = "0" ]
+    assert "DB-P${N}8 DESTRUCTIVE_CLEAR" $? "after DELETE the count must be 0, got '$CNT'"
+
+    PSNAP=$(fcli databases backups --json "$LDB" |
+        grep -o '"snapshot": *"[^"]*"' | head -n 1 | sed 's/.*: *"//; s/"$//')
+    [ -n "$PSNAP" ] || fatal "P${N}: no snapshot id in the ledger"
+    prestore_accepted() {
+        fcli databases restore --snapshot "$PSNAP" --confirm "$LDB" "$LDB" >/dev/null 2>&1
+    }
+    if ! poll_until 60 prestore_accepted; then
+        fcli databases restore --snapshot "$PSNAP" --confirm "$LDB" "$LDB" | tail -3 || true
+        fatal "P${N} databases restore (accept) never accepted within 60s"
+    fi
+    prestore_done() {
+        instance_ready "$LDB" && [ "$(p_psql "$LAPP" "$LENV" 'SELECT count(*) FROM w4')" = "1" ]
+    }
+    if poll_until 420 prestore_done; then
+        assert "DB-P${N}9 RESTORE_ROWS_BACK" 0
+    else
+        fcli databases show --json "$LDB" || true
+        assert "DB-P${N}9 RESTORE_ROWS_BACK" 1 "instance never returned to ready with 1 row within 420s"
+    fi
+
+    # percona 腿：vector 数据与扩展版本回读（「含 pgvector」的真机事实钉；
+    # 备份后新增的 vector 行必须已被重放抹掉——点时语义）。
+    if [ "$LVEC" = "1" ]; then
+        VCNT=$(p_psql "$LAPP" "$LENV" 'SELECT count(*) FROM vec')
+        VEC=$(p_psql "$LAPP" "$LENV" 'SELECT v::text FROM vec WHERE id=1')
+        VEXT=$(p_psql "$LAPP" "$LENV" "SELECT extversion FROM pg_extension WHERE extname='vector'")
+        VDIST=$(p_psql "$LAPP" "$LENV" "SELECT v <-> '[0,0,0]' FROM vec WHERE id=1")
+        [ "$VCNT" = "1" ] && [ "$VEC" = "[1,2,3]" ] && [ -n "$VEXT" ] && [ -n "$VDIST" ]
+        assert "DB-P${N}10 VECTOR_DATA_REPLAYED" $? \
+            "want 1 vector row [1,2,3] with extversion + distance after restore, got cnt=$VCNT v=$VEC ext=$VEXT dist=$VDIST"
+    fi
+}
+
+pg_leg 1 "$P1_DB" "$P1_APP" postgres-18 PG18_PROD 0
+pg_leg 2 "$P2_DB" "$P2_APP" percona-postgresql-18 PC_PROD 1
 
 finish

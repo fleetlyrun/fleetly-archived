@@ -1,10 +1,12 @@
 # dbtools 镜像发布（E4 D-DB-6「执行体」：库备份/恢复 job 的运行载体 =
 # 引擎工具 + restic，digest 钉定随平台发布）。
 #
-# 镜像内容 = deploy/Dockerfile.dbtools：**单镜像双 PG 大版本工具面**
-# （postgres:16 基底 + postgres:18 版本分区 COPY，IMPL-DB-0）+ redis-cli +
-# mysql/mongo 引擎同源工具面 + restic；job 按实例数据目录 major 选工具
-# （工具面版本纪律见该 Dockerfile 头注与 managed-databases §2.6）。
+# 镜像内容 = deploy/Dockerfile.dbtools：**单镜像多工具面**——双 PG 大版本
+# 工具面（postgres:16 基底 + postgres:18 版本分区 COPY，IMPL-DB-0）+
+# **percona PG18 完整发行版面**（/usr/pgsql-18，IMPL-DB-1/DT-9）+
+# redis-cli + mysql/mongo 引擎同源工具面 + restic；job 按实例数据目录
+# major × 发行版选工具（工具面版本纪律见该 Dockerfile 头注与
+# managed-databases §2.6）。
 #
 # 两个入口：
 #   - workflow_call：release.yml 随平台 release 调用（tag = 平台版本）；

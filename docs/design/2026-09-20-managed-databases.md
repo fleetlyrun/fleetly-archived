@@ -103,6 +103,7 @@ CreateDatabase ──→ db_instances 行(state=provisioning) + 凭据生成(密
 - **升级语义（受控重建 + 备份门）**：平台 release 携带新 digest（minor/patch）→ 既有实例**不自动变**；`databases upgrade` 逐实例 opt-in，流程 = ①自动 `pre_upgrade` 备份且 verify 通过才继续（失败 → `E_DB_BACKUP_FAILED` 中止，实例不动）②spec 换新 digest 受控重建（有卷强制 stop-first，停机窗口如实累计）③健康门 ④失败 = digest 归位（回写旧值重建）+ `db.upgrade_failed` + 状态落 degraded——**不是 revision 重放**（库无 revision/部署记录，D-DB-1 终裁推论）。平台检测到可升级 → `db.upgrade_available` 事件。主版本升级（16→17）与引擎切换不做（§7）。**暂停实例的备份门（W4-S5 落地注记）**：停摆引擎构造性无法执行 pg_dump/RDB 导出，降格为「台账内存在本实例 verified 备份」的存在性检查——无已验证备份 → 如实拒绝并指引先恢复再升级（不做假备份门）。**恢复的凭据语义边界（W4-S5 落地注记）**：原地恢复重放的是备份时刻的库内密码——若备份后轮换过凭据，恢复后库内密码与权威态密文错位（`databases reveal` 可对账），runbook 记人工收尾（恢复后再 rotate 一次即对齐）。
 - **镜像受管**：用户不可改库镜像/引擎参数（设置面只有限额与备份计划）；违规 → `E_DB_TEMPLATE_UNSUPPORTED`。
 - 新引擎接入成本 = 一个模板条目 + 一个 `EngineAdapter`（§2.6）+ 备份镜像工具，与架构 §4.3「各引擎备份/恢复适配器是主要成本」一致；MySQL/Mongo 后置按需求排序。
+- **目录扩展（IMPL-DB-1，DT-9，2026-09-27）**：注册表目录化（`Engine`/`Distribution`/`Major` 身份字段——PG 首个消费者），词表 = `postgres-16` / `postgres-18`（官方镜像）/ `percona-postgresql-18`（Percona 发行版面，含 pgvector）/ `redis-7` / `mysql-8.4` / `mongodb-8.0`。发行版差异只落**镜像与默认参数层**（percona 卷挂载点 `/data/db` + dbtools 工具面 `/usr/pgsql-18/bin`——§2.6 工具面版本纪律），**不新增适配器**（线协议同 postgres；矩阵真机钉死）。**主版本升级不做**：创建时钉死模板，升 major = dump/restore 到新实例（§7 首行）；minor 随平台 release 以同卷受控重建演进（上条升级语义）。
 
 ### 2.3 生命周期与操作
 
@@ -182,7 +183,7 @@ type EngineAdapter interface {
 | 调度 | 复用 E5 调度核（备份 ticker 演进，同一调度器），per 实例计划（缺省每日 03:00 UTC，保留 7 份，prune 沿用台账保留期删除语义） | 自建定时器 |
 | 诚实口径 | 同节点 RustFS 目标上的库备份 = **便捷层非灾备**（V2-2 口径延伸），Console 与文档同标注 | — |
 
-**工具面版本纪律（IMPL-DB-0 增补，2026-09-27）**：dbtools 执行体与实例数据目录**同 major**——PG 的 `pg_dump`/`pg_restore`/`postgres`（及消费链 `psql`/`pg_isready`/`pg_ctl`）跨大版本有硬语义边界（`pg_dump` 拒更高 major 服务器、`pg_restore` 拒更高 major 归档、临时恢复实例拒异 major 数据目录），job 脚本按模板 `Major` 取 `/usr/lib/postgresql/<major>/bin` 显式绝对路径（两代工具面并存后裸名会被 postgresql-common `pg_wrapper` 解析为最新 major）。单镜像双工具面的机制裁决与实证见 `docs/plan/2026-09-26-torchwood-line-impl.md` §4「IMPL-DB-0 方案可行性审查」；大版本升级不做，升 major = dump/restore 新实例（§7）。
+**工具面版本纪律（IMPL-DB-0 增补，2026-09-27；IMPL-DB-1 扩发行版维度）**：dbtools 执行体与实例数据目录**同 major × 同发行版**——PG 的 `pg_dump`/`pg_restore`/`postgres`（及消费链 `psql`/`pg_isready`/`pg_ctl`）跨大版本有硬语义边界（`pg_dump` 拒更高 major 服务器、`pg_restore` 拒更高 major 归档、临时恢复实例拒异 major 数据目录），job 脚本按模板 `Major` 取 `/usr/lib/postgresql/<major>/bin` 显式绝对路径（两代工具面并存后裸名会被 postgresql-common `pg_wrapper` 解析为最新 major）。**发行版维度（IMPL-DB-1）**：percona 条目走 `/usr/pgsql-<major>/bin` 完整发行版面——扩展文件面（pgvector 及 percona 自带的 pg_cron/pg_stat_monitor/pg_tde/pgaudit 等实例上可 `CREATE EXTENSION` 的整套）随该面承载，否则恢复重放的 `CREATE EXTENSION` 硬失败（一手证据见 `docs/plan/2026-09-26-torchwood-line-impl.md` §4「IMPL-DB-1 方案可行性审查（2026-09-27 续）」）；percona 的 `/usr/bin` 是 alternatives 符号链接，裸名同样非确定性。目录条目 = `postgres-16` / `postgres-18`（vanilla）与 `percona-postgresql-18`（发行版面，含 pgvector）；**大版本升级不做，升 major = dump/restore 到新实例**（§7）。单镜像多工具面的机制裁决与实证见同节审查记录。
 
 ### 2.7 平台密钥库与 compose secrets 开放
 
@@ -292,7 +293,7 @@ naming 新增库族公式（新增函数非改既有公式，本文档为文档�
 ## 7. 明确不做
 
 - ~~MySQL/MongoDB 模板~~（紧随按需求排序——各引擎备份适配器是主要成本，架构 §4.3；**v0.3 W4 兑现：见 §8**）
-- 主版本升级（PG 16→17）与引擎切换迁移路径
+- 主版本升级（PG 16→18）与引擎切换迁移路径（升 major = dump/restore 到新实例，§2.2 目录扩展注）
 - 读写分离/副本/库层 HA（有状态 HA 边界口径不变：库所在节点失联 = 该库不可用，恢复走备份重放 + rebind）
 - 库内多 database/多用户管理、RBAC、计量计费、多租户（v0.2 规划 §8）
 - 定期自动轮换凭据（仅手动）

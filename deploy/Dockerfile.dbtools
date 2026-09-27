@@ -33,6 +33,25 @@
 #     的 postgresql-common pg_wrapper 会把裸名 pg_dump/psql/pg_restore/
 #     pg_isready 解析为最新 major（实测 18）——显式路径是唯一确定性来源。
 #     （单镜像裁决与双镜像否定项的实测体积对比见同节审查记录。）
+#   - **percona 发行版工具面（v0.3.x IMPL-DB-1，DT-9）**：从
+#     percona/percona-distribution-postgresql:18（与 DB-1 的
+#     percona-postgresql-18 引擎同 digest，台账 #24）COPY **完整发行版面**
+#     /usr/pgsql-18（bin + share + lib，el9 布局、与引擎逐位同版）——
+#     发行版差异面（扩展文件：pgvector 及 pg_cron/pg_stat_monitor/pg_tde/
+#     pgaudit 等实例上可 CREATE EXTENSION 的整套）随该面整体承载：恢复
+#     重放时的 CREATE EXTENSION 必须有对应 share/extension 控制文件与
+#     pkglib .so（percona 数据目录 + vanilla 18 面实测 `extension "vector"
+#     is not available` → 依赖表/COPY 连锁失败，一手证据见 §4「IMPL-DB-1
+#     方案可行性审查（2026-09-27 续）」）。工具面选择 = f(Engine,
+#     Distribution, Major)：percona 条目全部走 /usr/pgsql-18/bin（internal/
+#     database pgToolDir；percona 的 /usr/bin 是 alternatives 符号链接，
+#     裸名同样非确定性）。
+#       缺失 soname 闭包：percona 的 postgres/initdb 链接 libicu*.so.67
+#       （el9 ICU），基底（Debian trixie）只有 ICU 76——三件补
+#       /usr/local/dbtools-lib（soname 版本段不同、与 Debian ICU 无遮蔽面；
+#       ldd 实测其余 bin/* 零 not found）。lib/*.so 扫描仅 hstore_plperl
+#       等 PL 桥接件缺 el9 perl/python 解释器库——其宿主扩展 plperl/
+#       plpython3 在 percona 引擎镜像自身即不提供，不在可用扩展面。
 #   - **mysql/mongo 工具面（v0.3 W4-S2，D-W4-3「临时 mysqld/mongod 须在
 #     dbtools 镜像内」的镜像裁决落地）**：从两引擎镜像同 digest COPY，与
 #     PG 基底选型同一条「与引擎逐位同版」原则——备份导出与恢复重放的工具
@@ -68,24 +87,27 @@
 #   - 体积注记（预算裁决 2026-09-23：opt-in/job 型组件不占 600MB 常驻预算
 #     顶）：postgres debian 基底使最终镜像从 ~120MB 增至 ~400MB；W4-S2 增
 #     mysql/mongo 工具面（mysqld 64MB + 私有库 30MB + mongo 全套）后
-#     ~1.08GB（docker images 本机实测，amd64 未压缩）——本镜像是**一次性
-#     job 执行体、非常驻**，按需拉取用后即删，预算口径明示可接受。
+#     ~1.08GB（docker images 本机实测，amd64 未压缩）；IMPL-DB-1 增
+#     percona 发行版面（/usr/pgsql-18 116MB + ICU 67 约 31MB）后 ~1.32GB
+#     （+16%，本机实测；一次性 job 执行体、非常驻，同预算口径——机制/体积
+#     对比证据见 docs/plan/2026-09-26-torchwood-line-impl.md §4
+#     「IMPL-DB-1 方案可行性审查（2026-09-27 续）」）。
 #   - 工具面（引擎适配器的命令词表，internal/database S5/W4 消费；PG 按
-#     实例数据目录 major 显式选路径——见上「PG 双大版本工具面」）：
+#     实例数据目录 major × 发行版显式选路径——见上两条）：
 #       pg_dump / pg_restore / psql / pg_isready / pg_ctl / postgres
-#                                    （/usr/lib/postgresql/16/bin 与
+#                                    （vanilla：/usr/lib/postgresql/16/bin 与
 #                                     /usr/lib/postgresql/18/bin，两代并存；
-#                                     postgres:16 基底自带 + postgres:18 COPY）
+#                                     percona：/usr/pgsql-18/bin 完整发行版面）
 #       redis-cli                     （/usr/local/bin/redis-cli）
 #       restic                        （/usr/bin/restic → /usr/local/bin）
 #       gosu                          （postgres 官方镜像自带——恢复重放的
 #       降权执行依赖，internal/database 恢复词表消费）
 #       mysqld / mysql / mysqldump / mysqladmin   （/usr/sbin、/usr/bin）
 #       mongod / mongosh / mongodump / mongorestore   （/usr/bin）
-#   - 多架构：六个 FROM 全为多架构 index（含新增 postgres:18——与 DB-1
-#     的 vanilla 引擎同 digest），COPY --from 按目标平台解析对应 manifest；
-#     缺口库源路径用 /usr/lib/*-linux-gnu/ 通配（amd64/arm64 双覆盖）——
-#     仍纯 COPY 无 RUN，无需 QEMU。
+#   - 多架构：七个 FROM 全为多架构 index（含 postgres:18 与 percona——与
+#     DB-1 的两个引擎条目同 digest），COPY --from 按目标平台解析对应
+#     manifest；缺口库源路径用 /usr/lib/*-linux-gnu/（Debian）与 /usr/lib64/
+#     （el9 percona）通配——仍纯 COPY 无 RUN，无需 QEMU。
 #
 # 发布：release.yml dbtools job（随平台 release 重建并钉新 digest）；本地
 # 引导/演练构建用 buildx --push（见 runbook）。
@@ -102,6 +124,10 @@ FROM mongo:8.0@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc082
 # 与 DB-1 vanilla 引擎同 digest，逐位同版）。
 FROM postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 AS postgres-engine-18
 
+# percona PG18 工具面来源（FROM stage 形态同上；与 DB-1 的 percona 引擎
+# 同 digest，台账 #24）。
+FROM percona/percona-distribution-postgresql:18@sha256:dae47360e8137cafc1e8d66f9a1be348f1405e3cf51daa383b94e6c277e6b256 AS percona-engine-18
+
 FROM postgres:16@sha256:a3b7f434b2dc57ce85a67e171163eb8ab1a1ebcb39d27484661f26b1dfbe30d6
 
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
@@ -115,6 +141,16 @@ COPY --from=postgres-engine-18 /usr/share/postgresql/18 /usr/share/postgresql/18
 # 落 /usr/local/dbtools-lib 随既有 LD_LIBRARY_PATH——无遮蔽面）。
 COPY --from=postgres-engine-18 /usr/lib/*-linux-gnu/libnuma.so.1 /usr/local/dbtools-lib/
 COPY --from=postgres-engine-18 /usr/lib/*-linux-gnu/liburing.so.2 /usr/local/dbtools-lib/
+
+# percona PG18 完整发行版面（IMPL-DB-1；见头注「percona 发行版工具面」）：
+# /usr/pgsql-18 整体落位（bin/share/lib 的编译期绝对路径原样保真），发行版
+# 扩展文件面（pgvector 等）随之可达。
+COPY --from=percona-engine-18 /usr/pgsql-18 /usr/pgsql-18
+# ICU 67 缺口闭包（percona postgres/initdb 链接 el9 libicu*.so.67；落既有
+# LD_LIBRARY_PATH 目录，soname 版本段与 Debian ICU 不同、无遮蔽面）。
+COPY --from=percona-engine-18 /usr/lib64/libicui18n.so.67* /usr/local/dbtools-lib/
+COPY --from=percona-engine-18 /usr/lib64/libicuuc.so.67* /usr/local/dbtools-lib/
+COPY --from=percona-engine-18 /usr/lib64/libicudata.so.67* /usr/local/dbtools-lib/
 
 # mysql 工具面（mysql:8.4 引擎同源——台账 #19 同 digest，逐位同版）。
 # mysqld 私有库随 /usr/lib64/mysql 原样落位（$ORIGIN/../lib64/mysql/private

@@ -217,7 +217,7 @@ var builtins = []Code{
 		Suggestion: "Remove the fleetly.databases labels from the referencing apps and redeploy them first (the reference list in the error context names every blocking app/service)."},
 	{ID: "E_DB_TEMPLATE_UNSUPPORTED", HTTP: 400,
 		Summary:    "unknown template id or a settings change violates the template-managed surface (image/engine parameters are not user-editable)",
-		Suggestion: "Use one of the built-in template ids (postgres-16, redis-7, mysql-8.4, mongodb-8.0) and limit settings changes to resource limits and the backup plan."},
+		Suggestion: "Use one of the built-in template ids (postgres-16, postgres-18, percona-postgresql-18, redis-7, mysql-8.4, mongodb-8.0) and limit settings changes to resource limits and the backup plan."},
 	{ID: "E_DB_ENV_PREFIX_CONFLICT", HTTP: 422,
 		Summary:    "two databases referenced by the same app derive the same env prefix (e.g. pg-prod vs pg_prod)",
 		Suggestion: "Rename one of the database instances (or reference only one per colliding pair in this app): env prefixes are derived from instance names by uppercasing with '-' mapped to '_'."},

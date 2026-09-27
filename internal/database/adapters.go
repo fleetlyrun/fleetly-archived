@@ -57,6 +57,16 @@ import (
 // 工具面：PG16 16.15 + PG18 18.6（版本分区路径，按 major 显式选取）、
 // redis-cli、restic 0.19.1、mysql/mongo 工具面（与引擎逐位同版）。重建随
 // 平台 release 由 .github/workflows/dbtools.yml 承载。
+//
+// **IMPL-DB-1（percona 发行版工具面）**：deploy/Dockerfile.dbtools 已增
+// percona PG18 完整工具面（/usr/pgsql-18 的 bin/share/lib，与引擎镜像同
+// digest）与 ICU 67 缺口闭包——percona 条目的 dump/verify/restore 全部
+// 走 /usr/pgsql-18/bin（pgToolDir 按发行版选择；恢复重放的扩展文件面
+// 随发行版整体承载）。**发布挂账**：不 commit/push 约束下 CI 无法构建
+// 新内容（同 DB-0 兜底），重发（建议 tag v0.3.1-dbtools.2）后三锚回填
+// = 本常量 + e2e/databases.sh DBTOOLS_IMG + 台账 #25 的 digest 列；回填
+// 前 percona-postgresql-18 的 job 以「镜像缺该发行版工具面」fail-loud
+// （缺面前置在 restorePostgresJobScript 首步）。
 const DefaultDatabaseToolsImage = "ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382"
 
 // 备份计划平台缺省（§5.4 配置键 databases.backup_*；实例 settings 零值
@@ -97,9 +107,16 @@ const (
 	mongoBackupFilename = "db.archive" // mongodump --archive --gzip 归档
 )
 
-// pgToolDir 返回模板 major 对应的 PG 工具面二进制目录（dbtools 镜像契约：
-// Debian 版本分区布局 /usr/lib/postgresql/<major>/bin——见 deploy/
-// Dockerfile.dbtools 头注）。
+// pgToolDir 返回模板对应 PG 工具面二进制目录（dbtools 镜像契约；**按发行版
+// 与 major 双维选择**——IMPL-DB-1 起）：
+//   - vanilla（官方镜像/Debian pgdg 布局）：/usr/lib/postgresql/<major>/bin
+//     （版本分区目录，两代并存——见 deploy/Dockerfile.dbtools 头注）；
+//   - percona（Percona 发行版面）：/usr/pgsql-<major>/bin——与 percona 引擎
+//     镜像逐位同版；发行版差异面（扩展文件/pkglib 等）随该面整体承载，
+//     恢复重放的 CREATE EXTENSION 才能落地（percona 自带 pgvector 及
+//     pg_cron/pg_stat_monitor 等，vanilla 面缺面即硬失败——一手证据见
+//     docs/plan/2026-09-26-torchwood-line-impl.md §4「IMPL-DB-1 方案
+//     可行性审查（2026-09-27 续）」）。
 //
 // **工具面版本纪律：与实例数据目录同 major**（IMPL-DB-0 一手实证）：
 //   - pg_dump 必须 ≥ 服务器 major（16 导 18 服务器 `aborting because of
@@ -109,10 +126,11 @@ const (
 //   - 临时恢复实例 postgres 必须 = 数据目录 major（异 major `database files
 //     are incompatible with server`）。
 //
-// **必须显式绝对路径**：两代工具面并存后，/usr/bin 的 postgresql-common
+// **必须显式绝对路径**：vanilla 面两代并存后 /usr/bin 的 postgresql-common
 // pg_wrapper 会把裸名 pg_dump/psql/pg_restore/pg_isready 解析为**最新**
-// major（实测 18）——裸名不是确定性来源。未知/缺失 major 诚实报错（不静默
-// 回落别代工具）。
+// major（实测 18），percona 面 /usr/bin 是 alternatives 符号链接——裸名不是
+// 确定性来源。未知/缺失 major 与未知发行版诚实报错（不静默回落别代或
+// 别发行版工具）。
 func pgToolDir(tpl dbtemplate.Template) (string, error) {
 	if tpl.Engine != dbtemplate.EnginePostgres {
 		return "", fmt.Errorf("database: template %q is not a postgres engine (no pg tool face)", tpl.ID)
@@ -120,7 +138,14 @@ func pgToolDir(tpl dbtemplate.Template) (string, error) {
 	if tpl.Major <= 0 {
 		return "", fmt.Errorf("database: template %q has no postgres major (pg tool face cannot be selected)", tpl.ID)
 	}
-	return fmt.Sprintf("/usr/lib/postgresql/%d/bin", tpl.Major), nil
+	switch tpl.Distribution {
+	case dbtemplate.DistributionVanilla:
+		return fmt.Sprintf("/usr/lib/postgresql/%d/bin", tpl.Major), nil
+	case dbtemplate.DistributionPercona:
+		return fmt.Sprintf("/usr/pgsql-%d/bin", tpl.Major), nil
+	default:
+		return "", fmt.Errorf("database: template %q has unknown distribution %q (pg tool face cannot be selected)", tpl.ID, tpl.Distribution)
+	}
 }
 
 // backupFilename 取模板对应的导出文件名（repo 内路径 = db/<instance>/<文件>）。

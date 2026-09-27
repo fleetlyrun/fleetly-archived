@@ -122,6 +122,28 @@ func TestDatabaseCreateAndGetMasked(t *testing.T) {
 	// 未知模板 → E_DB_TEMPLATE_UNSUPPORTED。
 	_, err = cl.CreateDatabase(ctx, &serverv1.CreateDatabaseRequest{Name: "pg-x", Template: "mysql-8"})
 	envCode(t, err, "E_DB_TEMPLATE_UNSUPPORTED")
+	// 词表人读形态（错误信息可行动面）覆盖全部注册表条目——IMPL-DB-1 的
+	// 两新条目随 List() 自动扩，本断言把「词表同步」钉住。
+	for _, tpl := range dbtemplate.List() {
+		if !strings.Contains(templateIDList(), tpl.ID) {
+			t.Fatalf("templateIDList() = %q, missing registry entry %s", templateIDList(), tpl.ID)
+		}
+	}
+	// IMPL-DB-1：两新 PG 条目在词表内（受理 + 行上钉定镜像 digest）。
+	for _, tc := range []struct{ name, template string }{
+		{"pg18", dbtemplate.TemplatePostgres18},
+		{"pgvec", dbtemplate.TemplatePerconaPostgresql18},
+	} {
+		row := mustCreate(t, cl, token, tc.name, tc.template)
+		tpl, err := dbtemplate.Get(tc.template)
+		if err != nil {
+			t.Fatalf("dbtemplate.Get(%s): %v", tc.template, err)
+		}
+		if row.GetTemplate() != tc.template || row.GetImageDigest() != tpl.Image {
+			t.Fatalf("%s row = template %q image %q, want %q/%q",
+				tc.name, row.GetTemplate(), row.GetImageDigest(), tc.template, tpl.Image)
+		}
+	}
 	// 非法名 → 400。
 	_, err = cl.CreateDatabase(ctx, &serverv1.CreateDatabaseRequest{Name: "Bad_Name!", Template: dbtemplate.TemplateRedis7})
 	if status.Code(err) != codes.InvalidArgument {
