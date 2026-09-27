@@ -62,12 +62,12 @@ import (
 // percona PG18 完整工具面（/usr/pgsql-18 的 bin/share/lib，与引擎镜像同
 // digest）与 ICU 67 缺口闭包——percona 条目的 dump/verify/restore 全部
 // 走 /usr/pgsql-18/bin（pgToolDir 按发行版选择；恢复重放的扩展文件面
-// 随发行版整体承载）。**发布挂账**：不 commit/push 约束下 CI 无法构建
-// 新内容（同 DB-0 兜底），重发（建议 tag v0.3.1-dbtools.2）后三锚回填
-// = 本常量 + e2e/databases.sh DBTOOLS_IMG + 台账 #25 的 digest 列；回填
-// 前 percona-postgresql-18 的 job 以「镜像缺该发行版工具面」fail-loud
-// （缺面前置在 restorePostgresJobScript 首步）。
-const DefaultDatabaseToolsImage = "ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382"
+// 随发行版整体承载）。
+// **发布记录（2026-09-27）**：多工具面镜像经 dbtools.yml dispatch 发布
+// （run 36312138248，tag v0.3.1-dbtools.2；cosign keyless 签名 + 验签门随
+// 工作流）——三锚同批回填 = 本常量 + e2e/databases.sh DBTOOLS_IMG + 台账
+// docs/runbooks/image-prepull.md #25。
+const DefaultDatabaseToolsImage = "ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.2@sha256:b57a5cfc353562c6a6bac35dcded9aa8ea56d708d2832cc79fb396d3e3b9ac2d"
 
 // 备份计划平台缺省（§5.4 配置键 databases.backup_*；实例 settings 零值
 // 字段回落——平台缺省只在此处为常量，不进 config.yaml：备份计划属实例

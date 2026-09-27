@@ -110,7 +110,7 @@ RESTIC_IMG='restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35
 # DB_DBTOOLS_IMG 覆盖仅服务本地矩阵复跑（发布挂账期验证新工具面）：无
 # `@sha256:` 的本地 tag 不走 registry 拉取，改宿主 save→dind load（见头注
 # env 段）。
-DBTOOLS_IMG="${DB_DBTOOLS_IMG:-ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382}"
+DBTOOLS_IMG="${DB_DBTOOLS_IMG:-ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.2@sha256:b57a5cfc353562c6a6bac35dcded9aa8ea56d708d2832cc79fb396d3e3b9ac2d}"
 # mysql/mongo 引擎镜像（v0.3 W4 D-W4-1/2，M/G 腿）：与 internal/dbtemplate
 # DefaultMySQLImage/DefaultMongoImage 同串（台账 docs/runbooks/image-prepull.md
 # #19/#20）——预拉沿 postgres 形态（公网镜像，3 次重试抗 registry 抖动）。

@@ -1212,3 +1212,5 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 
 - 解除步骤：①本票变更 commit + push（用户验收后）；②`gh workflow run dbtools.yml --repo fleetlyrun/fleetly --ref <branch> -f tag=v0.3.1-dbtools.2` → `gh run watch` → `docker buildx imagetools inspect ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.2` 取多架构 index digest（cosign 签名/验签门随工作流）；③三锚回填 = `internal/database/adapters.go` 的 `DefaultDatabaseToolsImage`、`e2e/databases.sh` 的 `DBTOOLS_IMG`、台账 `docs/runbooks/image-prepull.md` #25 的 digest 列。
 - 回填前语义：vanilla 16/18 与 mysql/mongo/redis 面在旧镜像上全功能；percona-postgresql-18 条目的 job 以「镜像缺该发行版工具面」fail-loud（restore 首步缺面前置；backup/verify 亦会因路径不存在退败）。
+
+**发布完成（2026-09-27，本会话执行——挂账解除）**：本票提交推送（`0bf5019`）后 dispatch `dbtools.yml`（run **36312138248**，tag `v0.3.1-dbtools.2`，conclusion=success，cosign 签名 + 验签门随工作流）；多架构 index digest = `sha256:b57a5cfc…ac2d`（`docker buildx imagetools inspect` 实测；amd64 manifest `b6f9ce6a…`、arm64 `c9f37525…`）；发布产物按 digest 拉取实证三面（percona 18.6.1 + `vector.control`、vanilla 16.15/18.6）+ 真机探针三腿 PASS（含 pgvector 回读；本会话复跑）。三锚已回填：`DefaultDatabaseToolsImage`、e2e `DBTOOLS_IMG`、台账 #25。
