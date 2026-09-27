@@ -1,0 +1,45 @@
+--- t=13:31:34 ---
+good: no such service: fleetly-founder-default-ord2-good;
+bad: no such service: fleetly-founder-default-ord2-bad;
+--- t=13:31:35 ---
+good: Accepted less than a second ago;
+bad: Preparing less than a second ago;
+--- t=13:31:36 ---
+good: Starting less than a second ago;
+bad: Assigned less than a second ago;Failed less than a second ago;
+--- t=13:31:37 ---
+good: Running less than a second ago;
+bad: Ready less than a second ago;Failed 1 second ago;
+--- t=13:31:38 ---
+good: Running 1 second ago;
+bad: Ready 1 second ago;Failed 2 seconds ago;
+--- t=13:31:39 ---
+good: Running 2 seconds ago;
+bad: Ready 2 seconds ago;Failed 3 seconds ago;
+--- t=13:31:40 ---
+good: Running 3 seconds ago;
+bad: Ready 3 seconds ago;Failed 4 seconds ago;
+--- t=13:31:41 ---
+good: Running 4 seconds ago;
+bad: Starting less than a second ago;Failed 5 seconds ago;
+--- t=13:31:42 ---
+good: Running 5 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;
+--- t=13:31:43 ---
+good: Running 6 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;
+--- t=13:31:44 ---
+good: Running 7 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;
+--- t=13:31:45 ---
+good: Running 8 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;
+--- t=13:31:46 ---
+good: Running 9 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;
+--- t=13:31:47 ---
+good: Running 10 seconds ago;
+bad: Running less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;
+--- t=13:31:50 ---
+good: Running 13 seconds ago;
+bad: Ready 2 seconds ago;Failed 3 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;

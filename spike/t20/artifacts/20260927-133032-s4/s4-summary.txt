@@ -1,0 +1,20 @@
+=== build fleetlyd+fleetly (v0.3.0-t20s4) ===
+binaries built
+=== stage binaries + fixtures + config ===
+=== pre-pull fixture image + swarm init + fleetlyd boot ===
+docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+Swarm initialized: current node (vymu60rwlrrauh30ysmelss19) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-3u11rgoh8uixs6xpp8mtyok8hqr252f0rk45tkxq60x7o673x5-2uc6g3ac855xd4wgf0qeddx17 10.242.0.10:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+fleetlyd live (liveness 200)
+=== register founder + mint machine token (curl helper on bridge) ===
+founder registered; machine token minted
+=== run inner ordering observation ===
+inner rc=0 (log: spike/t20/artifacts/20260927-133032-s4/s4-inner.log)
+=== collect artifacts ===
+artifacts collected: 16 files
+=== S4 DONE ===

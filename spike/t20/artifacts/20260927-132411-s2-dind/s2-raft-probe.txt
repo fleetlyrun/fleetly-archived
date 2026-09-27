@@ -1,0 +1,17 @@
+--- swarm data dir listing (mgr) ---
+total 28
+drwx------    5 root     root          4096 Sep 27 13:24 .
+drwx--x---   13 root     root          4096 Sep 27 13:24 ..
+drwxr-xr-x    2 root     root          4096 Sep 27 13:24 certificates
+-rw-------    1 root     root           207 Sep 27 13:24 docker-state.json
+drwx------    4 root     root          4096 Sep 27 13:24 raft
+-rw-------    1 root     root            67 Sep 27 13:24 state.json
+drwxrwxrwx    2 root     root          4096 Sep 27 13:24 worker
+
+total 16
+drwx------    4 root     root          4096 Sep 27 13:24 .
+drwx------    5 root     root          4096 Sep 27 13:24 ..
+drwx------    2 root     root          4096 Sep 27 13:24 snap-v3-encrypted
+drwx------    2 root     root          4096 Sep 27 13:24 wal-v3-encrypted
+--- plaintext credential grep (expect empty if raft encrypted) ---
+--- auth blob grep (exact X-Registry-Auth encoding) ---

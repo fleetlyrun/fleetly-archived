@@ -1,0 +1,95 @@
+=== S4.0 depends_on validate (current stance) ===
+validate-rc=1
+E_COMPOSE_UNSUPPORTED: service "mid" uses an unsupported field "depends_on": rejected field in v0.1 (orchestration order is managed by the platform release pipeline)
+  path: services.mid.depends_on
+  suggestion: Remove or rewrite the unsupported compose fields and retry; see the error code docs for the controlled subset and deny list.
+  docs: https://docs.fleetly.dev/errors/E_COMPOSE_UNSUPPORTED
+=== S4.1 ord1: dependency chain (parallel create + self-heal) ===
+ord1 deploy-rc=0 rc-wall-s=27
+ord1 deployment: {
+  "app": "ord1",
+  "app_state": "running",
+  "deployments": [
+    {
+      "id": "01M3HGZRN23HJCY1Z6WCM1AS1B",
+      "app": "ord1",
+      "kind": "deploy",
+      "status": "succeeded",
+      "revision_id": "01M3HH0J34PJ0P1QHCSZVZPGNE",
+      "first_healthy_at": "2026-09-27T13:31:24Z",
+      "created_at": "2026-09-27T13:31:04Z",
+      "updated_at": "2026-09-27T13:31:30Z"
+    }
+  ]
+}
+ord1 service ps base:
+fleetly-founder-default-ord1-base.1 Running 19 seconds ago 
+ord1 service ps mid:
+fleetly-founder-default-ord1-mid.1 Running 15 seconds ago 
+fleetly-founder-default-ord1-mid.1 Failed 21 seconds ago "task: non-zero exit (1)"
+fleetly-founder-default-ord1-mid.1 Failed 27 seconds ago "task: non-zero exit (1)"
+ord1 service ps leaf:
+fleetly-founder-default-ord1-leaf.1 Running 9 seconds ago 
+fleetly-founder-default-ord1-leaf.1 Failed 16 seconds ago "task: non-zero exit (1)"
+fleetly-founder-default-ord1-leaf.1 Failed 21 seconds ago "task: non-zero exit (1)"
+fleetly-founder-default-ord1-leaf.1 Failed 27 seconds ago "task: non-zero exit (1)"
+ORD1 service order (create event, delta from earliest)
+  base create+0ms
+  leaf create+11ms
+  mid create+22ms
+  base create_to_start=1334ms
+  base create_to_healthy=9545ms
+  base container_starts=1 (starts-until-first-healthy=1) container_dies=0
+  leaf create_to_start=1138ms
+  leaf create_to_healthy=19689ms
+  leaf container_starts=4 (starts-until-first-healthy=4) container_dies=3
+  mid create_to_start=1070ms
+  mid create_to_healthy=13754ms
+  mid container_starts=3 (starts-until-first-healthy=3) container_dies=2
+=== S4.2 ord2: permanently failing service (restart loop) ===
+ord2 deploy-rc=1 rc-wall-s=14
+  app: ord2 (degraded)
+  status: failed
+  error: E_OBSERVE_UNHEALTHY
+  verdict: unstable
+deployment 01M3HH0P98N6RXPZ3YPDTT64JJ failed: E_OBSERVE_UNHEALTHY ()
+ord2 deployment: {
+  "app": "ord2",
+  "app_state": "degraded",
+  "deployments": [
+    {
+      "id": "01M3HH0P98N6RXPZ3YPDTT64JJ",
+      "app": "ord2",
+      "kind": "deploy",
+      "status": "failed",
+      "first_healthy_at": "2026-09-27T13:31:42Z",
+      "verdict": "unstable",
+      "error_code": "E_OBSERVE_UNHEALTHY",
+      "created_at": "2026-09-27T13:31:34Z",
+      "updated_at": "2026-09-27T13:31:48Z"
+    }
+  ]
+}
+ord2 service ls:
+fleetly-founder-default-ord2-bad 0/1
+fleetly-founder-default-ord2-good 1/1
+ord2 bad service ps (restart loop):
+fleetly-founder-default-ord2-bad.1 Ready 2 seconds ago 
+fleetly-founder-default-ord2-bad.1 Failed 3 seconds ago "task: non-zero exit (1)"
+fleetly-founder-default-ord2-bad.1 Failed 8 seconds ago "task: non-zero exit (1)"
+fleetly-founder-default-ord2-bad.1 Failed 14 seconds ago "task: non-zero exit (1)"
+ORD2 container starts/dies: good=1/0 bad=3/3
+=== S4.3 event digest (deployment.*) ===
+#6 2026-09-27T13:31:04Z deployment.queued deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#7 2026-09-27T13:31:04Z deployment.release_started deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#9 2026-09-27T13:31:24Z deployment.healthy deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#10 2026-09-27T13:31:24Z deployment.switched deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#11 2026-09-27T13:31:24Z deployment.observe_started deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#13 2026-09-27T13:31:30Z deployment.succeeded deployment:01M3HGZRN23HJCY1Z6WCM1AS1B
+#16 2026-09-27T13:31:34Z deployment.queued deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+#17 2026-09-27T13:31:35Z deployment.release_started deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+#18 2026-09-27T13:31:42Z deployment.healthy deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+#19 2026-09-27T13:31:42Z deployment.switched deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+#20 2026-09-27T13:31:42Z deployment.observe_started deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+#22 2026-09-27T13:31:48Z deployment.failed deployment:01M3HH0P98N6RXPZ3YPDTT64JJ
+INNER_DONE

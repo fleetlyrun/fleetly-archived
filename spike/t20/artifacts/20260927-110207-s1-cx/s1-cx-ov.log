@@ -1,0 +1,64 @@
+pl6601wdyxtk4sktsk37k9ks2
+79d8c03d7d69ce310c94ed310468a1b1be0a66757f945ac718fed7a4b717050e
+docker: Error response from daemon: failed to set up container networking: attaching to network failed, make sure your network options are correct and check manager logs: context deadline exceeded
+
+Run 'docker run --help' for more information
+t20-cx-ov-mgr
+90bf51bff4666d38daacc7cb5a922ee959ebf2a9752370d669805aa29aa83cec
+519151777fcc3bb7afc300ba6e0dad2f6f7003405ca97fcde0788c2a37307876
+--- L1 mgr -> w1 ---
+PROBE_BEGIN host=90bf51bff466
+ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,eth1,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=10.0.1.6
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=ok
+TCP_PUBLIC_80=ok
+TCP_PUBLIC_53=ok
+HTTP_PUBLIC=ok
+PROBE_END
+--- L1 w1 -> mgr ---
+PROBE_BEGIN host=519151777fcc
+ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,eth1,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=10.0.1.4
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=ok
+TCP_PUBLIC_80=ok
+TCP_PUBLIC_53=ok
+HTTP_PUBLIC=ok
+PROBE_END
+11v4t0lk5pvh7ptxczxbwpbtc
+--- L2 service ps ---
+ID                          NAME                                      IMAGE                                                                                 NODE      DESIRED STATE   CURRENT STATE           ERROR     PORTS
+iv2but0kbko6s8tbisdspgjd4   t20-cx-ov-svc.ctrobwamnotan10r10kpon6f3   alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc   mgr       Running         Running 6 seconds ago             
+rhc2vw5mjgzfw2hjz7wagmcln   t20-cx-ov-svc.pjv0h0v3kmn48opdud4itk611   alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc   w1        Running         Running 6 seconds ago             
+--- L2 service logs (aggregated by manager) ---
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_PROBE_BEGIN host=077fa210dd75 my_ip=10.0.1.9
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | INTERFACES=eth0,eth1,lo
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_TASKS_DNS=ok
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_PING_1=10.0.1.10 ok
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_PING_2=10.0.1.9 ok
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_TASK_ADDRESSES=2 (ping-ok=2)
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | DNS_PUBLIC=ok
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | TCP_PUBLIC_80=ok
+t20-cx-ov-svc.0.iv2but0kbko6@mgr    | SVC_PROBE_END
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_PROBE_BEGIN host=ceaba4901584 my_ip=10.0.1.10
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | INTERFACES=eth0,eth1,lo
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_TASKS_DNS=ok
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_PING_1=10.0.1.10 ok
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_PING_2=10.0.1.9 ok
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_TASK_ADDRESSES=2 (ping-ok=2)
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | DNS_PUBLIC=ok
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | TCP_PUBLIC_80=ok
+t20-cx-ov-svc.0.rhc2vw5mjgzf@w1    | SVC_PROBE_END

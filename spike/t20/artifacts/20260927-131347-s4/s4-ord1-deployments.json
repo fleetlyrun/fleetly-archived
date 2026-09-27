@@ -1,0 +1,16 @@
+{
+  "app": "ord1",
+  "app_state": "running",
+  "deployments": [
+    {
+      "id": "01M3HG11NQAK8Z7C2YEV45HRHY",
+      "app": "ord1",
+      "kind": "deploy",
+      "status": "succeeded",
+      "revision_id": "01M3HG1V3S5Y548EFENDBKMJCZ",
+      "first_healthy_at": "2026-09-27T13:14:37Z",
+      "created_at": "2026-09-27T13:14:17Z",
+      "updated_at": "2026-09-27T13:14:43Z"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+=== CELL br (net=t20-s1-br args: -d bridge) ===
+CELL br ROUTE_TABLE=00000000->010014AC,000014AC->00000000
+CELL br INTERFACES=eth0,lo
+CELL br DNS_PEER=ok
+CELL br TCP_PEER=ok
+CELL br DNS_PUBLIC=ok
+CELL br TCP_PUBLIC_80=ok
+CELL br TCP_PUBLIC_53=ok
+CELL br HTTP_PUBLIC=ok
+CELL br DONE (log: spike/t20/artifacts/20260927-104155-s1-host/s1-host-br.log)
+=== CELL br-in (net=t20-s1-br-in args: -d bridge --internal) ===
+CELL br-in ROUTE_TABLE=000014AC->00000000
+CELL br-in INTERFACES=eth0,lo
+CELL br-in DNS_PEER=ok
+CELL br-in TCP_PEER=ok
+CELL br-in DNS_PUBLIC=fail
+CELL br-in TCP_PUBLIC_80=fail
+CELL br-in TCP_PUBLIC_53=fail
+CELL br-in HTTP_PUBLIC=fail
+CELL br-in DONE (log: spike/t20/artifacts/20260927-104155-s1-host/s1-host-br-in.log)
+=== CELL ov (net=t20-s1-ov args: --attachable -d overlay) ===
+CELL ov ROUTE_TABLE=00000000->0110A8C0,0001000A->00000000,0010A8C0->00000000
+CELL ov INTERFACES=eth0,eth1,lo
+CELL ov DNS_PEER=ok
+CELL ov TCP_PEER=ok
+CELL ov DNS_PUBLIC=ok
+CELL ov TCP_PUBLIC_80=ok
+CELL ov TCP_PUBLIC_53=ok
+CELL ov HTTP_PUBLIC=ok
+CELL ov DONE (log: spike/t20/artifacts/20260927-104155-s1-host/s1-host-ov.log)
+=== CELL ov-in (net=t20-s1-ov-in args: --attachable --internal -d overlay) ===
+CELL ov-in ROUTE_TABLE=0001000A->00000000
+CELL ov-in INTERFACES=eth0,lo
+CELL ov-in DNS_PEER=ok
+CELL ov-in TCP_PEER=ok
+CELL ov-in DNS_PUBLIC=fail
+CELL ov-in TCP_PUBLIC_80=fail
+CELL ov-in TCP_PUBLIC_53=fail
+CELL ov-in HTTP_PUBLIC=fail
+CELL ov-in DONE (log: spike/t20/artifacts/20260927-104155-s1-host/s1-host-ov-in.log)
+=== S1-HOST DONE ===

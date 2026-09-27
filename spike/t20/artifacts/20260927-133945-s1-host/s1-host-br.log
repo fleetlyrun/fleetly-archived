@@ -1,0 +1,20 @@
+86241e8f5644744538170d9e2bf98b648e39de79f3e90ad01a5d57a7a219b70a
+fbb363baa2a0eff6f2da8e2f6aa71112eb7c14668cad1247f25f61de6e6dc7bc
+0dfb4f40c6421cc359190a8797ab932b2ef9f0c4c4912e19f2d0a19a514f7f09
+PROBE_BEGIN host=0dfb4f40c642
+ROUTE_TABLE=00000000->010014AC,000014AC->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=172.20.0.2
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=ok
+TCP_PUBLIC_80=ok
+TCP_PUBLIC_53=ok
+HTTP_PUBLIC=ok
+PROBE_END
+--- probe container inspect (network attrs) ---
+{"t20-s1-br":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"86241e8f5644744538170d9e2bf98b648e39de79f3e90ad01a5d57a7a219b70a","EndpointID":"4c1c184d1bdbf47414c030703834bacf2b98d3ae7523837ca758cc9f5e4f44d1","Gateway":"172.20.0.1","IPAddress":"172.20.0.3","MacAddress":"ce:c5:0c:1b:20:fa","IPPrefixLen":16,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["t20-s1-br-probe","0dfb4f40c642"]}}
+--- peer log tail ---

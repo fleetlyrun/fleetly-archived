@@ -1,0 +1,144 @@
+--- t=13:41:26 ---
+good: no such service: fleetly-founder-default-ord2-good;
+bad: no such service: fleetly-founder-default-ord2-bad;
+--- t=13:41:27 ---
+good: Assigned less than a second ago;
+bad: Assigned less than a second ago;
+--- t=13:41:28 ---
+good: Starting less than a second ago;
+bad: Pending less than a second ago;Failed less than a second ago;
+--- t=13:41:29 ---
+good: Running less than a second ago;
+bad: Ready less than a second ago;Failed 1 second ago;
+--- t=13:41:30 ---
+good: Running 1 second ago;
+bad: Ready 1 second ago;Failed 2 seconds ago;
+--- t=13:41:31 ---
+good: Running 2 seconds ago;
+bad: Ready 2 seconds ago;Failed 3 seconds ago;
+--- t=13:41:32 ---
+good: Running 3 seconds ago;
+bad: Ready 3 seconds ago;Failed 4 seconds ago;
+--- t=13:41:33 ---
+good: Running 4 seconds ago;
+bad: Starting less than a second ago;Failed 5 seconds ago;
+--- t=13:41:34 ---
+good: Running 5 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;
+--- t=13:41:35 ---
+good: Running 6 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;
+--- t=13:41:36 ---
+good: Running 7 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;
+--- t=13:41:37 ---
+good: Running 8 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;
+--- t=13:41:38 ---
+good: Running 9 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;
+--- t=13:41:39 ---
+good: Running 10 seconds ago;
+bad: Starting less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;
+--- t=13:41:40 ---
+good: Running 11 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 12 seconds ago;
+--- t=13:41:41 ---
+good: Running 12 seconds ago;
+bad: Ready 1 second ago;Failed 2 seconds ago;Failed 7 seconds ago;Failed 13 seconds ago;
+--- t=13:41:42 ---
+good: Running 13 seconds ago;
+bad: Ready 2 seconds ago;Failed 3 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;
+--- t=13:41:43 ---
+good: Running 14 seconds ago;
+bad: Ready 3 seconds ago;Failed 4 seconds ago;Failed 9 seconds ago;Failed 15 seconds ago;
+--- t=13:41:44 ---
+good: Running 15 seconds ago;
+bad: Ready 4 seconds ago;Failed 5 seconds ago;Failed 10 seconds ago;Failed 16 seconds ago;
+--- t=13:41:45 ---
+good: Running 16 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;
+--- t=13:41:46 ---
+good: Running 17 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+--- t=13:41:47 ---
+good: Running 18 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+--- t=13:41:48 ---
+good: Running 19 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+--- t=13:41:50 ---
+good: Running 20 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+--- t=13:41:51 ---
+good: Running 21 seconds ago;
+bad: Running less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;Failed 22 seconds ago;
+--- t=13:41:52 ---
+good: Running 22 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+--- t=13:41:53 ---
+good: Running 23 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+--- t=13:41:54 ---
+good: Running 24 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+--- t=13:41:55 ---
+good: Running 26 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+--- t=13:41:56 ---
+good: Running 27 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+--- t=13:41:57 ---
+good: Running 28 seconds ago;
+bad: Preparing less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;
+--- t=13:41:58 ---
+good: Running 29 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+--- t=13:41:59 ---
+good: Running 30 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+--- t=13:42:00 ---
+good: Running 31 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+--- t=13:42:01 ---
+good: Running 32 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+--- t=13:42:02 ---
+good: Running 33 seconds ago;
+bad: Running less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+--- t=13:42:03 ---
+good: Running 34 seconds ago;
+bad: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 12 seconds ago;Failed 17 seconds ago;
+--- t=13:42:04 ---
+good: Running 35 seconds ago;
+bad: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 13 seconds ago;Failed 18 seconds ago;
+--- t=13:42:05 ---
+good: Running 36 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;Failed 19 seconds ago;
+--- t=13:42:06 ---
+good: Running 37 seconds ago;
+bad: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 15 seconds ago;Failed 20 seconds ago;
+--- t=13:42:07 ---
+good: Running 38 seconds ago;
+bad: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+--- t=13:42:08 ---
+good: Running 39 seconds ago;
+bad: Assigned less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;Failed 23 seconds ago;
+--- t=13:42:09 ---
+good: Running 40 seconds ago;
+bad: Ready less than a second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+--- t=13:42:10 ---
+good: Running 41 seconds ago;
+bad: Ready 1 second ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+--- t=13:42:11 ---
+good: Running 42 seconds ago;
+bad: Ready 2 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+--- t=13:42:12 ---
+good: Running 43 seconds ago;
+bad: Ready 3 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+--- t=13:42:13 ---
+good: Running 44 seconds ago;
+bad: Starting less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+--- t=13:42:16 ---
+good: Running 47 seconds ago;
+bad: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;Failed 19 seconds ago;

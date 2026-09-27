@@ -1,0 +1,43 @@
+=== swarm init + join ===
+two nodes Ready
+=== CELL ov-in (net=t20-cx-ov-in args: --attachable --internal -d overlay) ===
+CELL ov-in L1 ROUTE_TABLE=0001000A->00000000
+CELL ov-in L1 INTERFACES=eth0,lo
+CELL ov-in L1 DNS_PEER=ok
+CELL ov-in L1 TCP_PEER=ok
+CELL ov-in L1 DNS_PUBLIC=fail
+CELL ov-in L1 TCP_PUBLIC_80=fail
+CELL ov-in L1 HTTP_PUBLIC=fail
+CELL ov-in L1 ROUTE_TABLE=0001000A->00000000
+CELL ov-in L1 INTERFACES=eth0,lo
+CELL ov-in L1 DNS_PEER=ok
+CELL ov-in L1 TCP_PEER=ok
+CELL ov-in L1 DNS_PUBLIC=fail
+CELL ov-in L1 TCP_PUBLIC_80=fail
+CELL ov-in L1 HTTP_PUBLIC=fail
+CELL ov-in L2 DNS_PUBLIC=fail
+CELL ov-in L2 TCP_PUBLIC_80=fail
+CELL ov-in L2 DNS_PUBLIC=fail
+CELL ov-in L2 TCP_PUBLIC_80=fail
+CELL ov-in DONE (log: spike/t20/artifacts/20260927-110207-s1-cx/s1-cx-ov-in.log)
+=== CELL ov (net=t20-cx-ov args: --attachable -d overlay) ===
+CELL ov L1 ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+CELL ov L1 INTERFACES=eth0,eth1,lo
+CELL ov L1 DNS_PEER=ok
+CELL ov L1 TCP_PEER=ok
+CELL ov L1 DNS_PUBLIC=ok
+CELL ov L1 TCP_PUBLIC_80=ok
+CELL ov L1 HTTP_PUBLIC=ok
+CELL ov L1 ROUTE_TABLE=00000000->010012AC,0001000A->00000000,000012AC->00000000
+CELL ov L1 INTERFACES=eth0,eth1,lo
+CELL ov L1 DNS_PEER=ok
+CELL ov L1 TCP_PEER=ok
+CELL ov L1 DNS_PUBLIC=ok
+CELL ov L1 TCP_PUBLIC_80=ok
+CELL ov L1 HTTP_PUBLIC=ok
+CELL ov L2 DNS_PUBLIC=ok
+CELL ov L2 TCP_PUBLIC_80=ok
+CELL ov L2 DNS_PUBLIC=ok
+CELL ov L2 TCP_PUBLIC_80=ok
+CELL ov DONE (log: spike/t20/artifacts/20260927-110207-s1-cx/s1-cx-ov.log)
+=== S1-CROSS-NODE DONE ===

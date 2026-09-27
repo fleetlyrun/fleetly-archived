@@ -1,0 +1,8 @@
+deployment 01M3HG1Z9N82Z0PHS05Y90PJAH failed  error=E_OBSERVE_CRASH_LOOP
+warning [W_DEPLOY_NO_HEALTHCHECK] bad: service bad declares no healthcheck: health_gate=none (the health gate degrades to exit/replica-count checks, so failures surface later)
+deployment 01M3HG1Z9N82Z0PHS05Y90PJAH
+  app: ord2 (degraded)
+  status: failed
+  error: E_OBSERVE_CRASH_LOOP
+  verdict: unstable
+deployment 01M3HG1Z9N82Z0PHS05Y90PJAH failed: E_OBSERVE_CRASH_LOOP ()

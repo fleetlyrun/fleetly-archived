@@ -1,0 +1,38 @@
+=== registry:2 (htpasswd) at 10.240.0.50:5000 (host probe 127.0.0.1:15000) ===
+registry up (anonymous /v2/ -> 401)
+=== swarm init + join ===
+two nodes Ready
+=== A: tag->digest resolve + per-node digest pull (zero pre-pull) ===
+resolve: RESOLVED alpine:3.19 -> sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+A pre-check mgr inspect(alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1): 
+Error response from daemon: No such image: alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+A pre-check w1 inspect(alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1): 
+Error response from daemon: No such image: alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+t20-pub running tasks=2 (want 2)
+t20-pub.63tdry2n1a5y0yb5zfa2wbqgp mgr Running 3 seconds ago
+t20-pub.mpe5z4hwxq4981qml2q7o6a1h w1 Running 1 second ago
+A mgr dockerd: time="2026-09-27T13:43:36.698682066Z" level=info msg="image pulled" digest="sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1" remote="docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1"
+A post-check mgr inspect: sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+A w1 dockerd: time="2026-09-27T13:43:38.700800957Z" level=info msg="image pulled" digest="sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1" remote="docker.io/library/alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1"
+A post-check w1 inspect: sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+=== B: private image push + EncodedRegistryAuth create/update semantics ===
+pushed private:1 (10.240.0.50:5000/t20/private@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc) and private:2 (10.240.0.50:5000/t20/private@sha256:c015f04e8d832716124caea4a0aa148066c8bb0e90c7a03a934b9177d64e6ae4)
+private resolve (host loopback): RESOLVE_FAIL 127.0.0.1:15000/t20/private:1: registry 127.0.0.1:15000 unreachable while resolving t20/private:1: Get "https://127.0.0.1:15000/v2/t20/private/manifests/1": http: server gave HTTP response to HTTPS client
+exit status 1
+encoded auth blob computed (length 104)
+B2 no-auth control task: Rejected 25 seconds ago | "failed to resolve reference "10.240.0.50:5000/t20/private:1": pull access denied, repository does not exist or may require authorization: authorization failed: no basic auth credentials"
+registry snapshot b2: 100 lines
+B1 with-auth task: Running 1 second ago
+B1 w1 dockerd: time="2026-09-27T13:44:27.470386634Z" level=info msg="image pulled" digest="sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e" remote="10.240.0.50:5000/t20/private:1@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e"
+B1 w1 docker login config: ls: /root/.docker/config.json: No such file or directory
+registry snapshot b1: 122 lines
+B4 service inspect leak check: no-leak
+B3 update-without-auth new task: Running 2 seconds ago | 10.240.0.50:5000/t20/private:2
+B3 w1 dockerd: time="2026-09-27T13:44:27.470386634Z" level=info msg="image pulled" digest="sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e" remote="10.240.0.50:5000/t20/private:1@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e"
+B3 w1 dockerd: time="2026-09-27T13:44:31.528304102Z" level=info msg="image pulled" digest="sha256:c015f04e8d832716124caea4a0aa148066c8bb0e90c7a03a934b9177d64e6ae4" remote="10.240.0.50:5000/t20/private:2"
+registry snapshot b3: 146 lines
+B3 w1 registry requests (cumulative): 40
+B1 w1 registry requests (cumulative): 16 (delta = 24)
+raft probe: spike/t20/artifacts/20260927-134301-s2-dind/s2-raft-probe.txt (16 lines)
+registry snapshot final: 146 lines
+=== S2-DIND DONE ===

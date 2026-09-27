@@ -1,0 +1,17 @@
+{
+  "app": "ord2",
+  "app_state": "degraded",
+  "deployments": [
+    {
+      "id": "01M3HH0P98N6RXPZ3YPDTT64JJ",
+      "app": "ord2",
+      "kind": "deploy",
+      "status": "failed",
+      "first_healthy_at": "2026-09-27T13:31:42Z",
+      "verdict": "unstable",
+      "error_code": "E_OBSERVE_UNHEALTHY",
+      "created_at": "2026-09-27T13:31:34Z",
+      "updated_at": "2026-09-27T13:31:48Z"
+    }
+  ]
+}

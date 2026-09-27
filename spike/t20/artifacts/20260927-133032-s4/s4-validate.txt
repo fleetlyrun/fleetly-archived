@@ -1,0 +1,4 @@
+E_COMPOSE_UNSUPPORTED: service "mid" uses an unsupported field "depends_on": rejected field in v0.1 (orchestration order is managed by the platform release pipeline)
+  path: services.mid.depends_on
+  suggestion: Remove or rewrite the unsupported compose fields and retry; see the error code docs for the controlled subset and deny list.
+  docs: https://docs.fleetly.dev/errors/E_COMPOSE_UNSUPPORTED

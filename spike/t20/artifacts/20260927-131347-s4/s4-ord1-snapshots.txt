@@ -1,0 +1,108 @@
+--- t=13:14:17 ---
+base: no such service: fleetly-founder-default-ord1-base;
+mid: no such service: fleetly-founder-default-ord1-mid;
+leaf: no such service: fleetly-founder-default-ord1-leaf;
+--- t=13:14:18 ---
+base: Starting less than a second ago;
+mid: Starting less than a second ago;
+leaf: Starting less than a second ago;
+--- t=13:14:19 ---
+base: Starting 1 second ago;
+mid: Ready less than a second ago;Failed less than a second ago;
+leaf: Ready less than a second ago;Failed less than a second ago;
+--- t=13:14:20 ---
+base: Starting 2 seconds ago;
+mid: Ready 1 second ago;Failed 1 second ago;
+leaf: Ready 1 second ago;Failed 1 second ago;
+--- t=13:14:21 ---
+base: Starting 3 seconds ago;
+mid: Ready 2 seconds ago;Failed 2 seconds ago;
+leaf: Ready 2 seconds ago;Failed 2 seconds ago;
+--- t=13:14:22 ---
+base: Starting 4 seconds ago;
+mid: Ready 3 seconds ago;Failed 3 seconds ago;
+leaf: Ready 3 seconds ago;Failed 3 seconds ago;
+--- t=13:14:23 ---
+base: Starting 5 seconds ago;
+mid: Ready 4 seconds ago;Failed 4 seconds ago;
+leaf: Ready 4 seconds ago;Failed 4 seconds ago;
+--- t=13:14:24 ---
+base: Starting 6 seconds ago;
+mid: Starting less than a second ago;Failed 5 seconds ago;
+leaf: Pending less than a second ago;Failed less than a second ago;Failed 5 seconds ago;
+--- t=13:14:26 ---
+base: Starting 7 seconds ago;
+mid: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;
+leaf: Ready less than a second ago;Failed 1 second ago;Failed 6 seconds ago;
+--- t=13:14:27 ---
+base: Starting 8 seconds ago;
+mid: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;
+leaf: Ready 1 second ago;Failed 2 seconds ago;Failed 7 seconds ago;
+--- t=13:14:28 ---
+base: Running 1 second ago;
+mid: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;
+leaf: Ready 2 seconds ago;Failed 3 seconds ago;Failed 8 seconds ago;
+--- t=13:14:29 ---
+base: Running 2 seconds ago;
+mid: Ready 3 seconds ago;Failed 4 seconds ago;Failed 9 seconds ago;
+leaf: Ready 3 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;
+--- t=13:14:30 ---
+base: Running 3 seconds ago;
+mid: Ready 4 seconds ago;Failed 5 seconds ago;Failed 10 seconds ago;
+leaf: Starting less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;
+--- t=13:14:31 ---
+base: Running 4 seconds ago;
+mid: Starting 1 second ago;Failed 6 seconds ago;Failed 12 seconds ago;
+leaf: Ready less than a second ago;Failed less than a second ago;Failed 6 seconds ago;Failed 12 seconds ago;
+--- t=13:14:32 ---
+base: Running 5 seconds ago;
+mid: Running less than a second ago;Failed 7 seconds ago;Failed 13 seconds ago;
+leaf: Ready 1 second ago;Failed 1 second ago;Failed 7 seconds ago;Failed 13 seconds ago;
+--- t=13:14:33 ---
+base: Running 6 seconds ago;
+mid: Running 1 second ago;Failed 8 seconds ago;Failed 14 seconds ago;
+leaf: Ready 2 seconds ago;Failed 2 seconds ago;Failed 8 seconds ago;Failed 14 seconds ago;
+--- t=13:14:34 ---
+base: Running 7 seconds ago;
+mid: Running 2 seconds ago;Failed 9 seconds ago;Failed 15 seconds ago;
+leaf: Ready 3 seconds ago;Failed 3 seconds ago;Failed 9 seconds ago;Failed 15 seconds ago;
+--- t=13:14:35 ---
+base: Running 8 seconds ago;
+mid: Running 3 seconds ago;Failed 10 seconds ago;Failed 16 seconds ago;
+leaf: Ready 4 seconds ago;Failed 4 seconds ago;Failed 10 seconds ago;Failed 16 seconds ago;
+--- t=13:14:36 ---
+base: Running 9 seconds ago;
+mid: Running 4 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;
+leaf: Starting less than a second ago;Failed 5 seconds ago;Failed 11 seconds ago;Failed 17 seconds ago;
+--- t=13:14:37 ---
+base: Running 10 seconds ago;
+mid: Running 5 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+leaf: Running less than a second ago;Failed 7 seconds ago;Failed 12 seconds ago;Failed 18 seconds ago;
+--- t=13:14:38 ---
+base: Running 11 seconds ago;
+mid: Running 6 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+leaf: Running 1 second ago;Failed 8 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;
+--- t=13:14:39 ---
+base: Running 12 seconds ago;
+mid: Running 7 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+leaf: Running 2 seconds ago;Failed 9 seconds ago;Failed 14 seconds ago;Failed 20 seconds ago;
+--- t=13:14:40 ---
+base: Running 13 seconds ago;
+mid: Running 9 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+leaf: Running 3 seconds ago;Failed 10 seconds ago;Failed 15 seconds ago;Failed 21 seconds ago;
+--- t=13:14:41 ---
+base: Running 14 seconds ago;
+mid: Running 10 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+leaf: Running 4 seconds ago;Failed 11 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;
+--- t=13:14:42 ---
+base: Running 15 seconds ago;
+mid: Running 11 seconds ago;Failed 17 seconds ago;Failed 23 seconds ago;
+leaf: Running 5 seconds ago;Failed 12 seconds ago;Failed 17 seconds ago;Failed 23 seconds ago;
+--- t=13:14:43 ---
+base: Running 16 seconds ago;
+mid: Running 12 seconds ago;Failed 18 seconds ago;Failed 24 seconds ago;
+leaf: Running 6 seconds ago;Failed 13 seconds ago;Failed 19 seconds ago;Failed 24 seconds ago;
+--- t=13:14:46 ---
+base: Running 19 seconds ago;
+mid: Running 15 seconds ago;Failed 21 seconds ago;Failed 27 seconds ago;
+leaf: Running 9 seconds ago;Failed 16 seconds ago;Failed 22 seconds ago;Failed 27 seconds ago;

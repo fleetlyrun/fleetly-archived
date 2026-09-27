@@ -1,0 +1,68 @@
+[
+    {
+        "ID": "jdfsdvakaqnffoctbzfh7uua9",
+        "Version": {
+            "Index": 42
+        },
+        "CreatedAt": "2026-09-27T13:25:30.889222753Z",
+        "UpdatedAt": "2026-09-27T13:25:30.889222753Z",
+        "Spec": {
+            "Name": "t20-auth",
+            "Labels": {},
+            "TaskTemplate": {
+                "ContainerSpec": {
+                    "Image": "10.240.0.50:5000/t20/private:1@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e",
+                    "Args": [
+                        "sleep",
+                        "600"
+                    ],
+                    "Init": false,
+                    "StopGracePeriod": 1000000000,
+                    "DNSConfig": {},
+                    "Isolation": "default"
+                },
+                "Resources": {
+                    "Limits": {},
+                    "Reservations": {}
+                },
+                "RestartPolicy": {
+                    "Condition": "none",
+                    "Delay": 5000000000,
+                    "MaxAttempts": 0
+                },
+                "Placement": {
+                    "Constraints": [
+                        "node.hostname==w1"
+                    ]
+                },
+                "ForceUpdate": 0,
+                "Runtime": "container"
+            },
+            "Mode": {
+                "Replicated": {
+                    "Replicas": 1
+                }
+            },
+            "UpdateConfig": {
+                "Parallelism": 1,
+                "FailureAction": "pause",
+                "Monitor": 5000000000,
+                "MaxFailureRatio": 0,
+                "Order": "stop-first"
+            },
+            "RollbackConfig": {
+                "Parallelism": 1,
+                "FailureAction": "pause",
+                "Monitor": 5000000000,
+                "MaxFailureRatio": 0,
+                "Order": "stop-first"
+            },
+            "EndpointSpec": {
+                "Mode": "vip"
+            }
+        },
+        "Endpoint": {
+            "Spec": {}
+        }
+    }
+]

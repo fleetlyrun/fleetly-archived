@@ -1,0 +1,370 @@
+INNER_ENGINE=29.8.1
+N=30 STOP_GRACE=2s
+SWARM_INIT=ok
+EVENTS_PID=479
+=== ARM A: swarm service lifecycle ===
+A cycle_done=1 rm_wall_ms=4
+A cycle_done=2 rm_wall_ms=4
+A cycle_done=3 rm_wall_ms=5
+A cycle_done=4 rm_wall_ms=4
+A cycle_done=5 rm_wall_ms=4
+A cycle_done=6 rm_wall_ms=4
+A cycle_done=7 rm_wall_ms=4
+A cycle_done=8 rm_wall_ms=4
+A cycle_done=9 rm_wall_ms=4
+A cycle_done=10 rm_wall_ms=4
+A cycle_done=11 rm_wall_ms=4
+A cycle_done=12 rm_wall_ms=4
+A cycle_done=13 rm_wall_ms=4
+A cycle_done=14 rm_wall_ms=4
+A cycle_done=15 rm_wall_ms=4
+A cycle_done=16 rm_wall_ms=4
+A cycle_done=17 rm_wall_ms=4
+A cycle_done=18 rm_wall_ms=4
+A cycle_done=19 rm_wall_ms=4
+A cycle_done=20 rm_wall_ms=5
+A cycle_done=21 rm_wall_ms=4
+A cycle_done=22 rm_wall_ms=5
+A cycle_done=23 rm_wall_ms=4
+A cycle_done=24 rm_wall_ms=4
+A cycle_done=25 rm_wall_ms=4
+A cycle_done=26 rm_wall_ms=4
+A cycle_done=27 rm_wall_ms=4
+A cycle_done=28 rm_wall_ms=4
+A cycle_done=29 rm_wall_ms=4
+A cycle_done=30 rm_wall_ms=4
+=== ARM B: docker run/stop baseline ===
+B cycle_done=1
+B cycle_done=2
+B cycle_done=3
+B cycle_done=4
+B cycle_done=5
+B cycle_done=6
+B cycle_done=7
+B cycle_done=8
+B cycle_done=9
+B cycle_done=10
+B cycle_done=11
+B cycle_done=12
+B cycle_done=13
+B cycle_done=14
+B cycle_done=15
+B cycle_done=16
+B cycle_done=17
+B cycle_done=18
+B cycle_done=19
+B cycle_done=20
+B cycle_done=21
+B cycle_done=22
+B cycle_done=23
+B cycle_done=24
+B cycle_done=25
+B cycle_done=26
+B cycle_done=27
+B cycle_done=28
+B cycle_done=29
+B cycle_done=30
+METRICS_FILE=/tmp/t20-s3-metrics.txt
+--- ARM A per-cycle metrics (ms) ---
+A create_to_running_ms=434 svc=t20-lat-svc-1
+A create_to_healthy_ms=1461 svc=t20-lat-svc-1
+A update_to_running_ms=3642 svc=t20-lat-svc-1
+A update_to_healthy_ms=4669 svc=t20-lat-svc-1
+A rm_to_destroy_ms=3782 svc=t20-lat-svc-1
+A rm_to_die_ms=3297 svc=t20-lat-svc-1
+A create_to_running_ms=425 svc=t20-lat-svc-2
+A create_to_healthy_ms=1450 svc=t20-lat-svc-2
+A update_to_running_ms=3662 svc=t20-lat-svc-2
+A update_to_healthy_ms=4687 svc=t20-lat-svc-2
+A rm_to_destroy_ms=3698 svc=t20-lat-svc-2
+A rm_to_die_ms=3279 svc=t20-lat-svc-2
+A create_to_running_ms=400 svc=t20-lat-svc-3
+A create_to_healthy_ms=1427 svc=t20-lat-svc-3
+A update_to_running_ms=3730 svc=t20-lat-svc-3
+A update_to_healthy_ms=4756 svc=t20-lat-svc-3
+A rm_to_destroy_ms=3773 svc=t20-lat-svc-3
+A rm_to_die_ms=3314 svc=t20-lat-svc-3
+A create_to_running_ms=401 svc=t20-lat-svc-4
+A create_to_healthy_ms=1428 svc=t20-lat-svc-4
+A update_to_running_ms=3627 svc=t20-lat-svc-4
+A update_to_healthy_ms=4653 svc=t20-lat-svc-4
+A rm_to_destroy_ms=3761 svc=t20-lat-svc-4
+A rm_to_die_ms=3331 svc=t20-lat-svc-4
+A create_to_running_ms=387 svc=t20-lat-svc-5
+A create_to_healthy_ms=1413 svc=t20-lat-svc-5
+A update_to_running_ms=3718 svc=t20-lat-svc-5
+A update_to_healthy_ms=4743 svc=t20-lat-svc-5
+A rm_to_destroy_ms=3760 svc=t20-lat-svc-5
+A rm_to_die_ms=3308 svc=t20-lat-svc-5
+A create_to_running_ms=415 svc=t20-lat-svc-6
+A create_to_healthy_ms=1441 svc=t20-lat-svc-6
+A update_to_running_ms=3611 svc=t20-lat-svc-6
+A update_to_healthy_ms=4639 svc=t20-lat-svc-6
+A rm_to_destroy_ms=3752 svc=t20-lat-svc-6
+A rm_to_die_ms=3324 svc=t20-lat-svc-6
+A create_to_running_ms=399 svc=t20-lat-svc-7
+A create_to_healthy_ms=1425 svc=t20-lat-svc-7
+A update_to_running_ms=3612 svc=t20-lat-svc-7
+A update_to_healthy_ms=4639 svc=t20-lat-svc-7
+A rm_to_destroy_ms=3762 svc=t20-lat-svc-7
+A rm_to_die_ms=3307 svc=t20-lat-svc-7
+A create_to_running_ms=403 svc=t20-lat-svc-8
+A create_to_healthy_ms=1428 svc=t20-lat-svc-8
+A update_to_running_ms=3678 svc=t20-lat-svc-8
+A update_to_healthy_ms=4705 svc=t20-lat-svc-8
+A rm_to_destroy_ms=3741 svc=t20-lat-svc-8
+A rm_to_die_ms=3325 svc=t20-lat-svc-8
+A create_to_running_ms=402 svc=t20-lat-svc-9
+A create_to_healthy_ms=1427 svc=t20-lat-svc-9
+A update_to_running_ms=3667 svc=t20-lat-svc-9
+A update_to_healthy_ms=4694 svc=t20-lat-svc-9
+A rm_to_destroy_ms=3700 svc=t20-lat-svc-9
+A rm_to_die_ms=3280 svc=t20-lat-svc-9
+A create_to_running_ms=421 svc=t20-lat-svc-10
+A create_to_healthy_ms=1447 svc=t20-lat-svc-10
+A update_to_running_ms=3726 svc=t20-lat-svc-10
+A update_to_healthy_ms=4751 svc=t20-lat-svc-10
+A rm_to_destroy_ms=3762 svc=t20-lat-svc-10
+A rm_to_die_ms=3316 svc=t20-lat-svc-10
+A create_to_running_ms=413 svc=t20-lat-svc-11
+A create_to_healthy_ms=1440 svc=t20-lat-svc-11
+A update_to_running_ms=3674 svc=t20-lat-svc-11
+A update_to_healthy_ms=4702 svc=t20-lat-svc-11
+A rm_to_destroy_ms=3795 svc=t20-lat-svc-11
+A rm_to_die_ms=3312 svc=t20-lat-svc-11
+A create_to_running_ms=420 svc=t20-lat-svc-12
+A create_to_healthy_ms=1445 svc=t20-lat-svc-12
+A update_to_running_ms=3649 svc=t20-lat-svc-12
+A update_to_healthy_ms=4676 svc=t20-lat-svc-12
+A rm_to_destroy_ms=3775 svc=t20-lat-svc-12
+A rm_to_die_ms=3332 svc=t20-lat-svc-12
+A create_to_running_ms=392 svc=t20-lat-svc-13
+A create_to_healthy_ms=1419 svc=t20-lat-svc-13
+A update_to_running_ms=3664 svc=t20-lat-svc-13
+A update_to_healthy_ms=4689 svc=t20-lat-svc-13
+A rm_to_destroy_ms=3719 svc=t20-lat-svc-13
+A rm_to_die_ms=3287 svc=t20-lat-svc-13
+A create_to_running_ms=406 svc=t20-lat-svc-14
+A create_to_healthy_ms=1432 svc=t20-lat-svc-14
+A update_to_running_ms=3695 svc=t20-lat-svc-14
+A update_to_healthy_ms=4722 svc=t20-lat-svc-14
+A rm_to_destroy_ms=3823 svc=t20-lat-svc-14
+A rm_to_die_ms=3333 svc=t20-lat-svc-14
+A create_to_running_ms=406 svc=t20-lat-svc-15
+A create_to_healthy_ms=1431 svc=t20-lat-svc-15
+A update_to_running_ms=3727 svc=t20-lat-svc-15
+A update_to_healthy_ms=4755 svc=t20-lat-svc-15
+A rm_to_destroy_ms=3753 svc=t20-lat-svc-15
+A rm_to_die_ms=3275 svc=t20-lat-svc-15
+A create_to_running_ms=405 svc=t20-lat-svc-16
+A create_to_healthy_ms=1432 svc=t20-lat-svc-16
+A update_to_running_ms=3719 svc=t20-lat-svc-16
+A update_to_healthy_ms=4745 svc=t20-lat-svc-16
+A rm_to_destroy_ms=3765 svc=t20-lat-svc-16
+A rm_to_die_ms=3327 svc=t20-lat-svc-16
+A create_to_running_ms=403 svc=t20-lat-svc-17
+A create_to_healthy_ms=1431 svc=t20-lat-svc-17
+A update_to_running_ms=3736 svc=t20-lat-svc-17
+A update_to_healthy_ms=4762 svc=t20-lat-svc-17
+A rm_to_destroy_ms=3771 svc=t20-lat-svc-17
+A rm_to_die_ms=3320 svc=t20-lat-svc-17
+A create_to_running_ms=400 svc=t20-lat-svc-18
+A create_to_healthy_ms=1427 svc=t20-lat-svc-18
+A update_to_running_ms=3624 svc=t20-lat-svc-18
+A update_to_healthy_ms=4651 svc=t20-lat-svc-18
+A rm_to_destroy_ms=3764 svc=t20-lat-svc-18
+A rm_to_die_ms=3317 svc=t20-lat-svc-18
+A create_to_running_ms=419 svc=t20-lat-svc-19
+A create_to_healthy_ms=1446 svc=t20-lat-svc-19
+A update_to_running_ms=3707 svc=t20-lat-svc-19
+A update_to_healthy_ms=4734 svc=t20-lat-svc-19
+A rm_to_destroy_ms=3749 svc=t20-lat-svc-19
+A rm_to_die_ms=3287 svc=t20-lat-svc-19
+A create_to_running_ms=425 svc=t20-lat-svc-20
+A create_to_healthy_ms=1451 svc=t20-lat-svc-20
+A update_to_running_ms=3682 svc=t20-lat-svc-20
+A update_to_healthy_ms=4707 svc=t20-lat-svc-20
+A rm_to_destroy_ms=3706 svc=t20-lat-svc-20
+A rm_to_die_ms=3298 svc=t20-lat-svc-20
+A create_to_running_ms=403 svc=t20-lat-svc-21
+A create_to_healthy_ms=1428 svc=t20-lat-svc-21
+A update_to_running_ms=3674 svc=t20-lat-svc-21
+A update_to_healthy_ms=4700 svc=t20-lat-svc-21
+A rm_to_destroy_ms=3804 svc=t20-lat-svc-21
+A rm_to_die_ms=3324 svc=t20-lat-svc-21
+A create_to_running_ms=422 svc=t20-lat-svc-22
+A create_to_healthy_ms=1446 svc=t20-lat-svc-22
+A update_to_running_ms=3745 svc=t20-lat-svc-22
+A update_to_healthy_ms=4772 svc=t20-lat-svc-22
+A rm_to_destroy_ms=3763 svc=t20-lat-svc-22
+A rm_to_die_ms=3328 svc=t20-lat-svc-22
+A create_to_running_ms=424 svc=t20-lat-svc-23
+A create_to_healthy_ms=1451 svc=t20-lat-svc-23
+A update_to_running_ms=3704 svc=t20-lat-svc-23
+A update_to_healthy_ms=4731 svc=t20-lat-svc-23
+A rm_to_destroy_ms=3740 svc=t20-lat-svc-23
+A rm_to_die_ms=3315 svc=t20-lat-svc-23
+A create_to_running_ms=405 svc=t20-lat-svc-24
+A create_to_healthy_ms=1431 svc=t20-lat-svc-24
+A update_to_running_ms=3716 svc=t20-lat-svc-24
+A update_to_healthy_ms=4743 svc=t20-lat-svc-24
+A rm_to_destroy_ms=3772 svc=t20-lat-svc-24
+A rm_to_die_ms=3300 svc=t20-lat-svc-24
+A create_to_running_ms=420 svc=t20-lat-svc-25
+A create_to_healthy_ms=1446 svc=t20-lat-svc-25
+A update_to_running_ms=3606 svc=t20-lat-svc-25
+A update_to_healthy_ms=4632 svc=t20-lat-svc-25
+A rm_to_destroy_ms=3750 svc=t20-lat-svc-25
+A rm_to_die_ms=3303 svc=t20-lat-svc-25
+A create_to_running_ms=409 svc=t20-lat-svc-26
+A create_to_healthy_ms=1434 svc=t20-lat-svc-26
+A update_to_running_ms=3652 svc=t20-lat-svc-26
+A update_to_healthy_ms=4714 svc=t20-lat-svc-26
+A rm_to_destroy_ms=3843 svc=t20-lat-svc-26
+A rm_to_die_ms=3356 svc=t20-lat-svc-26
+A create_to_running_ms=479 svc=t20-lat-svc-27
+A create_to_healthy_ms=1516 svc=t20-lat-svc-27
+A update_to_running_ms=3683 svc=t20-lat-svc-27
+A update_to_healthy_ms=4710 svc=t20-lat-svc-27
+A rm_to_destroy_ms=3801 svc=t20-lat-svc-27
+A rm_to_die_ms=3334 svc=t20-lat-svc-27
+A create_to_running_ms=402 svc=t20-lat-svc-28
+A create_to_healthy_ms=1428 svc=t20-lat-svc-28
+A update_to_running_ms=3630 svc=t20-lat-svc-28
+A update_to_healthy_ms=4655 svc=t20-lat-svc-28
+A rm_to_destroy_ms=3770 svc=t20-lat-svc-28
+A rm_to_die_ms=3296 svc=t20-lat-svc-28
+A create_to_running_ms=404 svc=t20-lat-svc-29
+A create_to_healthy_ms=1430 svc=t20-lat-svc-29
+A update_to_running_ms=3712 svc=t20-lat-svc-29
+A update_to_healthy_ms=4739 svc=t20-lat-svc-29
+A rm_to_destroy_ms=3750 svc=t20-lat-svc-29
+A rm_to_die_ms=3320 svc=t20-lat-svc-29
+A create_to_running_ms=424 svc=t20-lat-svc-30
+A create_to_healthy_ms=1451 svc=t20-lat-svc-30
+A update_to_running_ms=3686 svc=t20-lat-svc-30
+A update_to_healthy_ms=4713 svc=t20-lat-svc-30
+A rm_to_destroy_ms=3720 svc=t20-lat-svc-30
+A rm_to_die_ms=3314 svc=t20-lat-svc-30
+--- ARM B per-cycle metrics (ms) ---
+B create_to_running_ms=135 ctr=t20-lat-ctr-1
+B create_to_healthy_ms=1161 ctr=t20-lat-ctr-1
+B run_to_die_ms=4393 ctr=t20-lat-ctr-1
+B start_to_die_ms=4257 ctr=t20-lat-ctr-1
+B create_to_running_ms=131 ctr=t20-lat-ctr-2
+B create_to_healthy_ms=1157 ctr=t20-lat-ctr-2
+B run_to_die_ms=4370 ctr=t20-lat-ctr-2
+B start_to_die_ms=4238 ctr=t20-lat-ctr-2
+B create_to_running_ms=137 ctr=t20-lat-ctr-3
+B create_to_healthy_ms=1163 ctr=t20-lat-ctr-3
+B run_to_die_ms=4386 ctr=t20-lat-ctr-3
+B start_to_die_ms=4248 ctr=t20-lat-ctr-3
+B create_to_running_ms=151 ctr=t20-lat-ctr-4
+B create_to_healthy_ms=1177 ctr=t20-lat-ctr-4
+B run_to_die_ms=4394 ctr=t20-lat-ctr-4
+B start_to_die_ms=4243 ctr=t20-lat-ctr-4
+B create_to_running_ms=139 ctr=t20-lat-ctr-5
+B create_to_healthy_ms=1166 ctr=t20-lat-ctr-5
+B run_to_die_ms=4381 ctr=t20-lat-ctr-5
+B start_to_die_ms=4242 ctr=t20-lat-ctr-5
+B create_to_running_ms=144 ctr=t20-lat-ctr-6
+B create_to_healthy_ms=1170 ctr=t20-lat-ctr-6
+B run_to_die_ms=4392 ctr=t20-lat-ctr-6
+B start_to_die_ms=4248 ctr=t20-lat-ctr-6
+B create_to_running_ms=150 ctr=t20-lat-ctr-7
+B create_to_healthy_ms=1177 ctr=t20-lat-ctr-7
+B run_to_die_ms=4388 ctr=t20-lat-ctr-7
+B start_to_die_ms=4237 ctr=t20-lat-ctr-7
+B create_to_running_ms=145 ctr=t20-lat-ctr-10
+B create_to_healthy_ms=1174 ctr=t20-lat-ctr-10
+B run_to_die_ms=4399 ctr=t20-lat-ctr-10
+B start_to_die_ms=4253 ctr=t20-lat-ctr-10
+B create_to_running_ms=189 ctr=t20-lat-ctr-8
+B create_to_healthy_ms=1215 ctr=t20-lat-ctr-8
+B run_to_die_ms=4416 ctr=t20-lat-ctr-8
+B start_to_die_ms=4227 ctr=t20-lat-ctr-8
+B create_to_running_ms=151 ctr=t20-lat-ctr-11
+B create_to_healthy_ms=1176 ctr=t20-lat-ctr-11
+B run_to_die_ms=4411 ctr=t20-lat-ctr-11
+B start_to_die_ms=4260 ctr=t20-lat-ctr-11
+B create_to_running_ms=140 ctr=t20-lat-ctr-9
+B create_to_healthy_ms=1165 ctr=t20-lat-ctr-9
+B run_to_die_ms=4364 ctr=t20-lat-ctr-9
+B start_to_die_ms=4224 ctr=t20-lat-ctr-9
+B create_to_running_ms=154 ctr=t20-lat-ctr-20
+B create_to_healthy_ms=1181 ctr=t20-lat-ctr-20
+B run_to_die_ms=4380 ctr=t20-lat-ctr-20
+B start_to_die_ms=4225 ctr=t20-lat-ctr-20
+B create_to_running_ms=140 ctr=t20-lat-ctr-12
+B create_to_healthy_ms=1166 ctr=t20-lat-ctr-12
+B run_to_die_ms=4372 ctr=t20-lat-ctr-12
+B start_to_die_ms=4232 ctr=t20-lat-ctr-12
+B create_to_running_ms=145 ctr=t20-lat-ctr-21
+B create_to_healthy_ms=1172 ctr=t20-lat-ctr-21
+B run_to_die_ms=4401 ctr=t20-lat-ctr-21
+B start_to_die_ms=4255 ctr=t20-lat-ctr-21
+B create_to_running_ms=132 ctr=t20-lat-ctr-13
+B create_to_healthy_ms=1158 ctr=t20-lat-ctr-13
+B run_to_die_ms=4374 ctr=t20-lat-ctr-13
+B start_to_die_ms=4241 ctr=t20-lat-ctr-13
+B create_to_running_ms=140 ctr=t20-lat-ctr-30
+B create_to_healthy_ms=1173 ctr=t20-lat-ctr-30
+B run_to_die_ms=4410 ctr=t20-lat-ctr-30
+B start_to_die_ms=4270 ctr=t20-lat-ctr-30
+B create_to_running_ms=155 ctr=t20-lat-ctr-22
+B create_to_healthy_ms=1181 ctr=t20-lat-ctr-22
+B run_to_die_ms=4380 ctr=t20-lat-ctr-22
+B start_to_die_ms=4225 ctr=t20-lat-ctr-22
+B create_to_running_ms=146 ctr=t20-lat-ctr-14
+B create_to_healthy_ms=1171 ctr=t20-lat-ctr-14
+B run_to_die_ms=4394 ctr=t20-lat-ctr-14
+B start_to_die_ms=4248 ctr=t20-lat-ctr-14
+B create_to_running_ms=159 ctr=t20-lat-ctr-23
+B create_to_healthy_ms=1186 ctr=t20-lat-ctr-23
+B run_to_die_ms=4415 ctr=t20-lat-ctr-23
+B start_to_die_ms=4255 ctr=t20-lat-ctr-23
+B create_to_running_ms=151 ctr=t20-lat-ctr-15
+B create_to_healthy_ms=1178 ctr=t20-lat-ctr-15
+B run_to_die_ms=4361 ctr=t20-lat-ctr-15
+B start_to_die_ms=4210 ctr=t20-lat-ctr-15
+B create_to_running_ms=128 ctr=t20-lat-ctr-24
+B create_to_healthy_ms=1154 ctr=t20-lat-ctr-24
+B run_to_die_ms=4379 ctr=t20-lat-ctr-24
+B start_to_die_ms=4251 ctr=t20-lat-ctr-24
+B create_to_running_ms=160 ctr=t20-lat-ctr-16
+B create_to_healthy_ms=1186 ctr=t20-lat-ctr-16
+B run_to_die_ms=4389 ctr=t20-lat-ctr-16
+B start_to_die_ms=4229 ctr=t20-lat-ctr-16
+B create_to_running_ms=134 ctr=t20-lat-ctr-25
+B create_to_healthy_ms=1159 ctr=t20-lat-ctr-25
+B run_to_die_ms=4375 ctr=t20-lat-ctr-25
+B start_to_die_ms=4241 ctr=t20-lat-ctr-25
+B create_to_running_ms=145 ctr=t20-lat-ctr-17
+B create_to_healthy_ms=1171 ctr=t20-lat-ctr-17
+B run_to_die_ms=4379 ctr=t20-lat-ctr-17
+B start_to_die_ms=4234 ctr=t20-lat-ctr-17
+B create_to_running_ms=156 ctr=t20-lat-ctr-26
+B create_to_healthy_ms=1188 ctr=t20-lat-ctr-26
+B run_to_die_ms=4390 ctr=t20-lat-ctr-26
+B start_to_die_ms=4233 ctr=t20-lat-ctr-26
+B create_to_running_ms=138 ctr=t20-lat-ctr-18
+B create_to_healthy_ms=1165 ctr=t20-lat-ctr-18
+B run_to_die_ms=4381 ctr=t20-lat-ctr-18
+B start_to_die_ms=4243 ctr=t20-lat-ctr-18
+B create_to_running_ms=144 ctr=t20-lat-ctr-27
+B create_to_healthy_ms=1171 ctr=t20-lat-ctr-27
+B run_to_die_ms=4404 ctr=t20-lat-ctr-27
+B start_to_die_ms=4259 ctr=t20-lat-ctr-27
+B create_to_running_ms=150 ctr=t20-lat-ctr-19
+B create_to_healthy_ms=1177 ctr=t20-lat-ctr-19
+B run_to_die_ms=4406 ctr=t20-lat-ctr-19
+B start_to_die_ms=4256 ctr=t20-lat-ctr-19
+B create_to_running_ms=136 ctr=t20-lat-ctr-28
+B create_to_healthy_ms=1163 ctr=t20-lat-ctr-28
+B run_to_die_ms=4410 ctr=t20-lat-ctr-28
+B start_to_die_ms=4273 ctr=t20-lat-ctr-28
+B create_to_running_ms=140 ctr=t20-lat-ctr-29
+B create_to_healthy_ms=1166 ctr=t20-lat-ctr-29
+B run_to_die_ms=4383 ctr=t20-lat-ctr-29
+B start_to_die_ms=4243 ctr=t20-lat-ctr-29
+INNER_DONE

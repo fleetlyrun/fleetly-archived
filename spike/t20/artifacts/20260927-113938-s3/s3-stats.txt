@@ -1,0 +1,10 @@
+# Spike ③ 生命周期时延分布（ms；min/p50/p90/max；来源 s3-metrics.txt）
+A create_to_running_ms n=30 min=389 p50=406 p90=420 max=445
+A create_to_healthy_ms n=30 min=1417 p50=1431 p90=1447 max=1471
+A update_to_running_ms n=30 min=11617 p50=11698 p90=11721 max=11752
+A update_to_healthy_ms n=30 min=12643 p50=12725 p90=12747 max=12778
+A rm_to_destroy_ms n=30 min=11712 p50=11747 p90=11789 max=11808
+A rm_to_die_ms n=30 min=11261 p50=11311 p90=11325 max=11339
+B create_to_running_ms n=30 min=131 p50=143 p90=158 max=169
+B create_to_healthy_ms n=30 min=1158 p50=1169 p90=1185 max=1194
+B start_to_die_ms n=30 min=11221 p50=12245 p90=12267 max=12282

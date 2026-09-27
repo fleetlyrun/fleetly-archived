@@ -1,0 +1,16 @@
+name: ord2
+# Spike ④ 场景 2：一个健康服务 + 一个永久失败服务（exit 1 重启循环）。
+# 用于观测：健康门/看门狗对失败服务的判定、部署失败形态与首发 scale=0。
+services:
+  good:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    command: ["sh", "-c", "touch /tmp/ready; sleep 600"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/ready"]
+      interval: 1s
+      timeout: 1s
+      retries: 100
+      start_period: 0s
+  bad:
+    image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+    command: ["sh", "-c", "echo bad-start; exit 1"]

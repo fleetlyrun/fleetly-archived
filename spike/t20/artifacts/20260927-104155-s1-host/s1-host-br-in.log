@@ -1,0 +1,24 @@
+079392cf663beff3a8e5c01ef117b4f6dbb650f7c7ca16822c82266c4e93f8f4
+36eedd25908317931033beb0ac8045cb3b06b93b2df4c38558ce804feb179079
+545aae99ffa31f019c50e3f8fcb3000a04ff3a490bf575d7cf40c1a7518dc6f2
+PROBE_BEGIN host=545aae99ffa3
+ROUTE_TABLE=000014AC->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=172.20.0.2
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=fail
+DNS_PUBLIC_OUT=Server:		127.0.0.11
+TCP_PUBLIC_80=fail
+TCP_PUBLIC_80_OUT=
+TCP_PUBLIC_53=fail
+TCP_PUBLIC_53_OUT=
+HTTP_PUBLIC=fail
+HTTP_PUBLIC_OUT=wget: can't connect to remote host (1.1.1.1): Network unreachable
+PROBE_END
+--- probe container inspect (network attrs) ---
+{"t20-s1-br-in":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"079392cf663beff3a8e5c01ef117b4f6dbb650f7c7ca16822c82266c4e93f8f4","EndpointID":"cfd41d3d6ff8c34583c1dbe6c7da2b8a299b3aca46afea8267cbf1e61e3380a7","Gateway":"","IPAddress":"172.20.0.3","MacAddress":"32:1c:7d:78:4c:cb","IPPrefixLen":16,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["t20-s1-br-in-probe","545aae99ffa3"]}}
+--- peer log tail ---

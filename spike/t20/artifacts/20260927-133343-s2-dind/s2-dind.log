@@ -1,0 +1,97 @@
+[
+    {
+        "Id": "sha256:71cc3b294a7d5cab671380adce59be59f7f45683feafc524b5f017f2b7fa0376",
+        "RepoTags": [
+            "httpd:2.4-alpine"
+        ],
+        "RepoDigests": [
+            "httpd@sha256:4e585da9d0125dec36d4500a9f5c5df7b2c0a01f67cb47865a91a4b05bdbec1b"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-09-17T21:17:01.091081141Z",
+        "Config": {
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Env": [
+                "PATH=/usr/local/apache2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "HTTPD_PREFIX=/usr/local/apache2",
+                "HTTPD_VERSION=2.4.68",
+                "HTTPD_SHA256=68c74d4df38c26bed4dfbdb8f3baf1eb532f3872357becc1bba5d136f6b63c06",
+                "HTTPD_PATCHES="
+            ],
+            "Cmd": [
+                "httpd-foreground"
+            ],
+            "WorkingDir": "/usr/local/apache2",
+            "StopSignal": "SIGWINCH"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 66916561,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/e0db1aba37d5efb82f00d02dd300c9a65011daab64b46a64b7572bb9f9a4d428/diff:/var/lib/docker/overlay2/aa17513851b0d0ba53d25859246828ea99423fd8738fdc147b379a52f6877dee/diff:/var/lib/docker/overlay2/42f112f9b70e040eedd54effd25e037f41e47c07ab16a263455651f618384a34/diff:/var/lib/docker/overlay2/307ef21006d133e8761b78be7b22bfc38003bff4b784cb432cb9a189fd3c2cc9/diff:/var/lib/docker/overlay2/68ce6de5f29a545022b4d573c810aca705e5b58af2fdf034cde1288c06d11878/diff:/var/lib/docker/overlay2/3f8dc5029dc38231a1484e6288d163bd186b8929cb509aa2b9eee3acccd7941b/diff",
+                "MergedDir": "/var/lib/docker/overlay2/a4bf650f3c36efba0227901168213a6691e352b4d3f5f480deecc558454a05c1/merged",
+                "UpperDir": "/var/lib/docker/overlay2/a4bf650f3c36efba0227901168213a6691e352b4d3f5f480deecc558454a05c1/diff",
+                "WorkDir": "/var/lib/docker/overlay2/a4bf650f3c36efba0227901168213a6691e352b4d3f5f480deecc558454a05c1/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:74d97c428c51a828f9051a7a40a53ff1fc99e54fc30323ce36760701b0b7f711",
+                "sha256:f79b5baf6a48727e4c9d1f3f922e2d3ed789f773f6271442086d68ea40452d9d",
+                "sha256:44924764e12f2ef77e1a2d81c7ab5cf3a2d3dce72b8d9c03347db7166fc2757e",
+                "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+                "sha256:f9949461a4720dbd911afa518139dd956c924e842cd6db7a5f527e91b590264c",
+                "sha256:32f3f6d536c9e0bd2aae472296255031b27bcbdcddee5dc51d1c08d60e3ca64e",
+                "sha256:b52f9f54718550328e820f4144e0f3e90020792ffa8f5d20f15971a0635e6089"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
+81aca2afa700b17798836a23396a0ab8044349cff1626b940db48a43b6cbe6a8
+Swarm initialized: current node (ocn21sgp49q3lhqop5yyeev1p) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-1v4p3cmeoe2vvlmgqa9ogtoa23jel7bvendbldi2h5sjp4bewy-7fozwjs5a8gzlcsivv8mtwt95 10.240.0.10:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+This node joined a swarm as a worker.
+nfwzw50sh81r41vyyu2x5cro6
+t20-pub
+docker.io/library/alpine:3.20
+
+WARNING! Your credentials are stored unencrypted in '/root/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+Login Succeeded
+sha256:748a232582da09832dfe3d52c3a7cc5ac83919891cb2e7bcaaed7c5d908d58bd
+The push refers to repository [10.240.0.50:5000/t20/private]
+25f1d6b1951a: Pushed
+1: digest: sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e size: 1023
+
+ Info -> Not all multiplatform-content is present and only the available single-platform image was pushed
+         sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc -> sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+The push refers to repository [10.240.0.50:5000/t20/private]
+25f1d6b1951a: Layer already exists
+0664bc68b379: Pushed
+44136fa355b3: Pushed
+2: digest: sha256:748a232582da09832dfe3d52c3a7cc5ac83919891cb2e7bcaaed7c5d908d58bd size: 855
+txq9kww41wc7vlezjgoh9raha
+image 10.240.0.50:5000/t20/private:1 could not be accessed on a registry to record
+its digest. Each node will access 10.240.0.50:5000/t20/private:1 independently,
+possibly leading to different nodes running different
+versions of the image.
+
+t20-noauth
+vxjceyn633riunx5ccox2tiq7
+t20-auth
+t20-auth

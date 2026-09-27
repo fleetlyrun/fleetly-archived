@@ -1,0 +1,46 @@
+=== S4.0 depends_on validate (current stance) ===
+validate-rc=1
+=== S4.1 ord1: dependency chain (parallel create + self-heal) ===
+ord1 deploy-rc=0 rc-wall-s=27
+ord1 deployment: {
+  "app": "ord1",
+  "app_state": "running",
+  "deployments": [
+    {
+      "id": "01M3HGZRN23HJCY1Z6WCM1AS1B",
+      "app": "ord1",
+      "kind": "deploy",
+      "status": "succeeded",
+      "revision_id": "01M3HH0J34PJ0P1QHCSZVZPGNE",
+      "first_healthy_at": "2026-09-27T13:31:24Z",
+      "created_at": "2026-09-27T13:31:04Z",
+      "updated_at": "2026-09-27T13:31:30Z"
+    }
+  ]
+}
+ord1 service ps base:
+ord1 service ps mid:
+ord1 service ps leaf:
+=== S4.2 ord2: permanently failing service (restart loop) ===
+ord2 deploy-rc=1 rc-wall-s=14
+ord2 deployment: {
+  "app": "ord2",
+  "app_state": "degraded",
+  "deployments": [
+    {
+      "id": "01M3HH0P98N6RXPZ3YPDTT64JJ",
+      "app": "ord2",
+      "kind": "deploy",
+      "status": "failed",
+      "first_healthy_at": "2026-09-27T13:31:42Z",
+      "verdict": "unstable",
+      "error_code": "E_OBSERVE_UNHEALTHY",
+      "created_at": "2026-09-27T13:31:34Z",
+      "updated_at": "2026-09-27T13:31:48Z"
+    }
+  ]
+}
+ord2 service ls:
+ord2 bad service ps (restart loop):
+=== S4.3 event digest (deployment.*) ===
+INNER_DONE

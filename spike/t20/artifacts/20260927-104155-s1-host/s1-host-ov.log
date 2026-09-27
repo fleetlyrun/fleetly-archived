@@ -1,0 +1,20 @@
+zezm0qe0ppa38n51585iodcg3
+7979525d55427c32d65135d14aec9cd2fdb91747ef7003c4f5624b181be92ac5
+1ce6a21a55280b3af2d33e1fe74dd167cc7fb5c621580ee0ffedb2a09f27f709
+PROBE_BEGIN host=1ce6a21a5528
+ROUTE_TABLE=00000000->0110A8C0,0001000A->00000000,0010A8C0->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,eth1,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=10.0.1.2
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=ok
+TCP_PUBLIC_80=ok
+TCP_PUBLIC_53=ok
+HTTP_PUBLIC=ok
+PROBE_END
+--- probe container inspect (network attrs) ---
+{"t20-s1-ov":{"IPAMConfig":{"IPv4Address":"10.0.1.4"},"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"zezm0qe0ppa38n51585iodcg3","EndpointID":"5b20f34d539fe7367c692559c42408d481c3f82152e0319fb993a2e87e996bf9","Gateway":"","IPAddress":"10.0.1.4","MacAddress":"02:42:0a:00:01:04","IPPrefixLen":24,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["t20-s1-ov-probe","1ce6a21a5528"]}}
+--- peer log tail ---

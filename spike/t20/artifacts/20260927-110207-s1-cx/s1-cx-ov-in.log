@@ -1,0 +1,89 @@
+plp4f3fgydo25sv6m27tkc9sz
+Unable to find image 'alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc' locally
+docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc: Pulling from library/alpine
+25f1d6b1951a: Pulling fs layer
+25f1d6b1951a: Download complete
+25f1d6b1951a: Pull complete
+3a030ca3f633: Download complete
+d4050d56ebf2: Download complete
+Digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+Status: Downloaded newer image for alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+09ee79c5c4c5a4b1a5a7c19cb926a38028501ad93086b657cce8e94316d31f04
+Unable to find image 'alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc' locally
+docker.io/library/alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc: Pulling from library/alpine
+25f1d6b1951a: Pulling fs layer
+3a030ca3f633: Download complete
+d4050d56ebf2: Download complete
+25f1d6b1951a: Download complete
+25f1d6b1951a: Pull complete
+Digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+Status: Downloaded newer image for alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+59b6708c5c14390ce592288ca5006bcc7fb21ee96990cecc5a299e016b9d96d6
+--- L1 mgr -> w1 ---
+PROBE_BEGIN host=09ee79c5c4c5
+ROUTE_TABLE=0001000A->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=10.0.1.4
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=fail
+DNS_PUBLIC_OUT=Server:		127.0.0.11
+TCP_PUBLIC_80=fail
+TCP_PUBLIC_80_OUT=
+TCP_PUBLIC_53=fail
+TCP_PUBLIC_53_OUT=
+HTTP_PUBLIC=fail
+HTTP_PUBLIC_OUT=wget: can't connect to remote host (1.1.1.1): Network unreachable
+PROBE_END
+--- L1 w1 -> mgr ---
+PROBE_BEGIN host=59b6708c5c14
+ROUTE_TABLE=0001000A->00000000
+NAMESERVERS=127.0.0.11
+INTERFACES=eth0,lo
+DNS_PEER=ok
+DNS_PEER_ADDR=10.0.1.2
+PING_PEER=ok
+PING_PEER_SUMMARY=2 packets transmitted, 2 packets received, 0% packet loss
+TCP_PEER=ok
+DNS_PUBLIC=fail
+DNS_PUBLIC_OUT=Server:		127.0.0.11
+TCP_PUBLIC_80=fail
+TCP_PUBLIC_80_OUT=
+TCP_PUBLIC_53=fail
+TCP_PUBLIC_53_OUT=
+HTTP_PUBLIC=fail
+HTTP_PUBLIC_OUT=wget: can't connect to remote host (1.1.1.1): Network unreachable
+PROBE_END
+o2chrnejf47oxbrgehw9ykoir
+--- L2 service ps ---
+ID                          NAME                                         IMAGE                                                                                 NODE      DESIRED STATE   CURRENT STATE           ERROR     PORTS
+4o0z17g0h8zkn7fv6lr18mcl3   t20-cx-ov-in-svc.ctrobwamnotan10r10kpon6f3   alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc   mgr       Running         Running 6 seconds ago             
+25b8a9cxt0lo9qvcxkre9ajll   t20-cx-ov-in-svc.pjv0h0v3kmn48opdud4itk611   alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc   w1        Running         Running 6 seconds ago             
+--- L2 service logs (aggregated by manager) ---
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_PROBE_BEGIN host=09293958bbd0 my_ip=10.0.1.7
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | ROUTE_TABLE=0001000A->00000000
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | INTERFACES=eth0,lo
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_TASKS_DNS=ok
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_PING_1=10.0.1.7 ok
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_PING_2=10.0.1.8 ok
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_TASK_ADDRESSES=2 (ping-ok=2)
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | DNS_PUBLIC=fail
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | DNS_PUBLIC_OUT=Server:		127.0.0.11
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | TCP_PUBLIC_80=fail
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | TCP_PUBLIC_80_OUT=
+t20-cx-ov-in-svc.0.4o0z17g0h8zk@mgr    | SVC_PROBE_END
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_PROBE_BEGIN host=40efaeae1fea my_ip=10.0.1.8
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | ROUTE_TABLE=0001000A->00000000
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | INTERFACES=eth0,lo
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_TASKS_DNS=ok
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_PING_1=10.0.1.7 ok
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_PING_2=10.0.1.8 ok
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_TASK_ADDRESSES=2 (ping-ok=2)
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | DNS_PUBLIC=fail
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | DNS_PUBLIC_OUT=Server:		127.0.0.11
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | TCP_PUBLIC_80=fail
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | TCP_PUBLIC_80_OUT=
+t20-cx-ov-in-svc.0.25b8a9cxt0lo@w1    | SVC_PROBE_END

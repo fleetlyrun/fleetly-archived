@@ -1,0 +1,8 @@
+deployment 01M3HH0P98N6RXPZ3YPDTT64JJ failed  error=E_OBSERVE_UNHEALTHY
+warning [W_DEPLOY_NO_HEALTHCHECK] bad: service bad declares no healthcheck: health_gate=none (the health gate degrades to exit/replica-count checks, so failures surface later)
+deployment 01M3HH0P98N6RXPZ3YPDTT64JJ
+  app: ord2 (degraded)
+  status: failed
+  error: E_OBSERVE_UNHEALTHY
+  verdict: unstable
+deployment 01M3HH0P98N6RXPZ3YPDTT64JJ failed: E_OBSERVE_UNHEALTHY ()
