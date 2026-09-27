@@ -94,8 +94,31 @@ func (s ServiceSpec) DesiredHash() string {
 // NetworkAttach 是一次服务网络接入。
 type NetworkAttach struct {
 	Name string `json:"name"`
-	// Aliases 是网络内别名（= compose 服务名，app 内短名互访）。
+	// Aliases 是网络内别名（= compose 服务名，app 内短名互访；项目网恒
+	// <app>-<service>——OT-1 别名隔离，见 naming.ProjectNetworkAlias）。
 	Aliases []string `json:"aliases,omitempty"`
+}
+
+// NetworkState 是一次网络对象实况投影（IMPL-T15-1 项目网对账/GC 的读面；
+// ServiceState 同纪律：第三方类型不出适配器）。
+type NetworkState struct {
+	Name string
+	// ID 是底座对象 ID（诊断面）。
+	ID string
+	// Labels 是网络对象 label 集（对账归因面：managed=true 平台网 +
+	// fleetly.project-network=<projectID> 项目网归属锚）。
+	Labels map[string]string
+	// Driver 是网络驱动（overlay/bridge/...；只读披露）。
+	Driver string
+	// Containers 是当前挂接的容器数（GC 安全性判据：零端点才回收；daemon
+	// 对 in-use 网络的移除另有 FailedPrecondition 拒绝兜底——真机实证）。
+	Containers int
+	// Services 是引用该网络的 Swarm 服务数（network inspect 的 Services
+	// 字段）。GC 安全性判据与 Containers 同款（零引用零端点才回收）；真机
+	// 实测注记（Docker 29.7.2）：受管 overlay 上该字段未填充（恒 0），
+	// 实际兜底 = Containers 计数 + daemon in-use 拒绝（FailedPrecondition
+	// 原样上抛、下拍重试）——零引用语义不因此失效（见 runbook 实测块）。
+	Services int
 }
 
 // MountSpec 是一次命名卷挂载。
@@ -272,6 +295,26 @@ var (
 	// ErrNotSwarmReady 表示引擎未启用 Swarm（或本机非 active manager）。
 	ErrNotSwarmReady = errors.New("docker engine is not an active swarm manager")
 )
+
+// NetworkSubstrate 是底座网络对象面端口（IMPL-T15-1 项目网生命周期 + 对账
+// 扩面；实现 = substrate.Client）。**独立小端口**（不并入 Substrate：既有
+// 端口只承担服务/任务面与 app 网 NetworkEnsure，测试替身零波及——仓库
+// 「新能力 = 新端口 + With 注入」惯例，SecretEnsurer/ConfigEnsurer 同款）。
+type NetworkSubstrate interface {
+	// NetworkEnsureWithLabels 幂等确保网络存在（缺失创建；自描述 label
+	// 随创建写入——项目网 = managed + fleetly.project-network=<projectID>）。
+	NetworkEnsureWithLabels(ctx context.Context, name string, labels map[string]string) error
+	// NetworkList 按 label 选择器（key=value）返回网络投影。
+	NetworkList(ctx context.Context, labels map[string]string) ([]NetworkState, error)
+	// NetworkInspect 按名取网络投影；缺失返回 ErrNetworkNotFound。
+	NetworkInspect(ctx context.Context, name string) (NetworkState, error)
+	// NetworkRemove 删除网络（幂等：缺失视为成功；in-use 由底座拒绝——
+	// 调用方 best-effort 消化，下一拍重试）。
+	NetworkRemove(ctx context.Context, name string) error
+}
+
+// ErrNetworkNotFound 表示目标网络不存在（端口哨兵，适配器归一）。
+var ErrNetworkNotFound = errors.New("substrate network not found")
 
 // 镜像可见性端口（复用 build 层端口形态；适配器同源）。
 type ImageChecker interface {

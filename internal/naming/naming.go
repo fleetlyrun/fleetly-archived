@@ -36,11 +36,23 @@ import (
 //	               ID 前 8）
 //	网络名         fleetly-<team>-<prj>-<app>-net （每 app 专属 overlay；
 //	               文档未钉字符串，保守补全，见包内注释与遗留记录）
+//	项目网名       fleetly-project-<projectID>      （OT-1 共享作用域 overlay；
+//	               项目平台 ID 全量——ULID 前 8 只承载 40 位时间戳成分，
+//	               256ms 窗口内创建的项目撞名（本票测试实证），截断即
+//	               有「网络静默合并」风险；Crockford 字符集与三段 slug
+//	               网络名结构不相交）
+//	项目网别名     <app>-<service>                 （仅项目网；短名别名
+//	               <service> 仅在 app 专属网——OT-1 别名隔离）
 //	日志流标签 app 值  <team>/<prj>/<app>（三段限定形，QualifiedName）
 const (
 	// namePrefix 是全部平台对象名的公共前缀（防集群全局命名空间撞名）。
 	namePrefix = "fleetly-"
 )
+
+// PlatformPrefix 是平台对象名公共前缀的导出形态（`fleetly-`）——命名空间
+// 判据的唯一来源（对账/清扫面以「managed label + 前缀」双条件圈定平台对象；
+// engine 等包不复制字面量）。
+const PlatformPrefix = namePrefix
 
 // QualifiedName 返回 app/库实例的三段限定形 `<team>/<prj>/<name>`（D-W0-9
 // 引用解析口径；'/' 不是命名成分合法字符，结构性与 '-' 拼接歧义互斥）。
@@ -177,12 +189,78 @@ func NetworkName(team, prj, app string) (string, error) {
 
 // NetworkAlias 返回服务在 app 网络内的别名 = compose 服务名（app 内短名
 // 互访与 compose 语义一致；跨 app 不可见——隔离由每 app 专属网络保证）。
-// v0.3 不变（别名是 compose 语义面，不进平台命名空间）。
+// v0.3 不变（别名是 compose 语义面，不进平台命名空间）。**仅 app 专属网**
+// 使用；项目网别名恒为 ProjectNetworkAlias（<app>-<service>）。
 func NetworkAlias(service string) (string, error) {
 	if err := validateComponent("service", service); err != nil {
 		return "", err
 	}
 	return service, nil
+}
+
+// projectNetworkPrefix 是项目网（OT-1 共享作用域 overlay）名固定前缀
+// `fleetly-project-`。完整名 = 前缀 + **项目平台 ID 全量**（ULID 26 位
+// Crockford 大写字母+数字）——不截断：ULID 前 8 位只承载 40 位时间戳成分
+// （256ms 窗口内创建的项目会撞名，本票测试实证两个夹具项目撞名），截断即
+// 存在「第二个项目的项目网静默并入第一个项目网络」的合并风险；全量 ID
+// 结构性唯一（项目行主键），且与三段 slug 网络名 `fleetly-<team>-<prj>-<app>-net`
+// 结构不相交（后者含小写字母与 '-'，Crockford 字符集不含 '-'）。
+// 该前缀族同时是识别面（IsProjectNetworkName），与 app 网/库网/组件网互不
+// 误伤；网络名不是 DNS 名，42 字符长度无解析面约束。
+const projectNetworkPrefix = namePrefix + "project-"
+
+// ProjectNetworkName 返回项目网 overlay 名 `fleetly-project-<projectID>`
+// （OT-1：Project = 网络共享作用域资源，平台建、成员服务双挂；ID 全量不
+// 截断——唯一性由项目主键承载，见前缀常量注）。
+func ProjectNetworkName(projectID string) (string, error) {
+	if err := validateProjectID(projectID); err != nil {
+		return "", err
+	}
+	return projectNetworkPrefix + projectID, nil
+}
+
+// validateProjectID 校验项目 ID 形态（26 位 ULID Crockford 大写字母+数字；
+// 截断/非法字符显式拒绝——命名对象的唯一性以 ID 全量为前提，形态违约必须
+// 在入口暴露而非产生一个看似合法却不再唯一的网络名）。
+func validateProjectID(id string) error {
+	if id == "" {
+		return fmt.Errorf("naming: project id is empty")
+	}
+	if len(id) != 26 {
+		return fmt.Errorf("naming: project id %q must be a 26-char ULID", id)
+	}
+	for _, r := range id {
+		isCrockford := (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z')
+		if !isCrockford {
+			return fmt.Errorf("naming: project id %q contains character %q outside the Crockford alphabet", id, r)
+		}
+	}
+	return nil
+}
+
+// IsProjectNetworkName 报告网络名是否为项目网（前缀 + 全量项目 ID
+// Crockford 尾段；前缀族识别谓词，naming.IsCronJobName 同款纪律）。
+func IsProjectNetworkName(name string) bool {
+	rest, ok := strings.CutPrefix(name, projectNetworkPrefix)
+	if !ok || rest == "" {
+		return false
+	}
+	return validateProjectID(rest) == nil
+}
+
+// ProjectNetworkAlias 返回服务在项目网内的别名 `<app>-<service>`
+// （OT-1 蓝图原条款：项目网别名 = app-service 拼接；**短名 <service> 只在
+// app 专属网**——DNS 解析域 = 容器所属网络，项目网内不存在短名记录，
+// 跨 app 短名混流在结构上不可能）。app 名 project 内唯一 + 成员双挂使该
+// 别名在项目网内唯一（同项目同名 app 非法——UNIQUE(project_id,name)）。
+func ProjectNetworkAlias(app, service string) (string, error) {
+	if err := validateComponent("app", app); err != nil {
+		return "", err
+	}
+	if err := validateComponent("service", service); err != nil {
+		return "", err
+	}
+	return app + "-" + service, nil
 }
 
 // cronJobNamePrefix 是一次性 cron job 服务名的固定前缀（E5 Cron）：完整名
@@ -456,6 +534,12 @@ func Hash8(content string) string {
 // cadvisor/node-exporter 等）：审计证明其服务/网络/路由三面均撞不上
 // （固定名无后缀段、固定网络名带 -net/-system 尾且无同形公式产物、固定
 // 服务名不进动态配置键空间）——保留字最小化，不预防性扩列。
+//
+// project（OT-1 项目网前缀族 `fleetly-project-<projectID>`，IMPL-T15-1）：team
+// slug=project 时 app 网名为 `fleetly-project-<prj>-<app>-net`（小写 + '-'），
+// 项目网名为前缀 + 26 位 Crockford（全量项目 ID，大写字母+数字）——两族
+// 结构不相交，无需保留（naming_test.TestProjectNetworkNameCannotCollideWithAppNetwork
+// 钉死）。
 var reservedTeamSlugReasons = map[string]string{
 	"cron":         "IsCronJobName prefix family (the cron orphan sweep would delete the team's long-running services as transient jobs)",
 	"init":         "IsInitJobName prefix family (reconcile-deletion and drift-extra exemptions would silently spare the team's long-running services, and the init orphan sweep would delete their in-flight tasks)",

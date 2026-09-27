@@ -6,5 +6,6 @@
   "created_at": "<rfc3339>",
   "updated_at": "<rfc3339>",
   "team_slug": "<team-slug>",
-  "project_slug": "<project-slug>"
+  "project_slug": "<project-slug>",
+  "project_id": "<ulid>"
 }

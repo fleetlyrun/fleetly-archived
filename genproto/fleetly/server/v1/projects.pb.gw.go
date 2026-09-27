@@ -449,6 +449,84 @@ func local_request_ProjectsService_MoveDatabase_0(ctx context.Context, marshaler
 	return msg, metadata, err
 }
 
+func request_ProjectsService_AttachAppProjectNetwork_0(ctx context.Context, marshaler runtime.Marshaler, client ProjectsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq AttachAppProjectNetworkRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["app"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app")
+	}
+	protoReq.App, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app", err)
+	}
+	msg, err := client.AttachAppProjectNetwork(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ProjectsService_AttachAppProjectNetwork_0(ctx context.Context, marshaler runtime.Marshaler, server ProjectsServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq AttachAppProjectNetworkRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["app"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app")
+	}
+	protoReq.App, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app", err)
+	}
+	msg, err := server.AttachAppProjectNetwork(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_ProjectsService_DetachAppProjectNetwork_0(ctx context.Context, marshaler runtime.Marshaler, client ProjectsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DetachAppProjectNetworkRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	val, ok := pathParams["app"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app")
+	}
+	protoReq.App, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app", err)
+	}
+	msg, err := client.DetachAppProjectNetwork(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ProjectsService_DetachAppProjectNetwork_0(ctx context.Context, marshaler runtime.Marshaler, server ProjectsServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DetachAppProjectNetworkRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["app"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "app")
+	}
+	protoReq.App, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "app", err)
+	}
+	msg, err := server.DetachAppProjectNetwork(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 // RegisterProjectsServiceHandlerServer registers the http handlers for service ProjectsService to "mux".
 // UnaryRPC     :call ProjectsServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -654,6 +732,46 @@ func RegisterProjectsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			return
 		}
 		forward_ProjectsService_MoveDatabase_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ProjectsService_AttachAppProjectNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/fleetly.server.v1.ProjectsService/AttachAppProjectNetwork", runtime.WithHTTPPathPattern("/v1/apps/{app}/project-network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ProjectsService_AttachAppProjectNetwork_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ProjectsService_AttachAppProjectNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_ProjectsService_DetachAppProjectNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/fleetly.server.v1.ProjectsService/DetachAppProjectNetwork", runtime.WithHTTPPathPattern("/v1/apps/{app}/project-network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ProjectsService_DetachAppProjectNetwork_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ProjectsService_DetachAppProjectNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -865,31 +983,69 @@ func RegisterProjectsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		}
 		forward_ProjectsService_MoveDatabase_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_ProjectsService_AttachAppProjectNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/fleetly.server.v1.ProjectsService/AttachAppProjectNetwork", runtime.WithHTTPPathPattern("/v1/apps/{app}/project-network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ProjectsService_AttachAppProjectNetwork_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ProjectsService_AttachAppProjectNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodDelete, pattern_ProjectsService_DetachAppProjectNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/fleetly.server.v1.ProjectsService/DetachAppProjectNetwork", runtime.WithHTTPPathPattern("/v1/apps/{app}/project-network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ProjectsService_DetachAppProjectNetwork_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ProjectsService_DetachAppProjectNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
 var (
-	pattern_ProjectsService_CreateProject_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
-	pattern_ProjectsService_ListProjects_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
-	pattern_ProjectsService_GetProject_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
-	pattern_ProjectsService_UpdateProject_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
-	pattern_ProjectsService_DeleteProject_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
-	pattern_ProjectsService_ListProjectMembers_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "members"}, ""))
-	pattern_ProjectsService_SetProjectMemberRole_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "members"}, "set-role"))
-	pattern_ProjectsService_RemoveProjectMember_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "members", "user_id"}, ""))
-	pattern_ProjectsService_MoveApp_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "to_project_id"}, "move-app"))
-	pattern_ProjectsService_MoveDatabase_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "to_project_id"}, "move-database"))
+	pattern_ProjectsService_CreateProject_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
+	pattern_ProjectsService_ListProjects_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "projects"}, ""))
+	pattern_ProjectsService_GetProject_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
+	pattern_ProjectsService_UpdateProject_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
+	pattern_ProjectsService_DeleteProject_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "id"}, ""))
+	pattern_ProjectsService_ListProjectMembers_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "members"}, ""))
+	pattern_ProjectsService_SetProjectMemberRole_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "projects", "project_id", "members"}, "set-role"))
+	pattern_ProjectsService_RemoveProjectMember_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "projects", "project_id", "members", "user_id"}, ""))
+	pattern_ProjectsService_MoveApp_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "to_project_id"}, "move-app"))
+	pattern_ProjectsService_MoveDatabase_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "projects", "to_project_id"}, "move-database"))
+	pattern_ProjectsService_AttachAppProjectNetwork_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "apps", "app", "project-network"}, ""))
+	pattern_ProjectsService_DetachAppProjectNetwork_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "apps", "app", "project-network"}, ""))
 )
 
 var (
-	forward_ProjectsService_CreateProject_0        = runtime.ForwardResponseMessage
-	forward_ProjectsService_ListProjects_0         = runtime.ForwardResponseMessage
-	forward_ProjectsService_GetProject_0           = runtime.ForwardResponseMessage
-	forward_ProjectsService_UpdateProject_0        = runtime.ForwardResponseMessage
-	forward_ProjectsService_DeleteProject_0        = runtime.ForwardResponseMessage
-	forward_ProjectsService_ListProjectMembers_0   = runtime.ForwardResponseMessage
-	forward_ProjectsService_SetProjectMemberRole_0 = runtime.ForwardResponseMessage
-	forward_ProjectsService_RemoveProjectMember_0  = runtime.ForwardResponseMessage
-	forward_ProjectsService_MoveApp_0              = runtime.ForwardResponseMessage
-	forward_ProjectsService_MoveDatabase_0         = runtime.ForwardResponseMessage
+	forward_ProjectsService_CreateProject_0           = runtime.ForwardResponseMessage
+	forward_ProjectsService_ListProjects_0            = runtime.ForwardResponseMessage
+	forward_ProjectsService_GetProject_0              = runtime.ForwardResponseMessage
+	forward_ProjectsService_UpdateProject_0           = runtime.ForwardResponseMessage
+	forward_ProjectsService_DeleteProject_0           = runtime.ForwardResponseMessage
+	forward_ProjectsService_ListProjectMembers_0      = runtime.ForwardResponseMessage
+	forward_ProjectsService_SetProjectMemberRole_0    = runtime.ForwardResponseMessage
+	forward_ProjectsService_RemoveProjectMember_0     = runtime.ForwardResponseMessage
+	forward_ProjectsService_MoveApp_0                 = runtime.ForwardResponseMessage
+	forward_ProjectsService_MoveDatabase_0            = runtime.ForwardResponseMessage
+	forward_ProjectsService_AttachAppProjectNetwork_0 = runtime.ForwardResponseMessage
+	forward_ProjectsService_DetachAppProjectNetwork_0 = runtime.ForwardResponseMessage
 )

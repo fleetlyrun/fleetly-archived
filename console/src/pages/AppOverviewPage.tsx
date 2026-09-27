@@ -19,6 +19,7 @@ import { errorEnvelopeFrom } from "@/api/errors";
 import { timeAgo } from "@/lib/utils";
 import { AppDriftCard } from "@/components/app-drift-card";
 import { AppMetricsCard } from "@/components/app-metrics-card";
+import { AppProjectNetworkCard } from "@/components/app-project-network-card";
 import { AppScalingCard } from "@/components/app-scaling-card";
 import { CronSection } from "@/components/cron-section";
 import { DegradedExplanationCardLive } from "@/components/degraded-explanation-card";
@@ -247,6 +248,10 @@ export function AppOverviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 项目网卡（IMPL-T15-1/OT-1）：归属项目 + 参与状态 + attach/detach
+          （admin 角色；平台管理员只读说明）——紧随 Application 卡。 */}
+      {app ? <AppProjectNetworkCard app={app} /> : null}
 
       <Card>
         <CardHeader className="flex-row items-center gap-2 space-y-0 border-b pb-3">

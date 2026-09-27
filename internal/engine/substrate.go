@@ -49,15 +49,19 @@ const substrateReconInterval = 30 * time.Second
 // 闸；生产由 tick 周期驱动）。
 func (e *Engine) SubstrateRecon(ctx context.Context) { e.substrateRecon(ctx, true) }
 
-// substrateRecon 是 tick 的存在性对账 duty（T0-V2.2/R2）。频控：非 force
-// 形态受 substrateNextAt 时间闸（tick goroutine 专用字段，与
-// deleteScanNextAt 同模式；重启即清零 = 重启后立即扫一拍）。
+// substrateRecon 是 tick 的存在性对账 duty（T0-V2.2/R2）。IMPL-T15-1 起
+// 含 networks 面（reconNetworks——孤儿网/缺失项目网披露；票面 DT-5 对账
+// 兜底守卫）。频控：非 force 形态受 substrateNextAt 时间闸（tick goroutine
+// 专用字段，与 deleteScanNextAt 同模式；重启即清零 = 重启后立即扫一拍）。
 func (e *Engine) substrateRecon(ctx context.Context, force bool) {
 	now := e.now()
 	if !force && now.Before(e.substrateNextAt) {
 		return
 	}
 	e.substrateNextAt = now.Add(substrateReconInterval)
+	// networks 面先行（读面披露——与 services 面共享同一频控闸；读错各自
+	// 独立消化，互不阻塞）。
+	e.reconNetworks(ctx)
 	apps, err := e.store.ListActiveApps(ctx)
 	if err != nil {
 		e.log.Warn("engine: substrate recon list apps", "error", err)

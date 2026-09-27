@@ -434,6 +434,17 @@
         },
         "project_slug": {
           "type": "string"
+        },
+        "project_id": {
+          "type": "string",
+          "title": "归属项目平台 ID（IMPL-T15-1：项目详情链接与项目网操作的目标锚；\n管理面用 ID，免疫跨团队同名项目歧义）。"
+        },
+        "project_network_attached": {
+          "type": "boolean",
+          "title": "项目网参与状态（IMPL-T15-1/OT-1 显式 opt-in）：attached=true 时\nproject_network = 项目网 overlay 名（`fleetly-project-\u003cproject_id\u003e`），\n成员服务在 app 私网之外双挂该网（项目网别名 `\u003capp\u003e-\u003cservice\u003e`）；\n缺省 false = 不参加（既有 app 私网隔离现状）。"
+        },
+        "project_network": {
+          "type": "string"
         }
       }
     },
@@ -577,6 +588,16 @@
           "title": "归属 slug（AppView 同款；详情头与列表行的限定形展示同源）。"
         },
         "project_slug": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string",
+          "title": "归属项目平台 ID 与项目网参与投影（IMPL-T15-1；AppView 同款字段，\n详情页的项目网卡数据源）。"
+        },
+        "project_network_attached": {
+          "type": "boolean"
+        },
+        "project_network": {
           "type": "string"
         },
         "placement": {

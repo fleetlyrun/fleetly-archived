@@ -93,10 +93,19 @@ type AppView struct {
 	UpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// 归属 slug（v0.3 W2-S3 归属模型；Console 限定形展示与团队级收窄过滤
 	// 的数据源——此前无归属投影，同名 app 在列表面不可分）。
-	TeamSlug      string `protobuf:"bytes,7,opt,name=team_slug,json=teamSlug,proto3" json:"team_slug,omitempty"`
-	ProjectSlug   string `protobuf:"bytes,8,opt,name=project_slug,json=projectSlug,proto3" json:"project_slug,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	TeamSlug    string `protobuf:"bytes,7,opt,name=team_slug,json=teamSlug,proto3" json:"team_slug,omitempty"`
+	ProjectSlug string `protobuf:"bytes,8,opt,name=project_slug,json=projectSlug,proto3" json:"project_slug,omitempty"`
+	// 归属项目平台 ID（IMPL-T15-1：项目详情链接与项目网操作的目标锚；
+	// 管理面用 ID，免疫跨团队同名项目歧义）。
+	ProjectId string `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// 项目网参与状态（IMPL-T15-1/OT-1 显式 opt-in）：attached=true 时
+	// project_network = 项目网 overlay 名（`fleetly-project-<project_id>`），
+	// 成员服务在 app 私网之外双挂该网（项目网别名 `<app>-<service>`）；
+	// 缺省 false = 不参加（既有 app 私网隔离现状）。
+	ProjectNetworkAttached bool   `protobuf:"varint,10,opt,name=project_network_attached,json=projectNetworkAttached,proto3" json:"project_network_attached,omitempty"`
+	ProjectNetwork         string `protobuf:"bytes,11,opt,name=project_network,json=projectNetwork,proto3" json:"project_network,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *AppView) Reset() {
@@ -181,6 +190,27 @@ func (x *AppView) GetTeamSlug() string {
 func (x *AppView) GetProjectSlug() string {
 	if x != nil {
 		return x.ProjectSlug
+	}
+	return ""
+}
+
+func (x *AppView) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *AppView) GetProjectNetworkAttached() bool {
+	if x != nil {
+		return x.ProjectNetworkAttached
+	}
+	return false
+}
+
+func (x *AppView) GetProjectNetwork() string {
+	if x != nil {
+		return x.ProjectNetwork
 	}
 	return ""
 }
@@ -285,6 +315,11 @@ type GetAppResponse struct {
 	// 归属 slug（AppView 同款；详情头与列表行的限定形展示同源）。
 	TeamSlug    string `protobuf:"bytes,9,opt,name=team_slug,json=teamSlug,proto3" json:"team_slug,omitempty"`
 	ProjectSlug string `protobuf:"bytes,10,opt,name=project_slug,json=projectSlug,proto3" json:"project_slug,omitempty"`
+	// 归属项目平台 ID 与项目网参与投影（IMPL-T15-1；AppView 同款字段，
+	// 详情页的项目网卡数据源）。
+	ProjectId              string `protobuf:"bytes,11,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProjectNetworkAttached bool   `protobuf:"varint,12,opt,name=project_network_attached,json=projectNetworkAttached,proto3" json:"project_network_attached,omitempty"`
+	ProjectNetwork         string `protobuf:"bytes,13,opt,name=project_network,json=projectNetwork,proto3" json:"project_network,omitempty"`
 	// 放置绑定（未绑定时不输出——EmitUnpopulated=false 语义下 message 零值
 	// 字段不渲染，读面缺省即「无绑定」）。
 	Placement *PlacementView `protobuf:"bytes,7,opt,name=placement,proto3" json:"placement,omitempty"`
@@ -376,6 +411,27 @@ func (x *GetAppResponse) GetTeamSlug() string {
 func (x *GetAppResponse) GetProjectSlug() string {
 	if x != nil {
 		return x.ProjectSlug
+	}
+	return ""
+}
+
+func (x *GetAppResponse) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GetAppResponse) GetProjectNetworkAttached() bool {
+	if x != nil {
+		return x.ProjectNetworkAttached
+	}
+	return false
+}
+
+func (x *GetAppResponse) GetProjectNetwork() string {
+	if x != nil {
+		return x.ProjectNetwork
 	}
 	return ""
 }
@@ -1314,7 +1370,7 @@ const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"\x0fListAppsRequest\x12 \n" +
 	"\x05limit\x18\x01 \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xe8\a(\x00R\x05limit\x12!\n" +
-	"\aproject\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18AR\aproject\"\xa6\x02\n" +
+	"\aproject\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18AR\aproject\"\xa8\x03\n" +
 	"\aAppView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -1325,11 +1381,16 @@ const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1b\n" +
 	"\tteam_slug\x18\a \x01(\tR\bteamSlug\x12!\n" +
-	"\fproject_slug\x18\b \x01(\tR\vprojectSlug\"B\n" +
+	"\fproject_slug\x18\b \x01(\tR\vprojectSlug\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\t \x01(\tR\tprojectId\x128\n" +
+	"\x18project_network_attached\x18\n" +
+	" \x01(\bR\x16projectNetworkAttached\x12'\n" +
+	"\x0fproject_network\x18\v \x01(\tR\x0eprojectNetwork\"B\n" +
 	"\x10ListAppsResponse\x12.\n" +
 	"\x04apps\x18\x01 \x03(\v2\x1a.fleetly.server.v1.AppViewR\x04apps\",\n" +
 	"\rGetAppRequest\x12\x1b\n" +
-	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04name\"\xbf\x03\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04name\"\xc1\x04\n" +
 	"\x0eGetAppResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -1341,7 +1402,11 @@ const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1b\n" +
 	"\tteam_slug\x18\t \x01(\tR\bteamSlug\x12!\n" +
 	"\fproject_slug\x18\n" +
-	" \x01(\tR\vprojectSlug\x12>\n" +
+	" \x01(\tR\vprojectSlug\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\v \x01(\tR\tprojectId\x128\n" +
+	"\x18project_network_attached\x18\f \x01(\bR\x16projectNetworkAttached\x12'\n" +
+	"\x0fproject_network\x18\r \x01(\tR\x0eprojectNetwork\x12>\n" +
 	"\tplacement\x18\a \x01(\v2 .fleetly.server.v1.PlacementViewR\tplacement\x12P\n" +
 	"\x12recent_deployments\x18\b \x03(\v2!.fleetly.server.v1.DeploymentViewR\x11recentDeployments\"/\n" +
 	"\x10DeleteAppRequest\x12\x1b\n" +

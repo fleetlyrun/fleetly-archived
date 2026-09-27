@@ -586,3 +586,212 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构结果；
 - init job 挂 config 的真机端到端（`migrate` 类服务挂 bootstrap SQL；本票以假底座断言同源投影，真机归 T2-4 割接前的 compose 验证）。
 - Console AppConfigsPage 真机走查（列表/新建/明文查看/删除；staging 窗口）。
 - 与 IMPL-T1-5（messageloop：`mlbridge.yaml` → Config）与 IMPL-T2-4（torchwood：`config.yaml`×3 + `bootstrap-roles.sql` → Config）的 compose 改写联动（按标准 `configs:` 形态）。
+
+### IMPL-T15-1 方案可行性审查（2026-09-26/27，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 参与模型按「归属（tenancy）与网络参与两面分离、网络参与 = 显式 attach/detach opt-in、缺省不参加」落（与 OT-1 原文与 RBAC §12 挂账行逐字一致，反证搜索见下）；票面「proto projects CRUD / state projects 表 / app.project_id / project 非空禁删」经核实**大部分已由 RBAC W0（W2-S1/S3）落地**，本票真正的新增面收敛为「项目网生命周期 + 成员服务双挂投影 + attach/detach + recon networks 扩面 + Console 最小面 + CLI」（差集表见下）。
+
+#### A. 票内「现状锚点」逐条取证
+
+- `internal/naming/naming.go`：`NetworkName` = `fleetly-<team>-<prj>-<app>-net`（:165-176，三段公式）✓；`NetworkAlias` = compose 服务名仅 app 网（:181-186）✓；用户自报 aliases 拒绝 = `internal/compose/validate.go:864-887`（`validateServiceNetworksDict`：每网络配置非空即拒，文案「service aliases are managed by the platform from compose service names」）✓；包注公式表在 :27-39（无项目网行——本票扩行）。
+- `internal/engine/substrate.go`：`substrateRecon` duty（:52-94）30s 频控（`substrateReconInterval` :46）、services-only（候选 = `ListActiveApps` 派生态 running/degraded；逐服务 `ServiceInspect`）、missing/drained 进程内记忆与派生态修正模式 ✓；测试骨架 `internal/engine/substrate_test.go`（缺失/在岗/瞬态错误/时间闸/drain 五族）✓。
+- `internal/engine/planner.go:294-305`（networks 装配点：app 网 + rustfs + 库网三源）✓ 现行 294-305；`buildServiceSpec` :234-340。
+- `internal/engine/ports.go`：`NetworkAttach`（:94-99，Name+Aliases）✓；`Substrate` 端口 :248-267（NetworkEnsure/Service*/TaskList）。
+- `internal/substrate/services.go`：`buildSwarmSpec`（:166-298）投影 `swarm.NetworkAttachmentConfig{Target, Aliases}`（:224-231）✓；`NetworkEnsure`（:129-157）恒带 `fleetly.managed=true`（:141-143）。
+- 附加现状（票面未列、实现必需）：`NetworkList/NetworkInspect/NetworkRemove` 在 substrate 端口**不存在**——moby client v0.6 具备 API（`client/network_list.go`、`network_remove.go`，`network.Summary` 含 Name/Labels/Containers）；`ingress/traefik.go` 与 `database/docker.go` 各有自己的 NetworkRemove/NetworkID 实现（不复用）。网络对象 label 下发能力：`NetworkCreate` 已带 Labels（substrate/database/rustfs/ingress 四处同款）✓。
+
+#### B. 票面 vs 现状差集表（W0 既有 vs 本票新增）
+
+| 票面改动点 | 现状核验 | 判定 |
+|---|---|---|
+| proto projects CRUD | `projects.proto` 已有 Create/List/Get/Update/Delete + 成员三 RPC + MoveApp/MoveDatabase（:42-106） | **已存在**（本票零改动该面） |
+| state projects 表 + app.project_id | 00018 建表/加列 + 00019 收紧 NOT NULL + `UNIQUE(project_id,name)`（apps_new :27-47） | **已存在** |
+| project 非空禁删（空才可删） | `state/projects.go:299-349` `DeleteProject` 存活资源计数拒（`ErrProjectNotEmpty`）+ api 409 映射（projects.go:84-85/223-238） | **已存在**（本票只加网络面交叉测试，不改语义） |
+| team/project label 集 | `state/labels.go:20-25` `fleetly.team`/`fleetly.project`；`naming/labels.go` 服务建立即写 | **已存在** |
+| Console 项目页 | `ProjectsPage.tsx` / `ProjectDetailPage.tsx` 已有一级页 + 详情（成员/应用/库卡） | **已存在**（本票加网络卡/列） |
+| 项目网 overlay 生命周期 | 无任何项目网概念（`fleetly-project-` 前缀不存在） | **新增** |
+| 成员服务双挂 + 项目网别名 | 单挂 app 网（planner :299） | **新增** |
+| attach/detach RPC + state 参与位 | 无 | **新增** |
+| state 参与成员资格/审计/迁移 | 无 | **新增**（app 列 + 审计 + 事件 + 00025） |
+| recon networks 扩面 | services-only | **新增** |
+| 项目网 GC（成员清空/项目删除） | 无 | **新增**（独立 duty：空网 + 零端点才回收） |
+| CLI projects | `cmd/fleetly/cmd` 无 projects 命令（`newProjectsCmd` 不存在）；SDK 无 `Projects()` 访问器 | **新增**（最小集 attach/detach/show） |
+
+#### C. 参与模型裁决（按证据）
+
+票面/设计原文链条：OT-1「**app ∈ 恰一 project（可选，缺省不参加任何项目网，维持 app 私网隔离现状）**」（设计档 :51）；RBAC §12「同项目 app 互访的**显式 opt-in**（项目网络形态，需求出现再启）」（rbac-teams :265）；票面「proto（projects CRUD + **attach/detach**）」「detach 走服务滚动」。现状证据亦一致：`apps.project_id` NOT NULL 是唯一项目归属（00019），网络投影唯一入口是 planner 的 app 网单挂。
+
+**裁决：归属与网络参与两面分离。**
+- 归属（tenancy）= `apps.project_id`（恒有，RBAC W0 已落地）；
+- 网络参与 = 新 app 级布尔位（迁移 00025 `apps.project_network_attached`，**加法默认 0**）——语义 = 「本 app 的成员服务在该 app 当前项目网内可互访」，**唯一改变路径 = 显式 attach/detach RPC**；缺省不参加 ⇒ 既有 app 行为零变化（投影仅在位时追加一段网络）。
+- attach 生效 = 项目网幂等 ensure（带自描述 label）+ 入队「参与变更重部署」（沿 MoveApp 换名重部署先例：正常发布管线产出新 revision/快照，服务滚动由 applyDesired 的 ServiceUpdate 承载，不新造绕过发布链路的直改 spec 通路）；detach 生效 = 摘网随下一次重部署的 task template 变更滚动。
+- 反证搜索（「某个守卫只能由缺省自动双挂满足？」）：①跨 app DNS 守卫（exec 内 `ping <app>-<service>`）在显式 attach 下同样成立（测试按 attach 后断言）；④别名隔离与该模型同构；DT-5 的 task-group 网是 T2-1 另网，不依赖缺省双挂；T1-5/T2-4 割接票（mlbridge 内网切法）显式声明为项目内网别名消费方，未预设缺省。**未发现反证，按默认读法实现。**
+
+**MoveApp 交叉语义裁决**：参与位是 **app 级**属性，MoveApp 改派**保留**该位；项目网投影随 app 的**当前**项目推导——新 revision 的成员服务双挂新项目的项目网（`fleetly-project-<newProjectID>`），旧项目网在失去最后一名成员后由 GC duty 回收（零端点判据）。理由：参与位表达的是「本 app 愿意与所在项目同伴共享网络」这一意图，归属变更不改变该意图；改派已强制换名重部署（全量重投影），旧网不留悬挂（GC 拍内回收）。测试钉死（`TestMoveAppPreservesProjectNetworkParticipation`）。
+
+#### D. 必查项取证
+
+**1. service update 增/摘网络的滚动语义（本地 Docker 29.7.2 / swarm active，一手探针 2026-09-27）**：
+
+原始观测（`docker service create/update`，`docker service ps` 逐次快照）：
+- 基线服务（alpine sleep 600，挂 net-a）：任务 `91ozad8g0m2z Running`。
+- `--network-add net-b`（CLI 缺省 stop-first）→ **任务整体替换**：新任务 `npp4kbg244h0 Running`，旧任务 `91ozad8g0m2z Shutdown/Shutdown`（停旧起新，无并存）。
+- 单独改写 `--update-order start-first`（非 task template 变更）→ **零任务替换**（同任务 `npp4kbg244h0` 持续 Running）——与 Spike B2「label/非模板字段不触发重建」口径一致。
+- start-first 下 `--network-add net-c` → **新旧并存滚动窗口**：新任务 `7j1nujuzhseu Running/DesiredState=Running` 与旧任务 `npp4kbg244h0 Running/DesiredState=Shutdown` 并存（随后旧任务下线）。
+- `--network-rm net-b` → 同款任务替换（`wuznaa35wekk` 新、`7j1nujuzhseu` 转 Shutdown），网络集合 = {net-a, net-c} 读回正确。
+- 平台侧结论：**网络集合是 task template 的一部分，增/摘网必然触发任务重建**；平台缺省更新序 start-first（planner `composeOrder`）⇒ 滚动窗口有新旧并存、不中断；有卷/global 服务强制 stop-first ⇒ 有停机窗口。Console/runbook 按此诚实标注。
+- 附带 GC 安全性实证：`docker network rm net-c`（仍被服务引用）→ daemon 拒绝：`FailedPrecondition: network <id> is in use by service <id>`——**in-use 移除由底座兜底拒绝**（GC 即使判据竞态也不会拆掉在役网络），零端点判据 + 拒绝兜底双层安全。
+
+（探针复跑面：本票落 `internal/substrate/projectnetwork_manual_test.go`，`FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/substrate -run TestManualProjectNetwork -v`，见实施记录。）
+
+**2. 别名 `<app>-<service>` 与 naming 契约评审（不混流论证）**：
+- DNS 解析域 = 容器所属网络（swarm 内嵌 DNS 按 netns 网络逐个解析）——短名别名 `<service>` 只写在 app 私网（`naming.NetworkAlias` = compose 服务名，planner 只为 app 网写），项目网只写 `<app>-<service>`（新公式）；跨 app 容器不在对方 app 私网内 ⇒ 短名必然解析不到，混流需要「同名短名与服务落在同一网络」这一结构条件，平台投影不存在该形态。
+- 用户自报 aliases 在校验层拒绝（A 项证据）⇒ 不存在用户制造的第三形态别名。
+- 命名扩展方式：新公式行进 `naming.go` 包注公式表（与 ConfigName 行同格）+ 表驱动测试（`ProjectNetworkName` / `ProjectNetworkAlias` 参数校验与逐字公式）；**不改**任何既有公式（票面「不改命名公式主体」）。
+- 撞键审计：项目网名 `fleetly-project-<projectID>`（项目平台 ULID **全量**——**实现期修正**：票面建议的「id8 = 前 8」在测试中即实证撞名（ULID 前 8 只承载 40 位时间戳成分，256ms 窗口内创建的两个夹具项目前 8 位相同）；截断还会把「第二个项目的项目网 ensure」静默并入第一个网络（NetworkEnsure 已存在即成功）——网络静默合并是安全级缺陷，故取全量 ID：结构性唯一（主键）、给 42 字符网络名无解析面约束）vs app 网 `fleetly-<team>-<prj>-<app>-net`（三段 slug + app 名全部 `[a-z0-9._-]`，含小写与 '-'）——即便 team slug = `project`（合法单词制），候选串 `fleetly-project-<prj>-<app>-net` 含 `-` 与小写字符，**结构上不可能**等于 `fleetly-project-` + 纯 Crockford 尾段（'-' 不在 Crockford 字符集）；service/secret/config/volume 与网络分别是底座不同命名空间，且公式不同。测试 `TestProjectNetworkNameCannotCollideWithAppNetwork` 钉死（含 team=project 形态 + 同窗口双 ID 反证）。
+
+**3. 项目网命名与前缀族全局撞键审计**（`fleetly-` 前缀族全列）：
+| 前缀/固定名 | 对象 | 与 `fleetly-project-<projectID>` 关系 |
+|---|---|---|
+| `fleetly-<team>-<prj>-<app>-net` | app 网 | 结构不相交（见上） |
+| `fleetly-db-<team>-<prj>-<name>-net` | 库网 | 前缀不同段（`db-`），不相交 |
+| `fleetly-cron-…` / `fleetly-init-…` / `fleetly-dbjob-…` | 一次性 job 服务 | 服务命名空间，不同对象类 |
+| `fleetly-rustfs-net` | 组件网（固定名） | 不同串；入 recon 期望白名单（组件 duty 生命周期） |
+| `fleetly-system` | 组件网（ingress registry 固定名） | 同上 |
+| `fleetly-victorialogs`/`fleetly-victoriametrics`/`fleetly-cadvisor`/`fleetly-node-exporter`/`fleetly-vmalert`/`fleetly-exec`/`fleetly-ingress`/`fleetly-registry`/`fleetly-buildkit` 等 | 服务/卷/容器名 | 服务与容器命名空间，不同对象类；`fleetly-rustfs-net` 唯一平台网络固定名已列 |
+| 保留 team slug 清单（cron/init/db/dbjob/rustfs/registry/acme/metrics/victorialogs） | team slug 守则 | **`project` 不入保留清单**：`fleetly-project-…` 与上表全串不相交，且无团队 slug 顶到 `fleetly-<team>-…` 首段时会撞项目网名（结构性证明同上）；project slug 居第二段不邻前缀族（rbac-teams §4.3 原判维持） |
+- **孤儿网识别用自描述 label**：新 label `fleetly.project-network=<projectID>`（网络对象；值取项目 ULID——slug 是 team 内局部量，ID 全局唯一）；识别面 = `managed=true` + `fleetly-` 前缀 + **期望集差**（期望集由 state 推导：active/deleting app 网、非 deleted 库网、成员项目网、组件固定名白名单），不靠前缀猜测（前缀族太多，票面要求）；带项目网 label 的漏网对象走 GC 分支（零端点才回收），不带 label 的无法归因孤儿只披露不删。
+
+**对账两方向与「派生修正」的最终定义**（票面授权裁决项）：
+- **state→swarm（应存在而缺失的项目网）**：`substrateRecon` networks 面同周期**暴露**（`network.missing` 事件 + 审计，按网络名节流）**且**项目网 duty 幂等重 ensure（`NetworkEnsureWithLabels`）——「派生修正」= **恢复平台自建、归属明确的对象**（平台是项目网的所有者，重建不涉他人物件；与 services 面「重建是部署链路职责」的差别在于网络没有发布链路归属）。事件先于修正可观察（tick 序：substrateRecon → reconcileProjectNetworks），披露不因自愈而消失。
+- **swarm→state（state 外 `fleetly-` 前缀平台网）**：`network.orphaned` 事件 + 审计（节流），**不静默删**（无法归因 ⇒ 可能伤及他人物件；清理归人工/后续票）。**唯一例外** = 带 `fleetly.project-network` label 且**无成员 + 零端点**的项目网：它是归属明确的本平台对象（成员清空后的回收残留），由项目网 duty 回收（零端点判据 + 底座 in-use 拒绝兜底双层安全）。
+- 「派生修正」不含视图字段改写（网络无派生态行），落地形态 = 事件 + 审计 + 上述幂等动作。
+
+**4. staging UDP 未放行期 placement 同节点指引落文档**：
+- 证据：`docs/design/2026-09-20-multi-node.md:66-67`（7946/tcp+udp gossip、4789/udp VXLAN 双向放行表）+ `docs/runbooks/vps-dogfooding.md:136`（W3-F2 真机实测：node2 跨节点 DNS NXDOMAIN/VIP 不可达、tcpdump 0 包、TCP 7946/22 全通 ⇒ VPC/云防火墙滤 UDP；跨节点 overlay 数据面整体不通）。
+- 落点：`docs/runbooks/project-networks.md`（新）——UDP 未放行期的**同节点 placement 指引**（走平台既有放置机制：compose `deploy.placement.constraints` 的 `node.labels.fleetly.*` 命名空间 + 绑定钉住，**不新造机制**，操作方式按 `internal/placement` 与 runbook 现状写准确）+ attach/detach 滚动语义诚实标注 + 本地/单节点可用性说明（Docker Desktop/单节点 overlay 数据面不走 VXLAN 跨宿主，功能可验）+ 跨节点验收前置（UDP 放行后复验）。
+
+#### E. 审查新增的交互面（实现必须接线/落回归）
+
+1. **desired-hash 与快照**：项目网进 `ServiceSpec.Networks` ⇒ 进 `DesiredHash`（`ports.go:88-92` 全字段 canonical JSON）与快照/漂移投影（`driftProjection` 网络按别名集合，:129-136）——attach/detach 必须走重部署产出新 revision，才有哈希一致（绕过发布链路直改 spec 会与快照比对成漂移，故不取）。
+2. **applyDesired 网络前置**（engine.go:911-924）：已对期望 spec 引用的全部网络做 `NetworkEnsure` 幂等确认 ⇒ 项目网在成员部署时自动确保（现有循环天然覆盖，无需新增写通路）。
+3. **in-flight 部署拒绝**：attach/detach 触发重部署复用「最近 succeeded 部署」的 compose/spec_hash（`EnqueueMoveRedeploy` 同源原语）——若目标 app 有非终态部署，重部署会以**旧**快照覆盖在途发布，必须 409 拒绝（ConvergeApp 先例「wait for it to reach a terminal state」）。机具令牌/角色门与错误码沿既有（复用 `E_STATE_VERSION_CONFLICT` 409 语义，不新造码）。
+4. **app 删除**：tombstone 第二拍清参与位（`MarkAppDeleted` 同步清 0——删后不参加任何项目网，防成员计数悬挂）；项目网随成员清空由 GC 回收。
+5. **MoveApp 摘旧网**：`MoveApp` 编排的 `DetachAppNetwork`（ingress）只摘 app 私网，项目网不在其域；项目网由 GC 按成员计数回收（本票覆盖测试）。
+6. **recon 瞬态纪律**：networks 面读错（List/Inspect 失败）不下任何结论（不事件、不 GC、不清记忆），与 services 面逐字同款。
+7. **范围纪律**：本票不新增 `NetworkList` 到既有 `engine.Substrate` 端口（会波及全部测试替身），按仓库「新能力 = 新小端口 + With 注入」惯例新增 `NetworkSubstrate` 端口（ensureWithLabels/list/inspect/remove 四原语），runtime 装配 substrate.Client。
+8. **已知泄漏类（本票如实披露、不扩面修）**：app 删除路径不回收 app 私网（`reapDeletingApp` 只摘服务/secret/config；traefik 亦未摘挂）——recon networks 面会把 deleted app 的 `fleetly-<team>-<prj>-<app>-net` 报为孤儿（持续形态每进程只报一次）。这是**既有真实泄漏**（非本票引入），本票的机制价值正在于让它可见；回收路径（含 traefik 摘挂）挂账后续票。
+
+结论：全部锚点成立；参与模型无阻塞矛盾；进入实现。实现中的决策与偏离记入实施记录。
+
+### IMPL-T15-1 实施记录（2026-09-26/27，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 五条守卫 + 新增交叉语义逐条回归全绿；审查期/实施期的本地真机探针（Docker 29.7.2 / swarm active / 单节点）与全部静态门禁证据见下。
+
+变更文件清单（每文件一句）：
+
+- `internal/state/migrations/00025_project_network_membership.sql`（新）：`apps.project_network_attached` 加法列（默认 0）+ 扫描索引；Down 演练；迁移 golden 显式再生成。
+- `internal/state/projectnetworks.go`（新）：参与位置位/清位幂等原语（审计 `app.project_network_attached`/`_detached` + 事件 `project.network_changed` 同事务 Outbox）+ 成员计数批量读面（`ProjectNetworkMemberCounts`/`ProjectNetworkMembers`，单分组查询免 N+1）。
+- `internal/state/projectnetworks_test.go`（新）：置位生命周期（幂等零重复披露）、成员计数口径（deleting/deleted 不计）、项目删除非空守卫交叉、迁移 00025 Up/Down 演练。
+- `internal/state/apps.go`：`App.ProjectNetworkAttached` 投影（appScanCols/scanApp）+ `MarkAppDeleted` tombstone 第二拍清参与位（无悬挂成员）；顺带 gofmt 归一一行既有注释。
+- `internal/state/labels.go`：`LabelProjectNetwork`（`fleetly.project-network`，网络对象自描述归属锚；值 = 项目 ID）。
+- `internal/state/testdata/migrations.golden`：00025 行显式再生成。
+- `internal/naming/naming.go`：`ProjectNetworkName`（`fleetly-project-<projectID>` **全量 ID**，含 `IsProjectNetworkName` 识别谓词）/`ProjectNetworkAlias`（`<app>-<service>`）/`PlatformPrefix` 导出；包注公式表与保留字审计注释扩行。
+- `internal/naming/naming_test.go`：表驱动公式行（项目网名/别名）、撞键审计（team=project 最凶形态 + 同 256ms 窗口双 ID 反证）、别名隔离契约、保留 slug 负路径扩 `project`。
+- `internal/engine/ports.go`：`NetworkState` 实况投影（Labels/Driver/Containers/Services）+ `NetworkSubstrate` 独立端口（ensureWithLabels/list/inspect/remove）+ `ErrNetworkNotFound` 哨兵。
+- `internal/engine/planner.go`：`PlanInput.ProjectNetwork` 与 `buildServiceSpec` 项目网双挂投影（别名 = `<app>-<service>`；投影进 desired-hash/快照 ⇒ attach/detach 由重部署滚动收敛）。
+- `internal/engine/engine.go`：`netSub`/`platformNetworks` 字段与 `WithNetworkSubstrate`/`WithPlatformNetworks` 注入；tick 增 `reconcileProjectNetworks` duty；planAndRelease 传项目网投影（命名违约显式失败）。
+- `internal/engine/projectnetwork.go`（新）：`EnsureProjectNetwork`（attach 前置幂等 ensure）/`EnqueueNetworkRedeploy`（参与变更重部署）/`reconNetworks`（孤儿网/缺失项目网披露，按名节流、瞬态读错不结论）/`reconcileProjectNetworks`（缺失项目网自愈 + 零成员零端点项目网回收）/期望集推导（app 网/库网/项目网/组件白名单）。
+- `internal/engine/projectnetwork_test.go`（新）：守卫①②④的引擎级回归 + attach/detach 滚动 + GC 安全性 + 瞬态纪律 + MoveApp 交叉 + 漂移可见 + 回滚点时重放 + 删除泄漏披露（明细见对应表）。
+- `internal/engine/substrate.go`：`substrateRecon` 同拍先跑 `reconNetworks`（读面披露与 services 面共用频控闸）。
+- `internal/engine/move.go`：`EnqueueMoveRedeploy` 抽出共享核心 `enqueueRedeploy`（source/auditAction 参数化，项目网参与变更复用）；顺带 G115 钳制（`uint64(max(...))`）。
+- `internal/engine/fakes_test.go`：假底座 ServiceUpdate 的模板变更模型扩网络集合（网络变化 = 任务替换，真机同构）；`fakeNetworkSubstrate`（ensure/list/inspect/remove + 孤儿/端点注入面）。
+- `internal/engine/engine_test.go`：harness 装配假网络面 + 组件网白名单（生产装配同形）。
+- `internal/engine/safecall_test.go`：tick duty 清单增 `reconcileProjectNetworks`（源扫描一致面）。
+- `internal/substrate/networks.go`（新）：`NetworkSubstrate` 端口的 moby/client 实现（四原语 + 投影；D2 per-call 预算）。
+- `internal/substrate/projectnetwork_manual_test.go`（新，默认不跑）：本地真机探针（label 往返/别名隔离双向/增摘网滚动/order-only 零替换/in-use 拒绝/零端点回收）。
+- `internal/substrate/client_timeout_test.go`：D2 预算覆盖面扩四原语。
+- `internal/api/projectnetwork.go`（新）：`ProjectNetworkPort` 端口 + attach/detach 组合（在途 409 → attach 前置 ensure → 状态落位 → 重部署入队；幂等重跑安全）+ AppView 项目网投影 helper。
+- `internal/api/projectnetwork_test.go`（新）：全链/幂等/无部署史/在途守卫/端口未装配/404 双门矩阵/ProjectView 投影七族回归。
+- `internal/api/projects.go`：`netPort` 字段与 `WithNetworkPort`；`projectView` 增 network_name/network_members（列表单查询共享计数；G115 钳制）。
+- `internal/api/apps.go`：ListApps/GetApp 增 `project_id`/`project_network_attached`/`project_network` 三字段投影。
+- `internal/api/scope.go`：两 RPC 登记 `ScopeAdmin`（隔离面敏感写；用户 principal 另受项目角色 admin 门）。
+- `internal/apitest/apitest.go`：ProjectsService 装配确定性假编排端口（CLI 测试同路径）+ `fakeProjectNetworkPort`。
+- `internal/runtime/provides.go`：`NewProjectsService` 注入 `appNetworkPort`（engine 实现）；`NewEngine` 注入 `WithNetworkSubstrate(sc)` 与 `WithPlatformNetworks(state.RustfsNetworkName, ingress.RegistryNetworkName)`（组件网白名单装配层注入，engine 不 import ingress）。
+- `proto/fleetly/server/v1/apps.proto` + `genproto/…/apps.{pb.go,swagger.json}`：AppView/GetAppResponse 增三字段（加法、向后兼容）。
+- `proto/fleetly/server/v1/projects.proto` + `genproto/…/projects.{pb.go,pb.gw.go,grpc.pb.go,swagger.json}`：Attach/DetachAppProjectNetwork 两 RPC（`POST|DELETE /v1/apps/{app}/project-network`）+ 请求/应答/成员投影消息 + ProjectView 网络两字段。
+- `sdk/go/fleetly/client.go`：`Projects()` 访问器（CLI 消费面）。
+- `cmd/fleetly/cmd/projects.go`（新）：`fleetly projects network <attach|detach|show>`（show 支持 `--json`；滚动语义文案）。
+- `cmd/fleetly/cmd/projects_test.go`（新）+ `app.go` 注册 + `testdata/golden/apps_get.golden` 显式再生成：CLI 全链与用法错误（64）。
+- `internal/eventcode/events.go` / `eventcode_test.go` / `testdata/events.golden`：`project.network_changed` / `network.orphaned` / `network.missing` 只增登记（85→88；docEvents 与 golden 显式再生成）。
+- `console/src/api/{schema.d.ts,endpoints.ts,types.ts}`：`pnpm gen:api` 再生成（+157 行）+ attach/detach 端点封装与三类型导出。
+- `console/src/components/app-project-network-card.tsx` + `.test.tsx`（新）：App 概览项目网卡（归属项目链接 + 参与徽标 + 网络名 + attach/detach + detach 确认对话框 + 角色/平台管理员只读说明）；4 测。
+- `console/src/pages/AppOverviewPage.tsx`：接入项目网卡（Application 卡后）。
+- `console/src/pages/ProjectDetailPage.tsx` + `.test.tsx`：信息卡增项目网行（overlay 名 + 成员数）、应用表增参与徽标列；测试夹具与断言随行。
+- `docs/runbooks/project-networks.md`（新）：项目网运维手册（语义/操作/滚动语义/UDP 未放行期同节点 placement 指引/对账披露/回收/真机探针原始观测/已知边界）。
+- `docs/plan/2026-09-26-torchwood-line-impl.md`：审查小节（已前置写入）+ 本实施记录。
+
+测试清单与票面五条守卫 + 新增交叉语义逐条对应表：
+
+| 守卫/条款 | 回归测试 |
+|---|---|
+| ① 跨 app DNS（exec 内 `ping <app>-<service>` 通） | 真机探针 `TestManualProjectNetwork`（app2 → `app1-web` exit=0，10.0.1.2；反向对称通）；spec 级断言 `TestProjectNetworkAttachmentProjectsMembersServices`（双挂：app 网 + 项目网，别名逐字） |
+| ② **孤儿网注入一个对账周期内暴露**（机制验收） | `TestProjectNetworkReconDisclosesInjectedOrphanWithinOneScan`（注入 fleetly- 前缀受管网 → force recon → `network.orphaned` 事件 + `reconcile.network_orphaned` 审计各 1；组件网白名单与项目网 label 对象零误报；持续形态节流；消失清零后再注入可再报）；`TestNetworkReconSubstrateReadErrorDisclosesNothing`（list 瞬态错误零事件/零动作，恢复后照常检出） |
+| ③ project 删除非空拒绝（既有语义不回退 + 网络面交叉） | `TestProjectDeleteGuardWithAttachmentCross`（attach 不改变拒绝；tombstone 两拍后项目可删、参与位已清） |
+| ④ 短名跨 app 不混流（别名隔离断言） | spec 级：`TestProjectNetworkAttachmentProjectsMembersServices`（项目网别名恰 `[demo-web]`，app 网别名恰 `[web]`）；真机：`TestManualProjectNetwork`（`ping only1` 自 app2 失败「bad address」、反向失败）；命名契约 `TestProjectNetworkAliasIsolationContract` |
+| ⑤ naming 契约表驱动测试不破（三段公式/保留字/公式表） | `TestNamesMatchDesignDocs`（项目网/别名两新行 + 既有行零改）、`TestProjectNetworkNameCannotCollideWithAppNetwork`（team=project 最凶形态 + 同窗口双 ID 反证 + 近名负路径）、`TestReservedTeamSlugs`（`project` 不入保留清单）；OT-1「app 保持全局唯一」旧文与现行三段契约的解释见审查节与偏离 8 |
+| attach/detach 滚动语义（真机实证 + 假底座同构） | 真机 `TestManualProjectNetwork`（增/摘网任务重建、start-first 并存窗口 `running/desired=shutdown`、order-only 零替换）；引擎 `TestAttachDetachRollMemberTasks`（重部署后任务 ID 替换） |
+| 成员回收 GC（成员清空/项目删除） | `TestReconcileProjectNetworksReclaimsDetachedEmptyNetwork`（有成员保留 / 端点未排空保留 / 零成员零端点回收恰一次）；真机 in-use 拒绝 + 清场后回收成功；`TestMoveAppPreservesProjectNetworkParticipation`（改派后旧项目网回收） |
+| 缺失项目网（state→swarm）披露 + 自愈 | `TestProjectNetworkReconDisclosesMissingMemberNetwork`（一周期暴露 + 节流 + recon 不自动建 + 收敛 duty 重 ensure） |
+| MoveApp 交叉语义（参与位保留、投影随当前项目） | `TestMoveAppPreservesProjectNetworkParticipation`（新命名上下文双挂新项目网、别名不变、旧网回收） |
+| 漂移投影补网络面（外部篡改可见） | `TestDriftDetectsProjectNetworkDetach`（平台形态零漂移；外部摘网 → `networks` 字段 diff） |
+| app 删除交叉（清位 + 泄漏可见） | 清位：`TestProjectNetworkMemberCounts`（MarkAppDeleted 后 flag=0）；泄漏披露：`TestNetworkReconDisclosesDeletedAppNetworkLeak`（active 网零误报；deleted 网一事件——既有泄漏可见化，回收挂账） |
+| 回滚点时重放边界（网络面随快照） | `TestRollbackReplaysSnapshotNetworkFace`（回滚到 attach 过的 revision → 项目网重放挂回；参与位不被回滚翻转；下次发布收敛） |
+| API 面（组合/幂等/双门/守卫） | `TestProjectNetworkAttachDetachFlow`（ensure 前置 + 状态 + 审计/事件 + rolling + GetApp 投影 + 幂等重跑 + detach 对称）、`TestProjectNetworkNoRedeployHistoryIsAccepted`、`TestProjectNetworkAttachInFlightGuard`（409 + 端口零调用 + 状态零变更）、`TestProjectNetworkScopeAndRoleGates`（登记 admin；read 拒 / developer 拒 / 平台管理员拒 / 团队 owner 放行）、`TestProjectNetworkPortNotAssembledAndNotFound`（Unavailable/404）、`TestProjectNetworkProjectViewProjection`（Get/List 网络面） |
+| CLI / Console / SDK | `TestProjectsNetworkSurface`（show 缺省 detached → attach → show/--json → detach → 用法错误 64）；`app-project-network-card.test.tsx`（detached+admin attach POST / attached+admin detach 确认 DELETE / developer 角色说明 / 平台管理员只读，4 测）；`ProjectDetailPage.test.tsx`（网络行 + 应用参与徽标，既有 10 测不回退）；SDK `Projects()` 访问器随全量 sdk 测试 |
+| 迁移/事件只增纪律 | `TestAppProjectNetworkAttachedLifecycle`（审计/事件词表与幂等）、`TestProjectNetworkMembershipMigrationUpDown`（00025 Up/Down + 默认 0）、migrations.golden 显式再生成；eventcode `TestDocEventSetMatchesRegistry`/`TestGoldenSnapshot`/`TestRegistryEventsReferencedInProduction`（三新事件有生产发出来源） |
+| D2 超时闭环 | `TestNonStreamingCallDeadlineBound` 扩 `NetworkEnsureWithLabels`/`NetworkList`/`NetworkInspect`/`NetworkRemove` 四例 |
+
+一手验证证据（本会话复验）：
+
+- 全量 `go test ./... -count=1` 全绿（32 包 ok，含新测 20 个 + 改写若干）。
+- 变更包 `go test -race -count=1` 全绿：engine / api / state / substrate / naming / eventcode / cmd/fleetly/cmd / apitest / runtime。
+- `go test ./sdk/...` 绿；`go vet ./...` 净（exit 0）。
+- `golangci-lint run --new --whole-files`：新代码零新增问题；仅余两处**未触行**存量（`internal/eventcode/eventcode_test.go:14` G101（`docEvents` 声明行，改动前同位置同报）、`internal/runtime/provides.go:1005` G402（gateway 回拨 TLS 形态，T1-4 记录同源）——逐条核对 diff hunk 不在本票改动内；本票顺带修复了的 `state/apps.go` 一处既有 doc 注释 gofmt 与 `engine/move.go` 一处 G115 钳制（均触文件归一）。
+- `sh deploy/check-image-pins.sh`：`OK — 28 image reference(s) digest-pinned, 0 exempt`（本票零新增镜像引用）。
+- proto/生成物幂等：`mise run generate:proto`（buf lint + generate）二次运行前后六文件 sha256 一致；`mise run generate:wire` 零漂移（`internal/runtime/wire_gen.go` 未变）；`mise run console:gen-api` 二次运行 `schema.d.ts` 哈希一致。
+- Console 四脚本：`pnpm test` **332 全绿**（55 文件；基线 328 + 新卡 4 测 + ProjectDetail 既有 10 测扩断言）、`pnpm typecheck` / `pnpm lint` / `pnpm build` 全净。
+- **本地真机探针（一手；Docker 29.7.2 / swarm active / 单节点）**：`FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/substrate -run TestManualProjectNetwork -v`（2026-09-27，PASS，51.5s）原始观测：
+  - 项目网 ensure：`fleetly-project-01JMANUALPROJECTNET0000000`，labels `map[fleetly.managed:true fleetly.project-network:01JMANUALPROJECTNET0000000]`，driver=overlay；二次 ensure 幂等。
+  - **守卫①**：app2 → `ping app1-web` exit=0（10.0.1.2，56 bytes/0.243ms）；反向 app1 → `app2-web` 通。
+  - **守卫④**：app2 → `ping only1`（app1 私网短别名）exit=1 `ping: bad address 'only1'`；反向同。
+  - 滚动：`--network-add` 等价 update → 任务 `mz0x…` → `rfax…`（旧任务 `running/desired=shutdown`——start-first 并存窗口）；摘网 → 再滚动；order-only update → `running/desired=running`（零替换）。
+  - GC 安全：inspect 端点 `containers=4 services=0`；`NetworkRemove`（在役）被拒 `FailedPrecondition: network … is in use by service …`；服务清场 + 端点排空后移除成功。
+  - 探针期附加观测：`network inspect` 的 `Services` 字段在本机受管 overlay 上恒 0（未填充）——GC 的零引用判据实际由 Containers + daemon in-use 拒绝双层承载（runbook 与端口注释已如实标注）。
+  - 审查期已跑的同族探针（`docker server update` 增/摘网）结论与 runbook 滚动语义表一致。
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **项目网名 = 全量项目 ID（`fleetly-project-<projectID>`），非票面建议的 `<id8>`**：审查记录 D.3 原文已载「实现期修正」——测试首轮即实证两个夹具项目 ULID 前 8 位撞名（前 8 只承载 40 位时间戳成分、256ms 窗口同值），且截断会把第二个项目的项目网 ensure 静默并入第一个网络（`NetworkEnsure` 已存在即成功）= 网络静默合并的安全级缺陷。全量 ID 结构性唯一（主键）、42 字符网络名无解析面约束、grep 友好。
+2. **attach/detach 生效腿 = 发布管线重部署（非绕过发布链路直改 service spec）**：新 revision 的规划投影按当前参与位重建（快照/desired-hash/漂移三面自动一致）；直改 spec 会与快照比对成漂移且需第二写通道。语义代价如实披露：在途部署 **409 拒绝**（重部署以最近 succeeded 为基，不得覆盖在途发布）；无成功部署史 = 仅状态落位（status=attached/detached），有史 = status=rolling。
+3. **「派生修正」的定义（票面授权裁决项，审查记录已冻结）**：缺失项目网 = 披露 + 收敛 duty 幂等重 ensure（平台自建对象，恢复不涉他人物件）；无法归因孤儿 = **只披露不删**（不静默删他人物件）；唯一回收例外 = 带自描述 label 且零成员零端点的项目网（归属明确的本平台对象）。回滚的点时重放（网络面随快照）登记为已知边界（与 env 快照同心智，runbook 载明）。
+4. **项目网参与权限 = admin scope + 项目角色 admin 门**：网络姿态改变是隔离面敏感写（把成员暴露给项目内其他 app 的可达集），与 app 删除/secrets 同级；平台管理员只读不代写、机具令牌 admin 等价照旧。CLI attach/detach 因此需要 admin 层凭据（README 未列动词清单，无需连带更新）。
+5. **新独立端口 `NetworkSubstrate`**（不扩既有 `Substrate` 接口）：四原语（ensureWithLabels/list/inspect/remove）单独 With 注入，既有测试替身零波及；实现 = substrate.Client。
+6. **GC 的双层安全判据**：零成员 + 零挂接容器才收；in-use 由 daemon `FailedPrecondition` 拒绝兜底（真机实证）；`Services` 字段未填充的实测注记见证据节。
+7. **recon 披露节流与瞬态纪律**：孤儿/缺失按网络名进程内 seen 记忆（持续只报一次、恢复清零可再报、重启重报一次——substrateMissingSeen 同款）；读错（List/Inspect）不结论、不动作。
+8. **OT-1「app 保持全局唯一」旧文的口径**（票面守卫⑤要求解释）：该字样是 RBAC D-W0-4 二修前的旧文；现行契约 = 三段命名 `fleetly-<team>-<prj>-<app>-*` + app 名 **project 内唯一**（`UNIQUE(project_id,name)`）。本票**零改动**命名公式主体（新增对象族只加行），表驱动测试全量不回退。
+9. **CLI 形态**：`fleetly projects network <attach|detach|show>`（嵌套子命令组沿 alerts/notifications 惯例；attach/detach 幂等重跑安全、show 支持 `--json`）；SDK 补 `Projects()` 访问器（此前 CLI 无项目动词面）。
+10. **Console 最小面**：app 归属 + 参与状态与 attach/detach 控件收在 App 概览「Project network」卡（admin 角色；平台管理员只读说明原位渲染）；项目详情信息卡显示网络名 + 成员数、应用列增参与徽标；项目列表页不加网络列（避免列表 N+1 查询；审查记录已声明最小面取舍）。
+11. **app_get golden 显式再生成**（`project_id` 加法字段进 `--json` 输出——只增契约变更，按 CLI golden 纪律 `-update` 再生成）。
+12. **已知泄漏类如实披露不扩面修**：app 删除路径不回收 app 私网（含 Traefik 摘挂缺失）——recon 会披露（`TestNetworkReconDisclosesDeletedAppNetworkLeak` 钉住机制）；回收路径挂账后续票（审查记录 E.8 已登记）。
+13. **别名段内歧义挂账**：项目网别名 `<app>-<service>` 是跨两层拼接——同项目 app「a」+服务「b-c」与 app「a-b」+服务「c」都 attach 时别名 `a-b-c` 撞名（swarm DNS 同时返回两地址）。与 rbac-teams §4.3 记载的服务名段内歧义同族（罕见命名组合、需两个特定命名同时 attach），本票照该先例**如实记录 + admission 预检挂账**（不新造检查机制）；runbook 已知边界载明。
+
+**验收追认（2026-09-27）**：用户于提交前指示「提交，然后下一项」验收，追认七项裁决：①项目网名全量 ID 修正（票面 `<id8>` 弃用）；②网络参与 = 显式 opt-in（缺省不参加）；③attach/detach 生效腿 = 发布管线重部署（在途 409）；④参与权限 = admin scope + 项目角色 admin；⑤对账口径（孤儿只披露 / 缺失自愈 / 回收仅自描述项目网零成员零端点）；⑥app 私网泄漏披露挂账（本票只可见化）；⑦别名段内歧义挂账。T1-5/T2-4 割接票按「显式 attach 后才有项目内网可达」书写。
+
+staging/真机待执行项（本环境无 staging 访问权，未虚构结果；本票已做单节点真机探针）：
+
+- **跨节点项目网数据面**：依赖 VPC/云防火墙放行 UDP 4789/7946（W3-F2 未放行）；放行前成员服务按 runbook 钉同节点 placement。放行后复验：两节点各一成员 app，互相 `ping <app>-<service>` 通、短名不通、attach/detach 跨节点滚动。
+- 多节点 overlay 上 `network inspect` 的 `Containers`/`Services` 字段分布复核（GC 判据在多节点形态的实测）。
+- Console 网络卡 staging 走查（attach → 重部署滚动 → 徽标翻转；平台管理员/developer 只读态）。
+- 项目网 + E4 库网/rustfs 牵线多网络叠加形态的真机复核（本票单节点探针为两网叠加，库网/rustfs 组合沿既有投影测试链）。
+- attach/detach 与域名路由收敛的交互走查（网络切换期间 Traefik 路由不依赖项目网——设计上入口只挂 app 网，无需改动；staging 一次真机确认）。

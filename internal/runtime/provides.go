@@ -461,7 +461,13 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 		WithConfigReaper(sc).
 		// W5-S1 自动扩缩（D-V3W5-2）：VM 瞬时查询端口——metrics.Backend 隐式
 		// 实现 engine.MetricsQuerier（评估器的 CPU/内存采样面）。
-		WithMetricsQuerier(mb)
+		WithMetricsQuerier(mb).
+		// IMPL-T15-1（OT-1）：底座网络对象面端口（项目网 ensure/对账/GC）
+		// + recon networks 面的平台组件网白名单（组件固定名常量在此注入
+		// ——engine 不 import ingress，方向纪律；组件网生命周期归各组件
+		// duty，网络对账不判罚）。
+		WithNetworkSubstrate(sc).
+		WithPlatformNetworks(state.RustfsNetworkName, ingress.RegistryNetworkName)
 }
 
 // dbTemplatePort 是引擎对库模板连接信息面的装配层适配（engine.DatabaseTemplatePort；
@@ -922,7 +928,23 @@ func NewProjectsService(st *state.Store, eng *engine.Engine, dbm *database.Manag
 		dbMovePort{mgr: dbm},
 		ingressMovePort{mgr: ing},
 	)
+	// IMPL-T15-1 项目网参与面：ensure + 参与变更重部署（engine 实现）。
+	svc = svc.WithNetworkPort(appNetworkPort{eng: eng})
 	return svc
+}
+
+// appNetworkPort 是 api.ProjectNetworkPort 的 engine.Engine 实现（IMPL-T15-1
+// 项目网生命周期与参与变更重部署；internal/engine/projectnetwork.go）。
+type appNetworkPort struct {
+	eng *engine.Engine
+}
+
+func (p appNetworkPort) EnsureProjectNetwork(ctx context.Context, projectID string) error {
+	return p.eng.EnsureProjectNetwork(ctx, projectID)
+}
+
+func (p appNetworkPort) EnqueueNetworkRedeploy(ctx context.Context, appID string) (string, error) {
+	return p.eng.EnqueueNetworkRedeploy(ctx, appID)
 }
 
 // appMovePort 是 api.AppMovePort 的 engine.Engine 实现（MoveApp 换名重

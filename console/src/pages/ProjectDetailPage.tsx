@@ -219,6 +219,16 @@ export function ProjectDetailPage() {
               <span data-testid="project-detail-description" className="text-muted-foreground">
                 {project.description || "—"}
               </span>
+              <span className="text-muted-foreground">Project network</span>
+              {/* 项目网面（IMPL-T15-1/OT-1）：overlay 名 + 参与成员数——对象
+                  由平台在首个成员 attach 时创建，成员清空且零端点后回收。 */}
+              <span data-testid="project-network-summary" className="text-muted-foreground">
+                <code className="text-xs" data-testid="project-network-name">
+                  {project.network_name}
+                </code>{" "}
+                · {project.network_members ?? 0} app
+                {(project.network_members ?? 0) === 1 ? "" : "s"} attached
+              </span>
               <span className="text-muted-foreground">Created</span>
               <span className="text-xs text-muted-foreground">{formatTime(project.created_at)}</span>
             </div>
@@ -349,6 +359,9 @@ function ProjectApps({
               <TableRow>
                 <TableHead>Application</TableHead>
                 <TableHead>State</TableHead>
+                {/* 项目网参与列（IMPL-T15-1/OT-1）：attach/detach 在 app 概览卡
+                    （单一操作面）；本列只读呈现参与状态。 */}
+                <TableHead>Project network</TableHead>
                 <TableHead>Updated</TableHead>
               </TableRow>
             </TableHeader>
@@ -365,6 +378,14 @@ function ProjectApps({
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{a.derived_state}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={a.project_network_attached ? "secondary" : "outline"}
+                      data-testid="project-app-network-badge"
+                    >
+                      {a.project_network_attached ? "attached" : "detached"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{timeAgo(a.updated_at)}</TableCell>
                 </TableRow>

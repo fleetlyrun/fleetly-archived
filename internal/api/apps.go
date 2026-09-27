@@ -101,15 +101,19 @@ func (s *AppsService) ListApps(ctx context.Context, req *serverv1.ListAppsReques
 		// 批量 map 缺席键 = 零值 Placement（State 空串 = 无绑定记录，
 		// 与 per-app 路径的 ErrPlacementNotFound 分支同派生语义）。
 		derived := engine.DeriveAppState(factsFromWindow(placements[app.ID], deployments[app.ID]))
+		projectNetwork, attached := appProjectNetworkProjection(app)
 		out = append(out, &serverv1.AppView{
-			Id:           app.ID,
-			Name:         app.Name,
-			Lifecycle:    string(app.Lifecycle),
-			DerivedState: derived,
-			CreatedAt:    timestamppb.New(app.CreatedAt),
-			UpdatedAt:    timestamppb.New(app.UpdatedAt),
-			TeamSlug:     app.TeamSlug,
-			ProjectSlug:  app.ProjectSlug,
+			Id:                     app.ID,
+			Name:                   app.Name,
+			Lifecycle:              string(app.Lifecycle),
+			DerivedState:           derived,
+			CreatedAt:              timestamppb.New(app.CreatedAt),
+			UpdatedAt:              timestamppb.New(app.UpdatedAt),
+			TeamSlug:               app.TeamSlug,
+			ProjectSlug:            app.ProjectSlug,
+			ProjectId:              app.ProjectID,
+			ProjectNetworkAttached: attached,
+			ProjectNetwork:         projectNetwork,
 		})
 	}
 	return &serverv1.ListAppsResponse{Apps: out}, nil
@@ -129,15 +133,19 @@ func (s *AppsService) GetApp(ctx context.Context, req *serverv1.GetAppRequest) (
 	if err != nil {
 		return nil, err
 	}
+	projectNetwork, attached := appProjectNetworkProjection(app)
 	resp := &serverv1.GetAppResponse{
-		Id:           app.ID,
-		Name:         app.Name,
-		Lifecycle:    string(app.Lifecycle),
-		DerivedState: derived,
-		CreatedAt:    timestamppb.New(app.CreatedAt),
-		UpdatedAt:    timestamppb.New(app.UpdatedAt),
-		TeamSlug:     app.TeamSlug,
-		ProjectSlug:  app.ProjectSlug,
+		Id:                     app.ID,
+		Name:                   app.Name,
+		Lifecycle:              string(app.Lifecycle),
+		DerivedState:           derived,
+		CreatedAt:              timestamppb.New(app.CreatedAt),
+		UpdatedAt:              timestamppb.New(app.UpdatedAt),
+		TeamSlug:               app.TeamSlug,
+		ProjectSlug:            app.ProjectSlug,
+		ProjectId:              app.ProjectID,
+		ProjectNetworkAttached: attached,
+		ProjectNetwork:         projectNetwork,
 	}
 	if p, err := s.st.GetPlacement(ctx, app.ID); err == nil {
 		resp.Placement = placementView(p)

@@ -57,6 +57,8 @@ logs.victorialogs_removed	managed VictoriaLogs removed after logs.backend left v
 metrics.mode_updated	metrics mode setting changed (payload carries the mode value; switching on deploys the managed VictoriaMetrics/cAdvisor/node-exporter stack, switching off removes the services — the data volume is retained)
 metrics.stack_deployed	managed metrics stack service deployed or converged to the desired spec (payload carries service/image/reason)
 metrics.stack_removed	managed metrics stack removed after metrics.mode left on (data volume retained; payload carries volume_retained=true)
+network.missing	an expected project network is absent from the substrate (external removal); disclosed only — the next attach or member deploy re-ensures it
+network.orphaned	a platform-managed fleetly- network exists that no state fact attributes to a live resource (unattributed leak; disclosed only — never deleted silently)
 node.availability_changed	node availability changed (active/drain/pause transition; drain maintenance-window narrative; payload carries old/new)
 node.down	node judged DOWN (Swarm loss-of-contact verdict)
 node.joined	node joined the cluster (observed)
@@ -70,6 +72,7 @@ placement.unresolved	binding undecidable after DR; explicit placement required (
 project.created	a project was created (payload carries team_id/slug; W1 source = the default project provisioned atomically with registration, W2-S1 source = ProjectsService.CreateProject)
 project.deleted	an empty project was deleted (non-empty guard passed; payload carries team_id/slug)
 project.member_changed	a project role override was set or removed (payload carries change/user_id and role on override_set; no row means the team role applies again)
+project.network_changed	an app was attached to or detached from its project network (payload carries change/app/app_id/project_id; participation is an explicit opt-in and defaults off)
 reconcile.drift_detected	drift detected between desired and actual state (including manual docker operations); convergence is per-app opt-in
 registry.updated	platform registry credentials changed (payload carries the host and the password fingerprint, never credentials)
 release.job_failed	release-time init job failed (task failed/rejected/shut down; the deployment fails — no retry, restart-condition=none; job service removed)

@@ -303,6 +303,13 @@ var methodScopes = map[string]string{
 	// 落回矩阵登记点，语义不变（scope.go 头注纪律：新增 RPC 必须登记）。
 	"/fleetly.server.v1.ProjectsService/MoveApp":      ScopeAdmin,
 	"/fleetly.server.v1.ProjectsService/MoveDatabase": ScopeAdmin,
+	// 项目网参与面（T 线 OT-1 / IMPL-T15-1）：attach/detach = admin——网络
+	// 姿态改变是应用隔离面的敏感写（把成员服务暴露给项目内其他 app 的
+	// 可达集），与 app 删除/secrets/库生命周期同门；用户 principal 另受
+	// 第 2 门项目角色约束（requireAppAccess，项目角色 admin+；平台管理员
+	// 只读不代写；机具令牌 admin 等价照旧）。
+	"/fleetly.server.v1.ProjectsService/AttachAppProjectNetwork": ScopeAdmin,
+	"/fleetly.server.v1.ProjectsService/DetachAppProjectNetwork": ScopeAdmin,
 }
 
 // RequiredScope 返回方法所需 scope（未登记返回 false——调用方按 admin

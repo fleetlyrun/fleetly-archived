@@ -77,6 +77,13 @@ type PlanInput struct {
 	// 底座对象已 ensure；键缺省 = 该服务无挂载）。按 target 字典序
 	//（desired-hash 确定性）。
 	ConfigMounts map[string][]ConfigMount
+	// ProjectNetwork 是项目网投影（OT-1/IMPL-T15-1）：app 参与位在位时
+	// 非空 = 项目网 overlay 名（naming.ProjectNetworkName）；非空时每个
+	// 成员服务在 app 私网之外**双挂**项目网，别名 = <app>-<service>
+	//（naming.ProjectNetworkAlias；短名仅 app 私网）。空 = 不参加（缺省，
+	// 既有行为零变化）。投影进 spec.Networks ⇒ 进 desired-hash 与快照
+	// ⇒ attach/detach 由下一次重部署滚动收敛。
+	ProjectNetwork string
 	// Images 是服务 → digest 钉定镜像引用（building 阶段产出）。
 	Images map[string]string
 	// Decision 是放置裁决（绑定约束编译结果）。
@@ -295,13 +302,22 @@ func buildServiceSpec(in PlanInput, svc *compose.Service, image string, volByKey
 	// 牵线（仅 rustfs 模式且带 fleetly.s3 label 的服务——应用→RustFS 内网
 	// 单向可达；external 模式不加，应用自行出网）+ E4 库共享网络（带
 	// fleetly.databases label 的服务逐实例附加，**无别名**——引用方以
-	// Swarm 服务名可达；managed-databases §2.4）。
+	// Swarm 服务名可达；managed-databases §2.4）+ OT-1 项目网（参与位
+	// 在位时双挂——别名 = <app>-<service>，短名只在 app 私网；项目网名
+	// 由装配层按 app 当前项目推导，MoveApp 保留参与位、投影随新项目）。
 	networks := []NetworkAttach{{Name: netName, Aliases: []string{alias}}}
 	if svc.S3 && in.AttachRustfsNetwork {
 		networks = append(networks, NetworkAttach{Name: state.RustfsNetworkName})
 	}
 	for _, dbNet := range in.DBNetworks[svc.Name] {
 		networks = append(networks, NetworkAttach{Name: dbNet})
+	}
+	if in.ProjectNetwork != "" {
+		projectAlias, perr := naming.ProjectNetworkAlias(in.AppName, svc.Name)
+		if perr != nil {
+			return ServiceSpec{}, nil, errorf("E_RUNTIME_UNAVAILABLE", "project network alias failed for service %s: %v", svc.Name, perr)
+		}
+		networks = append(networks, NetworkAttach{Name: in.ProjectNetwork, Aliases: []string{projectAlias}})
 	}
 
 	spec := ServiceSpec{

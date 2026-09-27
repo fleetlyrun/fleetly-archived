@@ -48,6 +48,13 @@ const (
 	// 与 secret 清场按此 label 选择。
 	LabelDatabase = "fleetly.db"
 
+	// LabelProjectNetwork 标记项目网 overlay 归属（网络对象 label，值 =
+	// 项目平台 ID；OT-1/IMPL-T15-1）。识别面用途：①对账/GC 无需从前缀
+	// 反解项目（id8 是有损截断）即可归因；②孤儿网判定不靠前缀猜测
+	//（前缀族众多，票面明确要求自描述 label）。服务 label 集不含此键
+	// （仅网络对象写入）。
+	LabelProjectNetwork = "fleetly.project-network"
+
 	// LabelNodeID 是节点身份锚（node label，值 = 平台节点 ID n_<ULID>，
 	// state-model §2.3）。
 	LabelNodeID = "fleetly.node-id"

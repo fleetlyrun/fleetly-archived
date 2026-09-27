@@ -23,6 +23,9 @@ const PROJECT = {
     name: "Staging",
     description: "pre-prod fleet",
     created_at: "2026-09-24T13:58:59Z",
+    // 项目网投影（IMPL-T15-1/OT-1）：overlay 名 + 参与成员数。
+    network_name: "fleetly-project-01PRJ1",
+    network_members: 1,
   },
 };
 
@@ -66,7 +69,7 @@ function stubFetch(opts: {
         ok: true,
         status: 200,
         statusText: "",
-        json: () => Promise.resolve({ apps: "apps" in opts ? opts.apps : [{ id: "A1", name: "demo", derived_state: "running" }] }),
+        json: () => Promise.resolve({ apps: "apps" in opts ? opts.apps : [{ id: "A1", name: "demo", derived_state: "running", project_network_attached: true }] }),
       });
     }
     if (url.includes("/databases")) {
@@ -117,6 +120,15 @@ describe("ProjectDetailPage", () => {
     expect(await screen.findByTestId("project-detail-name")).toHaveTextContent("Staging");
     expect(screen.getByText("founder/staging")).toBeInTheDocument();
     expect(screen.getByTestId("project-detail-description")).toHaveTextContent("pre-prod fleet");
+    // 项目网面（IMPL-T15-1/OT-1）：overlay 名 + 参与成员数（信息卡）；
+    // 应用行带参与徽标（attach/detach 操作面在 app 概览卡）。
+    expect(screen.getByTestId("project-network-name")).toHaveTextContent(
+      "fleetly-project-01PRJ1",
+    );
+    expect(screen.getByTestId("project-network-summary")).toHaveTextContent("1 app attached");
+    await waitFor(() =>
+      expect(screen.getByTestId("project-app-network-badge")).toHaveTextContent("attached"),
+    );
     // 项目内资源清单（收窄断言：URL 带 project=founder/staging）。
     await waitFor(() => expect(screen.getByTestId("project-app-row")).toBeInTheDocument());
     expect(screen.getByTestId("project-db-row")).toBeInTheDocument();

@@ -67,6 +67,17 @@ type fakeLogPort struct {
 	at   time.Time
 }
 
+// fakeProjectNetworkPort 是项目网参与编排的确定性假端口（IMPL-T15-1）：
+// ensure 恒成功；重部署入队返回 ErrNoRedeploySource（本环境无部署史——
+// RPC 应答落 attached/detached 形态，CLI 断言面稳定）。
+type fakeProjectNetworkPort struct{}
+
+func (fakeProjectNetworkPort) EnsureProjectNetwork(context.Context, string) error { return nil }
+
+func (fakeProjectNetworkPort) EnqueueNetworkRedeploy(context.Context, string) (string, error) {
+	return "", engine.ErrNoRedeploySource
+}
+
 func (f *fakeLogPort) StreamServiceLogs(_ context.Context, _ string, _ time.Time, _ bool) (<-chan substrate.LogLine, error) {
 	ch := make(chan substrate.LogLine)
 	go func() {
@@ -207,7 +218,11 @@ func start(t *testing.T, joinBaseDomain string, joinPort api.JoinTokenPort) *Env
 	// 团队/项目面（v0.3 W2-S1）：CLI/集成测试同路径消费（角色门在 handler
 	// 内强制，与生产同形）。
 	serverv1.RegisterTeamsServiceServer(srv, api.NewTeamsService(st))
-	serverv1.RegisterProjectsServiceServer(srv, api.NewProjectsService(st))
+	// 团队/项目面（v0.3 W2-S1）：CLI/集成测试同路径消费（角色门在 handler
+	// 内强制，与生产同形）。IMPL-T15-1：项目网参与端口装配确定性假实现
+	//（attach/detach 的 RPC 链可走通；网络/重部署编排语义在 engine/state
+	// 各自测试覆盖——本环境无底座）。
+	serverv1.RegisterProjectsServiceServer(srv, api.NewProjectsService(st).WithNetworkPort(fakeProjectNetworkPort{}))
 
 	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = srv.Serve(lis) }()

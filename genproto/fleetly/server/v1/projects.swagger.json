@@ -16,6 +16,66 @@
     "application/json"
   ],
   "paths": {
+    "/v1/apps/{app}/project-network": {
+      "delete": {
+        "summary": "DetachAppProjectNetwork 从项目网摘除 app（摘网随下一次重部署的服务\n滚动收敛；项目网在失去最后一名成员且零端点后由平台回收）。权限与\n在途守卫同 Attach。",
+        "operationId": "ProjectsService_DetachAppProjectNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DetachAppProjectNetworkResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ProjectsService"
+        ]
+      },
+      "post": {
+        "summary": "AttachAppProjectNetwork 把 app 挂入其项目网（T 线 OT-1 / IMPL-T15-1 的\n显式 opt-in；项目由 app 行归属解析——请求不携带项目，避免「指向别的\n项目网」的歧义面）。语义（全部幂等）：\n  1. 确保项目网 overlay 在位（平台建 `fleetly-project-\u003cproject_id\u003e`，\n     带自描述 label；缺失创建、已存在不覆盖）；\n  2. 参与位置位（状态库唯一改变路径；审计 app.project_network_attached\n     + 事件 project.network_changed 同事务）；\n  3. 入队「参与变更重部署」（复用最近 succeeded 部署的 compose——新\n     revision 的成员服务双挂项目网，滚动收敛；无部署史 = 仅置位）。\n权限：admin scope + 项目角色 admin（网络姿态改变是隔离面的敏感写，\n与 app 删除/secrets 同级；平台管理员只读不代写）。在途部署存在时 409\n拒绝（重部署会以旧快照覆盖在途发布）。",
+        "operationId": "ProjectsService_AttachAppProjectNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1AttachAppProjectNetworkResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ProjectsService"
+        ]
+      }
+    },
     "/v1/projects": {
       "get": {
         "summary": "ListProjects 我可见项目（团队归属集）；带 team_id 收窄到单队（须为\n该队成员或平台管理员）；平台管理员不带过滤 = 全部。",
@@ -405,6 +465,54 @@
         }
       }
     },
+    "v1AppProjectNetworkMembership": {
+      "type": "object",
+      "properties": {
+        "app_id": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string",
+          "title": "项目限定形展示（team/project）。"
+        },
+        "network": {
+          "type": "string",
+          "title": "项目网 overlay 名（`fleetly-project-\u003cproject_id\u003e`）。"
+        },
+        "attached": {
+          "type": "boolean",
+          "title": "变更后的参与状态（true = 已挂入）。"
+        },
+        "changed": {
+          "type": "boolean",
+          "title": "本次是否发生状态变更（false = 已是目标值，幂等重跑；后置编排仍执行）。"
+        },
+        "deployment_id": {
+          "type": "string",
+          "title": "参与变更重部署的部署 ID（无成功部署史 = 空）。"
+        },
+        "status": {
+          "type": "string",
+          "title": "rolling | attached | detached（rolling = 重部署已入队，服务随发布\n滚动切换网络；attached/detached = 无部署史，仅状态落位）。"
+        }
+      },
+      "title": "AppProjectNetworkMembership 是参与变更的结论投影。"
+    },
+    "v1AttachAppProjectNetworkResponse": {
+      "type": "object",
+      "properties": {
+        "membership": {
+          "$ref": "#/definitions/v1AppProjectNetworkMembership"
+        }
+      },
+      "title": "AttachAppProjectNetworkResponse 是挂入应答（两条 RPC 共享同一\nmembership 投影——buf lint 要求 response 名与 RPC 同名，投影复用）。"
+    },
     "v1CreateProjectRequest": {
       "type": "object",
       "properties": {
@@ -432,6 +540,15 @@
     },
     "v1DeleteProjectResponse": {
       "type": "object"
+    },
+    "v1DetachAppProjectNetworkResponse": {
+      "type": "object",
+      "properties": {
+        "membership": {
+          "$ref": "#/definitions/v1AppProjectNetworkMembership"
+        }
+      },
+      "title": "DetachAppProjectNetworkResponse 是摘除应答。"
     },
     "v1ErrorResponse": {
       "type": "object",
@@ -601,6 +718,14 @@
         "created_at": {
           "type": "string",
           "format": "date-time"
+        },
+        "network_name": {
+          "type": "string",
+          "title": "项目网投影（IMPL-T15-1/OT-1）：network_name = 项目网 overlay 名\n（`fleetly-project-\u003cid\u003e`，平台建；无成员时对象可不存在）；network_members\n= 参与位在位的 active app 数（成员计数，Console 网络面展示）。"
+        },
+        "network_members": {
+          "type": "integer",
+          "format": "int32"
         }
       },
       "title": "ProjectView 是项目行的无敏感投影。"

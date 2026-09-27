@@ -4,6 +4,7 @@
 import { api, utf8ToBase64 } from "./client";
 import type {
   AcceptInviteResponse,
+  AttachAppProjectNetworkResponse,
   CancelDeploymentResponse,
   CreateDatabaseResponse,
   CreateInviteResponse,
@@ -17,6 +18,7 @@ import type {
   DeleteWebhookEndpointResponse,
   DeployResponse,
   DeploymentView,
+  DetachAppProjectNetworkResponse,
   DisableUserResponse,
   EnableUserResponse,
   GetAlertsStatusResponse,
@@ -326,6 +328,28 @@ export function revokeInvite(teamId: string, inviteId: string) {
   return api<Record<string, never>>(
     `/teams/${encodeURIComponent(teamId)}/invites/${encodeURIComponent(inviteId)}:revoke`,
     { method: "POST", json: {} },
+  );
+}
+
+// ── 项目网参与面（T 线 OT-1 / IMPL-T15-1）───────────────────────────────
+// attach/detach 是显式 opt-in（缺省不参加——app 私网隔离现状）；成员服务
+// 在下一次「参与变更重部署」中滚动切换网络。服务端权限 = admin scope +
+// 项目角色 admin（团队 owner/admin；平台管理员只读不代写）。app 用平台 ID
+// 寻址（REST 单段路径；管理面惯例，免疫跨项目同名歧义）。
+
+/** 挂入项目网（幂等；重部署入队后成员服务滚动双挂）。 */
+export function attachAppProjectNetwork(app: string) {
+  return api<AttachAppProjectNetworkResponse>(
+    `/apps/${encodeURIComponent(app)}/project-network`,
+    { method: "POST" },
+  );
+}
+
+/** 摘除项目网（幂等；成员服务在重部署中离开项目网）。 */
+export function detachAppProjectNetwork(app: string) {
+  return api<DetachAppProjectNetworkResponse>(
+    `/apps/${encodeURIComponent(app)}/project-network`,
+    { method: "DELETE" },
   );
 }
 

@@ -110,6 +110,15 @@ message AppView {
   // 的数据源——此前无归属投影，同名 app 在列表面不可分）。
   string team_slug = 7;
   string project_slug = 8;
+  // 归属项目平台 ID（IMPL-T15-1：项目详情链接与项目网操作的目标锚；
+  // 管理面用 ID，免疫跨团队同名项目歧义）。
+  string project_id = 9;
+  // 项目网参与状态（IMPL-T15-1/OT-1 显式 opt-in）：attached=true 时
+  // project_network = 项目网 overlay 名（`fleetly-project-<project_id>`），
+  // 成员服务在 app 私网之外双挂该网（项目网别名 `<app>-<service>`）；
+  // 缺省 false = 不参加（既有 app 私网隔离现状）。
+  bool project_network_attached = 10;
+  string project_network = 11;
 }
 
 message ListAppsResponse {
@@ -131,6 +140,11 @@ message GetAppResponse {
   // 归属 slug（AppView 同款；详情头与列表行的限定形展示同源）。
   string team_slug = 9;
   string project_slug = 10;
+  // 归属项目平台 ID 与项目网参与投影（IMPL-T15-1；AppView 同款字段，
+  // 详情页的项目网卡数据源）。
+  string project_id = 11;
+  bool project_network_attached = 12;
+  string project_network = 13;
   // 放置绑定（未绑定时不输出——EmitUnpopulated=false 语义下 message 零值
   // 字段不渲染，读面缺省即「无绑定」）。
   PlacementView placement = 7;

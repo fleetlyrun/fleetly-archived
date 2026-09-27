@@ -66,6 +66,10 @@ type App struct {
 	// join 装载，调用方免二次查询）。
 	TeamSlug    string
 	ProjectSlug string
+	// ProjectNetworkAttached 是项目网参与位（OT-1/IMPL-T15-1，00025 加法列）：
+	// true = 成员服务在 app 私网之外双挂当前项目的项目网；唯一改变路径 =
+	// ProjectsService attach/detach RPC。缺省 false = 不参加（既有行为零变化）。
+	ProjectNetworkAttached bool
 }
 
 // QualifiedName 返回三段限定形 `team/prj/app`（D-W0-9 引用口径；naming.
@@ -79,7 +83,7 @@ func (a App) QualifiedName() string {
 // appScanCols 是应用行查询列清单（归属 slug 经 projects/teams join 反解；
 // 新增列只加在此与 scanApp）。
 const appScanCols = `a.id, a.name, a.lifecycle, a.created_at, a.updated_at, a.deleting_at, a.deleted_at,
-	a.project_id, a.team_id, t.slug, p.slug`
+	a.project_id, a.team_id, t.slug, p.slug, a.project_network_attached`
 
 // appScanFrom 是应用行查询的 FROM 子句（slug join 单点）。
 const appScanFrom = `FROM apps a
@@ -133,7 +137,7 @@ func (t *Tx) CreateApp(ctx context.Context, appID, name, projectID, teamID strin
 // GetAppByName 按名取应用行；不存在返回 ErrAppNotFound。跨项目同名 app 多
 // 行命中时返回 ErrAppAmbiguous（不静默取任意行——D-W0-4 二修后的按名解析
 // 纪律：裸名仅域内唯一时可用）。三段限定形 team/prj/app 输入走精确解析
-//（GetAppByQualifiedName——按裸名重解析的引擎/日志共享面凭限定形免疫跨项
+// （GetAppByQualifiedName——按裸名重解析的引擎/日志共享面凭限定形免疫跨项
 // 目重名歧义；应用名词表不含 `/`〔compose 名 ^[a-z0-9][a-z0-9_-]*$〕，分支
 // 与裸名查询不相交）。ID 形态归调用面解析（GetAppByID 全库唯一）。
 func (s *Store) GetAppByName(ctx context.Context, name string) (App, error) {
@@ -209,13 +213,15 @@ func scanApp(row interface{ Scan(dest ...any) error }) (App, error) {
 	var lifecycle string
 	var created, updated int64
 	var deleting, deleted sql.NullInt64
+	var attached int
 	if err := row.Scan(&a.ID, &a.Name, &lifecycle, &created, &updated, &deleting, &deleted,
-		&a.ProjectID, &a.TeamID, &a.TeamSlug, &a.ProjectSlug); err != nil {
+		&a.ProjectID, &a.TeamID, &a.TeamSlug, &a.ProjectSlug, &attached); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return App{}, ErrAppNotFound
 		}
 		return App{}, fmt.Errorf("state: scan app: %w", err)
 	}
+	a.ProjectNetworkAttached = attached != 0
 	return finishScanApp(a, lifecycle, created, updated, deleting, deleted), nil
 }
 
@@ -293,9 +299,11 @@ func (s *Store) MarkAppDeleted(ctx context.Context, appID string) error {
 // MarkAppDeleted 是事务内 tombstone 第二拍（H10/MG-3：与终局事件/审计
 // 同事务组合的形态——引擎 deleting 回收 duty 在受管服务全部移除后原子
 // 落终态，进程在「迁移已落、事件未发」之间崩溃的披露缺口不存在）。
+// IMPL-T15-1：同步清项目网参与位（删后不参加任何项目网——成员计数与项目网
+// GC 不因墓碑行悬挂；无独立事件，终局 app.deleted 已承载删除语义）。
 func (t *Tx) MarkAppDeleted(ctx context.Context, appID string) error {
 	res, err := t.ExecContext(ctx,
-		`UPDATE apps SET lifecycle = ?, updated_at = ?, deleted_at = ?
+		`UPDATE apps SET lifecycle = ?, updated_at = ?, deleted_at = ?, project_network_attached = 0
 		WHERE id = ? AND lifecycle = ?`,
 		string(LifecycleDeleted), nowNano(), nowNano(), appID, string(LifecycleDeleting))
 	if err != nil {

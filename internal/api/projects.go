@@ -4,17 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/engine"
+	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"google.golang.org/grpc/codes"
 )
 
 // ProjectsService 实现 server.v1.ProjectsService（v0.3 W2-S1，rbac-teams
-// 设计 §3.3/§3.4/§5）：项目与队内覆写成员面。
+// 设计 §3.3/§3.4/§5）：项目与队内覆写成员面。IMPL-T15-1 增项目网参与面
+// （attach/detach 两 RPC，internal/api/projectnetwork.go）。
 //
 // 项目面权限（本票自含，W2-S4 通用角色门之前的实现切面）：
 //   - 全部方法要求用户凭据（requireTeamUser——机具令牌恒 403）；
@@ -40,6 +43,9 @@ type ProjectsService struct {
 	appMove AppMovePort
 	dbMove  DBMovePort
 	ingMove IngressMovePort
+	// netPort 是项目网参与编排端口（IMPL-T15-1；nil = attach/detach 如实
+	// 报不可用）。实现 = engine（projectnetwork.go）。
+	netPort ProjectNetworkPort
 }
 
 // NewProjectsService 构造 ProjectsService。
@@ -131,7 +137,7 @@ func (s *ProjectsService) CreateProject(ctx context.Context, req *serverv1.Creat
 	if err != nil {
 		return nil, mapProjectErr(err)
 	}
-	view, err := s.projectView(ctx, proj)
+	view, err := s.projectView(ctx, proj, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +170,11 @@ func (s *ProjectsService) ListProjects(ctx context.Context, req *serverv1.ListPr
 	if err != nil {
 		return nil, err
 	}
+	// 项目网成员计数（IMPL-T15-1）：单分组查询全量共享——列表投影免 N+1。
+	counts, err := s.st.ProjectNetworkMemberCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
 	teamFiltered := req.GetTeamId() != ""
 	out := make([]*serverv1.ProjectView, 0, len(projects))
 	for _, proj := range projects {
@@ -172,7 +183,7 @@ func (s *ProjectsService) ListProjects(ctx context.Context, req *serverv1.ListPr
 		// staging 真机走查实爆后修正）。
 		if (teamFiltered && proj.TeamID == req.GetTeamId()) ||
 			(!teamFiltered && (isPlatformAdminUser(ctx, s.st) || allowed[proj.TeamID])) {
-			view, err := s.projectView(ctx, proj)
+			view, err := s.projectView(ctx, proj, counts)
 			if err != nil {
 				return nil, err
 			}
@@ -188,7 +199,7 @@ func (s *ProjectsService) GetProject(ctx context.Context, req *serverv1.GetProje
 	if err != nil {
 		return nil, err
 	}
-	view, err := s.projectView(ctx, proj)
+	view, err := s.projectView(ctx, proj, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +224,7 @@ func (s *ProjectsService) UpdateProject(ctx context.Context, req *serverv1.Updat
 	if err != nil {
 		return nil, mapProjectErr(err)
 	}
-	view, err := s.projectView(ctx, updated)
+	view, err := s.projectView(ctx, updated, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -519,22 +530,43 @@ func (s *ProjectsService) MoveDatabase(ctx context.Context, req *serverv1.MoveDa
 // ── 投影 helpers ─────────────────────────────────────────────────────────────
 
 // projectView 是 state.Project → proto 投影（team_slug 补全——限定形
-// team/project 展示面，D-W0-9；团队行缺失按空串投影，不阻塞列表）。
-func (s *ProjectsService) projectView(ctx context.Context, p state.Project) (*serverv1.ProjectView, error) {
+// team/project 展示面，D-W0-9；团队行缺失按空串投影，不阻塞列表。
+// IMPL-T15-1 增项目网投影：network_name = 项目网 overlay 名（公式现推，
+// 免查询）；network_members = 参与位在位的 active app 数）。counts 为批量
+// 成员计数（ListProjects 单查询共享；nil = 单行路径现查）。
+func (s *ProjectsService) projectView(ctx context.Context, p state.Project, counts map[string]int) (*serverv1.ProjectView, error) {
 	teamSlug := ""
 	if t, err := s.st.GetTeam(ctx, p.TeamID); err == nil {
 		teamSlug = t.Slug
 	} else if !errors.Is(err, state.ErrTeamNotFound) {
 		return nil, err
 	}
+	network, err := naming.ProjectNetworkName(p.ID)
+	if err != nil {
+		return nil, err
+	}
+	if counts == nil {
+		counts, err = s.st.ProjectNetworkMemberCounts(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// 成员计数窄化（gosec G115）：上界 = 项目内 app 数，显式钳制到 int32
+	// 量程内（实际远不可能触顶）。
+	members := counts[p.ID]
+	if members > math.MaxInt32 {
+		members = math.MaxInt32
+	}
 	return &serverv1.ProjectView{
-		Id:          p.ID,
-		TeamId:      p.TeamID,
-		TeamSlug:    teamSlug,
-		Slug:        p.Slug,
-		Name:        p.Name,
-		Description: p.Description,
-		CreatedAt:   tstamp(p.CreatedAt),
+		Id:             p.ID,
+		TeamId:         p.TeamID,
+		TeamSlug:       teamSlug,
+		Slug:           p.Slug,
+		Name:           p.Name,
+		Description:    p.Description,
+		CreatedAt:      tstamp(p.CreatedAt),
+		NetworkName:    network,
+		NetworkMembers: int32(members), //nolint:gosec // G115：已显式钳制（见上）
 	}, nil
 }
 

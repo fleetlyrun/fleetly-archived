@@ -31,7 +31,8 @@ package eventcode
 // （route.label_ignored，OT-2 单一写点仲裁）= 82 + IMPL-T1-2 增 1
 // （registry.updated，DT-2 平台 registry 凭证面）= 83 + IMPL-T1-3 增 2
 // （release.job_failed / release.job_timed_out，DT-4 部署期 init job）=
-// 85 个事件名。
+// 85 + IMPL-T15-1 增 3（project.network_changed 项目网参与面 +
+// network.orphaned / network.missing 对账兜底守卫，OT-1/DT-5）= 88 个事件名。
 var builtins = []Event{
 	// ── 发布（release-semantics §2.7）──
 	{Name: "deployment.queued", Summary: "deploy queued (per-app mutually exclusive queueing)"},
@@ -270,6 +271,22 @@ var builtins = []Event{
 	// change=override_set 带 role、override_removed）。owner 恒不可覆写
 	//（设计 §3.3），覆写事件只涉及三档项目角色。
 	{Name: "project.member_changed", Summary: "a project role override was set or removed (payload carries change/user_id and role on override_set; no row means the team role applies again)"},
+	// IMPL-T15-1 实现期新增（OT-1 项目网参与，注册表只增）：发出来源 =
+	// internal/state/projectnetworks.go 的参与位置位/清位原语（与业务写同
+	// 事务 = Outbox；API attach/detach 唯一消费点）。payload 带
+	// change=attached|detached + app/app_id/project_id，零敏感材料；项目网
+	// 名由 project_id 按 naming 公式现推（不重复落）。
+	{Name: "project.network_changed", Summary: "an app was attached to or detached from its project network (payload carries change/app/app_id/project_id; participation is an explicit opt-in and defaults off)"},
+	// IMPL-T15-1 实现期新增（OT-1/DT-5 对账兜底守卫，注册表只增）：发出来源 =
+	// internal/engine 的 substrateRecon networks 面（自描述 label + 期望集差
+	// 识别 state 外平台前缀网）。只披露不静默删（清理归各自归属路径/人工）；
+	// 持续形态每进程只报一次（seen 记忆，恢复后清零可再报）。payload 带
+	// 网络名与归因摘要，零敏感材料。
+	{Name: "network.orphaned", Summary: "a platform-managed fleetly- network exists that no state fact attributes to a live resource (unattributed leak; disclosed only — never deleted silently)"},
+	// 发出来源同上（state→swarm 方向）：成员项目的项目网在底座缺失（外部
+	// 移除）；重建归 attach/发布链路的 NetworkEnsure（对账不自动重建，
+	// 与 app.substrate_missing 同纪律）。
+	{Name: "network.missing", Summary: "an expected project network is absent from the substrate (external removal); disclosed only — the next attach or member deploy re-ensures it"},
 
 	// ── git SSH host key（v0.3 W3-S2，rbac-teams §6 裁决 D-W0-8 FZ-12；
 	//    注册表只增）：发出来源 = host key 启动装载与指纹台账的比对事务

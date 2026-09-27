@@ -52,22 +52,31 @@ func (e *Engine) Store() *state.Store { return e.store }
 // 发布 = 无底座对象随归属迁移，跳过编排）。deployment.queued 事件
 // （source=app_move）与审计（app.move_redeploy）同事务落。
 func EnqueueMoveRedeploy(ctx context.Context, st *state.Store, appID string) (string, error) {
+	return enqueueRedeploy(ctx, st, appID, "app_move", "app.move_redeploy")
+}
+
+// enqueueRedeploy 是「按当前态重部署」的共享原语（MoveApp 换名重部署与
+// IMPL-T15-1 项目网参与变更重部署同源）：以最近一次 succeeded 部署的
+// ComposePath + SpecHash 入队——新发布的规划/快照/revision 全链在**当前**
+// 归属与状态（含项目网参与位）下重建，服务滚动由发布管内收敛承载。
+// source 进 deployment.queued 事件 payload（归因面），auditAction 进审计。
+func enqueueRedeploy(ctx context.Context, st *state.Store, appID, source, auditAction string) (string, error) {
 	app, err := st.GetAppByID(ctx, appID)
 	if err != nil {
 		return "", err
 	}
-	var source *state.DeployRecord
+	var from *state.DeployRecord
 	rows, err := st.ListAppDeployments(ctx, appID, 25)
 	if err != nil {
 		return "", err
 	}
 	for i := range rows {
 		if rows[i].Status == state.DeploySucceeded && rows[i].SpecHash != "" && rows[i].ComposePath != "" {
-			source = &rows[i]
+			from = &rows[i]
 			break
 		}
 	}
-	if source == nil {
+	if from == nil {
 		return "", ErrNoRedeploySource
 	}
 	deployID := ulid.Make().String()
@@ -77,21 +86,21 @@ func EnqueueMoveRedeploy(ctx context.Context, st *state.Store, appID string) (st
 			AppID:       appID,
 			AppName:     app.Name,
 			Kind:        "deploy",
-			SpecHash:    source.SpecHash,
-			ComposePath: source.ComposePath,
+			SpecHash:    from.SpecHash,
+			ComposePath: from.ComposePath,
 		}); err != nil {
 			return err
 		}
 		if _, err := tx.AppendEvent(ctx, state.Event{
 			Name:    "deployment.queued",
 			Subject: "deployment:" + deployID,
-			Payload: state.DiffSummary("deployment", deployID, "app", app.Name, "source", "app_move"),
+			Payload: state.DiffSummary("deployment", deployID, "app", app.Name, "source", source),
 		}); err != nil {
 			return err
 		}
 		return tx.WriteAudit(ctx, state.AuditEntry{
 			Actor:  "system",
-			Action: "app.move_redeploy",
+			Action: auditAction,
 			Target: "app:" + app.ID,
 			Result: "ok",
 			DiffSummary: state.DiffSummary("app", app.Name,
@@ -131,7 +140,7 @@ func (e *Engine) AwaitAppSwap(ctx context.Context, appID string, timeout time.Du
 					continue // scale-0 服务无运行判据
 				}
 				tasks, terr := e.sub.TaskList(ctx, s.Name)
-				if terr != nil || uint64(countRunningTasks(tasks)) < s.Replicas {
+				if terr != nil || uint64(max(countRunningTasks(tasks), 0)) < s.Replicas {
 					allUp = false
 					break
 				}

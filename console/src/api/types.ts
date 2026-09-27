@@ -36,6 +36,12 @@ export type RevokeTokenResponse = Schemas["v1RevokeTokenResponse"];
 export type ProjectView = Schemas["v1ProjectView"];
 export type ListProjectsResponse = Schemas["v1ListProjectsResponse"];
 
+// ── 项目网参与面（T 线 OT-1 / IMPL-T15-1）────────────────────────────────
+
+export type AppProjectNetworkMembership = Schemas["v1AppProjectNetworkMembership"];
+export type AttachAppProjectNetworkResponse = Schemas["v1AttachAppProjectNetworkResponse"];
+export type DetachAppProjectNetworkResponse = Schemas["v1DetachAppProjectNetworkResponse"];
+
 // ── teams（v0.3 W2-S5 团队设置页：成员/角色/邀请管理，rbac-teams §3.1）──
 
 export type TeamView = Schemas["v1TeamView"];

@@ -25,12 +25,13 @@ import (
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
 )
 
-// harness 是一只测试环境（store + box + 假底座/解析器/时钟）。
+// harness 是一只测试环境（store + box + 假底座/解析器/时钟/网络面）。
 type harness struct {
 	t        *testing.T
 	store    *state.Store
 	box      *secrets.Box
 	sub      *fakeSubstrate
+	nets     *fakeNetworkSubstrate
 	resolver *fakeResolver
 	images   *fakeImages
 	clk      *fakeClock
@@ -111,12 +112,16 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("ensure key: %v", err)
 	}
 	sub := newFakeSubstrate()
+	netSub := newFakeNetworkSubstrate()
 	res := &fakeResolver{store: st}
 	images := &fakeImages{missing: map[string]bool{}}
 	clk := newFakeClock(testStart)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	eng := NewEngine(Config{}, st, sub, images, res, box, logger).WithClock(clk)
-	return &harness{t: t, store: st, box: box, sub: sub, resolver: res, images: images, clk: clk, eng: eng}
+	eng := NewEngine(Config{}, st, sub, images, res, box, logger).
+		WithClock(clk).
+		WithNetworkSubstrate(netSub).
+		WithPlatformNetworks("fleetly-system", state.RustfsNetworkName)
+	return &harness{t: t, store: st, box: box, sub: sub, nets: netSub, resolver: res, images: images, clk: clk, eng: eng}
 }
 
 // writeCompose 落一份 compose fixture 并返回绝对路径。

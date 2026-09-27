@@ -19,16 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProjectsService_CreateProject_FullMethodName        = "/fleetly.server.v1.ProjectsService/CreateProject"
-	ProjectsService_ListProjects_FullMethodName         = "/fleetly.server.v1.ProjectsService/ListProjects"
-	ProjectsService_GetProject_FullMethodName           = "/fleetly.server.v1.ProjectsService/GetProject"
-	ProjectsService_UpdateProject_FullMethodName        = "/fleetly.server.v1.ProjectsService/UpdateProject"
-	ProjectsService_DeleteProject_FullMethodName        = "/fleetly.server.v1.ProjectsService/DeleteProject"
-	ProjectsService_ListProjectMembers_FullMethodName   = "/fleetly.server.v1.ProjectsService/ListProjectMembers"
-	ProjectsService_SetProjectMemberRole_FullMethodName = "/fleetly.server.v1.ProjectsService/SetProjectMemberRole"
-	ProjectsService_RemoveProjectMember_FullMethodName  = "/fleetly.server.v1.ProjectsService/RemoveProjectMember"
-	ProjectsService_MoveApp_FullMethodName              = "/fleetly.server.v1.ProjectsService/MoveApp"
-	ProjectsService_MoveDatabase_FullMethodName         = "/fleetly.server.v1.ProjectsService/MoveDatabase"
+	ProjectsService_CreateProject_FullMethodName           = "/fleetly.server.v1.ProjectsService/CreateProject"
+	ProjectsService_ListProjects_FullMethodName            = "/fleetly.server.v1.ProjectsService/ListProjects"
+	ProjectsService_GetProject_FullMethodName              = "/fleetly.server.v1.ProjectsService/GetProject"
+	ProjectsService_UpdateProject_FullMethodName           = "/fleetly.server.v1.ProjectsService/UpdateProject"
+	ProjectsService_DeleteProject_FullMethodName           = "/fleetly.server.v1.ProjectsService/DeleteProject"
+	ProjectsService_ListProjectMembers_FullMethodName      = "/fleetly.server.v1.ProjectsService/ListProjectMembers"
+	ProjectsService_SetProjectMemberRole_FullMethodName    = "/fleetly.server.v1.ProjectsService/SetProjectMemberRole"
+	ProjectsService_RemoveProjectMember_FullMethodName     = "/fleetly.server.v1.ProjectsService/RemoveProjectMember"
+	ProjectsService_MoveApp_FullMethodName                 = "/fleetly.server.v1.ProjectsService/MoveApp"
+	ProjectsService_MoveDatabase_FullMethodName            = "/fleetly.server.v1.ProjectsService/MoveDatabase"
+	ProjectsService_AttachAppProjectNetwork_FullMethodName = "/fleetly.server.v1.ProjectsService/AttachAppProjectNetwork"
+	ProjectsService_DetachAppProjectNetwork_FullMethodName = "/fleetly.server.v1.ProjectsService/DetachAppProjectNetwork"
 )
 
 // ProjectsServiceClient is the client API for ProjectsService service.
@@ -81,6 +83,24 @@ type ProjectsServiceClient interface {
 	// MoveDatabase 资源改派（同 MoveApp 语义；库卷公式不变——零卷迁移/
 	// 零数据搬移，换名重部署引用同一物理卷）。
 	MoveDatabase(ctx context.Context, in *MoveDatabaseRequest, opts ...grpc.CallOption) (*MoveDatabaseResponse, error)
+	// AttachAppProjectNetwork 把 app 挂入其项目网（T 线 OT-1 / IMPL-T15-1 的
+	// 显式 opt-in；项目由 app 行归属解析——请求不携带项目，避免「指向别的
+	// 项目网」的歧义面）。语义（全部幂等）：
+	//  1. 确保项目网 overlay 在位（平台建 `fleetly-project-<project_id>`，
+	//     带自描述 label；缺失创建、已存在不覆盖）；
+	//  2. 参与位置位（状态库唯一改变路径；审计 app.project_network_attached
+	//     + 事件 project.network_changed 同事务）；
+	//  3. 入队「参与变更重部署」（复用最近 succeeded 部署的 compose——新
+	//     revision 的成员服务双挂项目网，滚动收敛；无部署史 = 仅置位）。
+	//
+	// 权限：admin scope + 项目角色 admin（网络姿态改变是隔离面的敏感写，
+	// 与 app 删除/secrets 同级；平台管理员只读不代写）。在途部署存在时 409
+	// 拒绝（重部署会以旧快照覆盖在途发布）。
+	AttachAppProjectNetwork(ctx context.Context, in *AttachAppProjectNetworkRequest, opts ...grpc.CallOption) (*AttachAppProjectNetworkResponse, error)
+	// DetachAppProjectNetwork 从项目网摘除 app（摘网随下一次重部署的服务
+	// 滚动收敛；项目网在失去最后一名成员且零端点后由平台回收）。权限与
+	// 在途守卫同 Attach。
+	DetachAppProjectNetwork(ctx context.Context, in *DetachAppProjectNetworkRequest, opts ...grpc.CallOption) (*DetachAppProjectNetworkResponse, error)
 }
 
 type projectsServiceClient struct {
@@ -191,6 +211,26 @@ func (c *projectsServiceClient) MoveDatabase(ctx context.Context, in *MoveDataba
 	return out, nil
 }
 
+func (c *projectsServiceClient) AttachAppProjectNetwork(ctx context.Context, in *AttachAppProjectNetworkRequest, opts ...grpc.CallOption) (*AttachAppProjectNetworkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachAppProjectNetworkResponse)
+	err := c.cc.Invoke(ctx, ProjectsService_AttachAppProjectNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectsServiceClient) DetachAppProjectNetwork(ctx context.Context, in *DetachAppProjectNetworkRequest, opts ...grpc.CallOption) (*DetachAppProjectNetworkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachAppProjectNetworkResponse)
+	err := c.cc.Invoke(ctx, ProjectsService_DetachAppProjectNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProjectsServiceServer is the server API for ProjectsService service.
 // All implementations must embed UnimplementedProjectsServiceServer
 // for forward compatibility.
@@ -241,6 +281,24 @@ type ProjectsServiceServer interface {
 	// MoveDatabase 资源改派（同 MoveApp 语义；库卷公式不变——零卷迁移/
 	// 零数据搬移，换名重部署引用同一物理卷）。
 	MoveDatabase(context.Context, *MoveDatabaseRequest) (*MoveDatabaseResponse, error)
+	// AttachAppProjectNetwork 把 app 挂入其项目网（T 线 OT-1 / IMPL-T15-1 的
+	// 显式 opt-in；项目由 app 行归属解析——请求不携带项目，避免「指向别的
+	// 项目网」的歧义面）。语义（全部幂等）：
+	//  1. 确保项目网 overlay 在位（平台建 `fleetly-project-<project_id>`，
+	//     带自描述 label；缺失创建、已存在不覆盖）；
+	//  2. 参与位置位（状态库唯一改变路径；审计 app.project_network_attached
+	//     + 事件 project.network_changed 同事务）；
+	//  3. 入队「参与变更重部署」（复用最近 succeeded 部署的 compose——新
+	//     revision 的成员服务双挂项目网，滚动收敛；无部署史 = 仅置位）。
+	//
+	// 权限：admin scope + 项目角色 admin（网络姿态改变是隔离面的敏感写，
+	// 与 app 删除/secrets 同级；平台管理员只读不代写）。在途部署存在时 409
+	// 拒绝（重部署会以旧快照覆盖在途发布）。
+	AttachAppProjectNetwork(context.Context, *AttachAppProjectNetworkRequest) (*AttachAppProjectNetworkResponse, error)
+	// DetachAppProjectNetwork 从项目网摘除 app（摘网随下一次重部署的服务
+	// 滚动收敛；项目网在失去最后一名成员且零端点后由平台回收）。权限与
+	// 在途守卫同 Attach。
+	DetachAppProjectNetwork(context.Context, *DetachAppProjectNetworkRequest) (*DetachAppProjectNetworkResponse, error)
 	mustEmbedUnimplementedProjectsServiceServer()
 }
 
@@ -280,6 +338,12 @@ func (UnimplementedProjectsServiceServer) MoveApp(context.Context, *MoveAppReque
 }
 func (UnimplementedProjectsServiceServer) MoveDatabase(context.Context, *MoveDatabaseRequest) (*MoveDatabaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MoveDatabase not implemented")
+}
+func (UnimplementedProjectsServiceServer) AttachAppProjectNetwork(context.Context, *AttachAppProjectNetworkRequest) (*AttachAppProjectNetworkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachAppProjectNetwork not implemented")
+}
+func (UnimplementedProjectsServiceServer) DetachAppProjectNetwork(context.Context, *DetachAppProjectNetworkRequest) (*DetachAppProjectNetworkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachAppProjectNetwork not implemented")
 }
 func (UnimplementedProjectsServiceServer) mustEmbedUnimplementedProjectsServiceServer() {}
 func (UnimplementedProjectsServiceServer) testEmbeddedByValue()                         {}
@@ -482,6 +546,42 @@ func _ProjectsService_MoveDatabase_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectsService_AttachAppProjectNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachAppProjectNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectsServiceServer).AttachAppProjectNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectsService_AttachAppProjectNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectsServiceServer).AttachAppProjectNetwork(ctx, req.(*AttachAppProjectNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectsService_DetachAppProjectNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachAppProjectNetworkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectsServiceServer).DetachAppProjectNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectsService_DetachAppProjectNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectsServiceServer).DetachAppProjectNetwork(ctx, req.(*DetachAppProjectNetworkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProjectsService_ServiceDesc is the grpc.ServiceDesc for ProjectsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -528,6 +628,14 @@ var ProjectsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MoveDatabase",
 			Handler:    _ProjectsService_MoveDatabase_Handler,
+		},
+		{
+			MethodName: "AttachAppProjectNetwork",
+			Handler:    _ProjectsService_AttachAppProjectNetwork_Handler,
+		},
+		{
+			MethodName: "DetachAppProjectNetwork",
+			Handler:    _ProjectsService_DetachAppProjectNetwork_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

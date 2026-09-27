@@ -77,29 +77,30 @@ func WithDialOptions(opts ...grpc.DialOption) Option {
 // Client 是 fleetlyd gRPC 面的客户端封装：单连接复用，goroutine 安全。
 // 各服务面经同名访问器取用（返回 proto 生成客户端——方法契约即 proto）。
 type Client struct {
-	conn    *grpc.ClientConn
-	system  serverv1.SystemServiceClient
-	apps    serverv1.AppsServiceClient
-	deploy  serverv1.DeploymentsServiceClient
-	revs    serverv1.RevisionsServiceClient
-	builds  serverv1.BuildsServiceClient
-	drift   serverv1.DriftServiceClient
-	doms    serverv1.DomainsServiceClient
-	env     serverv1.EnvServiceClient
-	logs    serverv1.LogsServiceClient
-	metrics serverv1.MetricsServiceClient
-	alerts  serverv1.AlertingServiceClient
-	notifs  serverv1.NotificationsServiceClient
-	events  serverv1.EventsServiceClient
-	place   serverv1.PlacementServiceClient
-	tokens  serverv1.TokensServiceClient
-	gitkey  serverv1.GitKeysServiceClient
-	auth    serverv1.AuthServiceClient
-	audit   serverv1.AuditServiceClient
-	cron    serverv1.CronServiceClient
-	dbs     serverv1.DatabaseServiceClient
-	secs    serverv1.SecretsServiceClient
-	configs serverv1.ConfigsServiceClient
+	conn     *grpc.ClientConn
+	system   serverv1.SystemServiceClient
+	apps     serverv1.AppsServiceClient
+	deploy   serverv1.DeploymentsServiceClient
+	revs     serverv1.RevisionsServiceClient
+	builds   serverv1.BuildsServiceClient
+	drift    serverv1.DriftServiceClient
+	doms     serverv1.DomainsServiceClient
+	env      serverv1.EnvServiceClient
+	logs     serverv1.LogsServiceClient
+	metrics  serverv1.MetricsServiceClient
+	alerts   serverv1.AlertingServiceClient
+	notifs   serverv1.NotificationsServiceClient
+	events   serverv1.EventsServiceClient
+	place    serverv1.PlacementServiceClient
+	tokens   serverv1.TokensServiceClient
+	gitkey   serverv1.GitKeysServiceClient
+	auth     serverv1.AuthServiceClient
+	audit    serverv1.AuditServiceClient
+	cron     serverv1.CronServiceClient
+	dbs      serverv1.DatabaseServiceClient
+	secs     serverv1.SecretsServiceClient
+	configs  serverv1.ConfigsServiceClient
+	projects serverv1.ProjectsServiceClient
 }
 
 // NewClient 建立 gRPC 连接（默认 127.0.0.1:8421，明文——TLS 经 WithTLS/
@@ -126,29 +127,30 @@ func NewClient(opts ...Option) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		conn:    conn,
-		system:  serverv1.NewSystemServiceClient(conn),
-		apps:    serverv1.NewAppsServiceClient(conn),
-		deploy:  serverv1.NewDeploymentsServiceClient(conn),
-		revs:    serverv1.NewRevisionsServiceClient(conn),
-		builds:  serverv1.NewBuildsServiceClient(conn),
-		drift:   serverv1.NewDriftServiceClient(conn),
-		doms:    serverv1.NewDomainsServiceClient(conn),
-		env:     serverv1.NewEnvServiceClient(conn),
-		logs:    serverv1.NewLogsServiceClient(conn),
-		metrics: serverv1.NewMetricsServiceClient(conn),
-		alerts:  serverv1.NewAlertingServiceClient(conn),
-		notifs:  serverv1.NewNotificationsServiceClient(conn),
-		events:  serverv1.NewEventsServiceClient(conn),
-		place:   serverv1.NewPlacementServiceClient(conn),
-		tokens:  serverv1.NewTokensServiceClient(conn),
-		gitkey:  serverv1.NewGitKeysServiceClient(conn),
-		auth:    serverv1.NewAuthServiceClient(conn),
-		audit:   serverv1.NewAuditServiceClient(conn),
-		cron:    serverv1.NewCronServiceClient(conn),
-		dbs:     serverv1.NewDatabaseServiceClient(conn),
-		secs:    serverv1.NewSecretsServiceClient(conn),
-		configs: serverv1.NewConfigsServiceClient(conn),
+		conn:     conn,
+		system:   serverv1.NewSystemServiceClient(conn),
+		apps:     serverv1.NewAppsServiceClient(conn),
+		deploy:   serverv1.NewDeploymentsServiceClient(conn),
+		revs:     serverv1.NewRevisionsServiceClient(conn),
+		builds:   serverv1.NewBuildsServiceClient(conn),
+		drift:    serverv1.NewDriftServiceClient(conn),
+		doms:     serverv1.NewDomainsServiceClient(conn),
+		env:      serverv1.NewEnvServiceClient(conn),
+		logs:     serverv1.NewLogsServiceClient(conn),
+		metrics:  serverv1.NewMetricsServiceClient(conn),
+		alerts:   serverv1.NewAlertingServiceClient(conn),
+		notifs:   serverv1.NewNotificationsServiceClient(conn),
+		events:   serverv1.NewEventsServiceClient(conn),
+		place:    serverv1.NewPlacementServiceClient(conn),
+		tokens:   serverv1.NewTokensServiceClient(conn),
+		gitkey:   serverv1.NewGitKeysServiceClient(conn),
+		auth:     serverv1.NewAuthServiceClient(conn),
+		audit:    serverv1.NewAuditServiceClient(conn),
+		cron:     serverv1.NewCronServiceClient(conn),
+		dbs:      serverv1.NewDatabaseServiceClient(conn),
+		secs:     serverv1.NewSecretsServiceClient(conn),
+		configs:  serverv1.NewConfigsServiceClient(conn),
+		projects: serverv1.NewProjectsServiceClient(conn),
 	}, nil
 }
 
@@ -246,6 +248,10 @@ func (c *Client) Secrets() serverv1.SecretsServiceClient { return c.secs }
 // Configs 取明文配置资源面（T 线 OT-3/IMPL-T1-4：external config CRUD——
 // 明文可回读，GetConfig 走 admin scope；list 只出名称/指纹）。
 func (c *Client) Configs() serverv1.ConfigsServiceClient { return c.configs }
+
+// Projects 取项目面（v0.3 W2-S1 项目/覆写成员 + W2-S3 资源改派 +
+// IMPL-T15-1 项目网参与 attach/detach）。
+func (c *Client) Projects() serverv1.ProjectsServiceClient { return c.projects }
 
 // Ping 探测控制面存活并取回 service / version（豁免鉴权——装面前的
 // 存活检查路径）。

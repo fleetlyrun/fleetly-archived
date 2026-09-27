@@ -304,6 +304,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/apps/{app}/project-network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * AttachAppProjectNetwork 把 app 挂入其项目网（T 线 OT-1 / IMPL-T15-1 的
+         *     显式 opt-in；项目由 app 行归属解析——请求不携带项目，避免「指向别的
+         *     项目网」的歧义面）。语义（全部幂等）：
+         *       1. 确保项目网 overlay 在位（平台建 `fleetly-project-<project_id>`，
+         *          带自描述 label；缺失创建、已存在不覆盖）；
+         *       2. 参与位置位（状态库唯一改变路径；审计 app.project_network_attached
+         *          + 事件 project.network_changed 同事务）；
+         *       3. 入队「参与变更重部署」（复用最近 succeeded 部署的 compose——新
+         *          revision 的成员服务双挂项目网，滚动收敛；无部署史 = 仅置位）。
+         *     权限：admin scope + 项目角色 admin（网络姿态改变是隔离面的敏感写，
+         *     与 app 删除/secrets 同级；平台管理员只读不代写）。在途部署存在时 409
+         *     拒绝（重部署会以旧快照覆盖在途发布）。
+         */
+        post: operations["ProjectsService_AttachAppProjectNetwork"];
+        /**
+         * DetachAppProjectNetwork 从项目网摘除 app（摘网随下一次重部署的服务
+         *     滚动收敛；项目网在失去最后一名成员且零端点后由平台回收）。权限与
+         *     在途守卫同 Attach。
+         */
+        delete: operations["ProjectsService_DetachAppProjectNetwork"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects": {
         parameters: {
             query?: never;
@@ -2401,6 +2436,34 @@ export interface components {
             name?: string;
             description?: string;
         };
+        /** AppProjectNetworkMembership 是参与变更的结论投影。 */
+        v1AppProjectNetworkMembership: {
+            app_id?: string;
+            app?: string;
+            project_id?: string;
+            /** 项目限定形展示（team/project）。 */
+            project?: string;
+            /** 项目网 overlay 名（`fleetly-project-<project_id>`）。 */
+            network?: string;
+            /** 变更后的参与状态（true = 已挂入）。 */
+            attached?: boolean;
+            /** 本次是否发生状态变更（false = 已是目标值，幂等重跑；后置编排仍执行）。 */
+            changed?: boolean;
+            /** 参与变更重部署的部署 ID（无成功部署史 = 空）。 */
+            deployment_id?: string;
+            /**
+             * rolling | attached | detached（rolling = 重部署已入队，服务随发布
+             *     滚动切换网络；attached/detached = 无部署史，仅状态落位）。
+             */
+            status?: string;
+        };
+        /**
+         * AttachAppProjectNetworkResponse 是挂入应答（两条 RPC 共享同一
+         *     membership 投影——buf lint 要求 response 名与 RPC 同名，投影复用）。
+         */
+        v1AttachAppProjectNetworkResponse: {
+            membership?: components["schemas"]["v1AppProjectNetworkMembership"];
+        };
         v1CreateProjectRequest: {
             team_id?: string;
             slug?: string;
@@ -2411,6 +2474,10 @@ export interface components {
             project?: components["schemas"]["v1ProjectView"];
         };
         v1DeleteProjectResponse: Record<string, never>;
+        /** DetachAppProjectNetworkResponse 是摘除应答。 */
+        v1DetachAppProjectNetworkResponse: {
+            membership?: components["schemas"]["v1AppProjectNetworkMembership"];
+        };
         v1GetProjectResponse: {
             project?: components["schemas"]["v1ProjectView"];
         };
@@ -2465,6 +2532,14 @@ export interface components {
             description?: string;
             /** Format: date-time */
             created_at?: string;
+            /**
+             * 项目网投影（IMPL-T15-1/OT-1）：network_name = 项目网 overlay 名
+             *     （`fleetly-project-<id>`，平台建；无成员时对象可不存在）；network_members
+             *     = 参与位在位的 active app 数（成员计数，Console 网络面展示）。
+             */
+            network_name?: string;
+            /** Format: int32 */
+            network_members?: number;
         };
         v1RemoveProjectMemberResponse: Record<string, never>;
         v1SetProjectMemberRoleResponse: {
@@ -2568,6 +2643,19 @@ export interface components {
              */
             team_slug?: string;
             project_slug?: string;
+            /**
+             * 归属项目平台 ID（IMPL-T15-1：项目详情链接与项目网操作的目标锚；
+             *     管理面用 ID，免疫跨团队同名项目歧义）。
+             */
+            project_id?: string;
+            /**
+             * 项目网参与状态（IMPL-T15-1/OT-1 显式 opt-in）：attached=true 时
+             *     project_network = 项目网 overlay 名（`fleetly-project-<project_id>`），
+             *     成员服务在 app 私网之外双挂该网（项目网别名 `<app>-<service>`）；
+             *     缺省 false = 不参加（既有 app 私网隔离现状）。
+             */
+            project_network_attached?: boolean;
+            project_network?: string;
         };
         v1DeleteAppResponse: {
             name?: string;
@@ -2623,6 +2711,13 @@ export interface components {
             /** 归属 slug（AppView 同款；详情头与列表行的限定形展示同源）。 */
             team_slug?: string;
             project_slug?: string;
+            /**
+             * 归属项目平台 ID 与项目网参与投影（IMPL-T15-1；AppView 同款字段，
+             *     详情页的项目网卡数据源）。
+             */
+            project_id?: string;
+            project_network_attached?: boolean;
+            project_network?: string;
             placement?: components["schemas"]["v1PlacementView"];
             /** 最近部署（created_at 倒序，至多 5 条；派生状态的正交细节）。 */
             recent_deployments?: components["schemas"]["v1DeploymentView"][];
@@ -5236,6 +5331,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["v1SetTeamMemberRoleResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsService_AttachAppProjectNetwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1AttachAppProjectNetworkResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProjectsService_DetachAppProjectNetwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1DetachAppProjectNetworkResponse"];
                 };
             };
             /** @description An unexpected error response. */

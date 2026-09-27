@@ -223,6 +223,25 @@ func sameConfigMounts(a, b []ConfigMount) bool {
 	return true
 }
 
+// sameNetworkAttachments 比较网络接入集（名称 + 别名集合；网络集合变化 =
+// task template 变化 = 服务滚动，IMPL-T15-1 真机实证——增/摘网必然重建任务）。
+func sameNetworkAttachments(a, b []NetworkAttach) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Name != b[i].Name || len(a[i].Aliases) != len(b[i].Aliases) {
+			return false
+		}
+		for j := range a[i].Aliases {
+			if a[i].Aliases[j] != b[i].Aliases[j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // mutateExternal 模拟外部操作（手动 docker service update --env 等）：绕过
 // 平台写语义直接改写运行服务形态并推进对象版本（不触碰 desired-hash
 // label——外部改动不清理平台簿记，正是漂移检测要抓的形态）。
@@ -297,22 +316,24 @@ func (f *fakeSubstrate) ServiceUpdate(_ context.Context, name string, spec Servi
 	f.updates = append(f.updates, [2]string{name, spec.Image})
 	oldImage := svc.spec.Image
 	oldTasks := append([]TaskState{}, svc.tasks...)
-	// 判定是否有实质变更（镜像或 config 引用变化才进入行为模型——真实
-	// swarm 的 task template 变更即触发滚动，config 引用是模板的一部分；
-	// 纯 label 更新零任务变动——归位零成本的假底座同构，Spike B2）。
+	// 判定是否有实质变更（镜像 / config 引用 / 网络集合变化才进入行为模型
+	// ——真实 swarm 的 task template 变更即触发滚动：config 引用与网络集合
+	// 都是模板的一部分〔IMPL-T1-4/T15-1 真机实证〕；纯 label 更新零任务
+	// 变动——归位零成本的假底座同构，Spike B2）。
 	imageChanged := oldImage != spec.Image
 	configsChanged := !sameConfigMounts(svc.spec.Configs, spec.Configs)
+	networksChanged := !sameNetworkAttachments(svc.spec.Networks, spec.Networks)
 	svc.spec = spec
-	if !imageChanged && !configsChanged {
+	if !imageChanged && !configsChanged && !networksChanged {
 		svc.update = "completed"
 		return nil
 	}
-	if configsChanged && !imageChanged {
-		// 同镜像、config 引用换版：真实 swarm 以 task template 变更重建任务
-		//（同镜像也替换；IMPL-T1-4 真机探针实证），更新即完成。
+	if (configsChanged || networksChanged) && !imageChanged {
+		// 同镜像、config/网络集合变更：真实 swarm 以 task template 变更重建
+		// 任务（同镜像也替换；IMPL-T1-4/T15-1 真机探针实证），更新即完成。
 		svc.update = "completed"
 		svc.message = ""
-		svc.tasks = f.runningTasks(svc, "t-cfg")
+		svc.tasks = f.runningTasks(svc, "t-template")
 		return nil
 	}
 	f.applyMode(svc, oldImage, oldTasks)
@@ -549,10 +570,154 @@ func (f *fakeResolver) Preflight(context.Context, string) error {
 	return err
 }
 
+// fakeNetwork 是一只假网络对象的实况（label 集 + 挂接/引用计数）。
+type fakeNetwork struct {
+	labels     map[string]string
+	containers int
+	services   int
+}
+
+// fakeNetworkSubstrate 是 NetworkSubstrate 端口的内存实现（IMPL-T15-1 项目网
+// 生命周期与对账测试）：ensure 幂等（已存在不覆盖 label——真实 daemon 同
+// 语义）、list 按 managed label 过滤（**列表投影不含端点计数**——真实
+// daemon 语义，GC 判据走 Inspect）、inspect 带 containers/services、
+// remove 幂等记录。
+type fakeNetworkSubstrate struct {
+	mu   sync.Mutex
+	nets map[string]*fakeNetwork
+	// failListErr 注入 NetworkList 瞬态错误（读错不结论断言面）。
+	failListErr error
+	// failInspectErr 注入 NetworkInspect 瞬态错误（GC 读错不动作断言面）。
+	failInspectErr error
+	// ensures 记录 ensure 调用序列（收敛 duty 断言面）。
+	ensures []string
+	// removes 记录 remove 调用序列（回收断言面）。
+	removes []string
+}
+
+func newFakeNetworkSubstrate() *fakeNetworkSubstrate {
+	return &fakeNetworkSubstrate{nets: map[string]*fakeNetwork{}}
+}
+
+func (f *fakeNetworkSubstrate) NetworkEnsureWithLabels(_ context.Context, name string, labels map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ensures = append(f.ensures, name)
+	if _, ok := f.nets[name]; ok {
+		return nil // 已存在不覆盖（真实 daemon 语义）
+	}
+	copied := make(map[string]string, len(labels))
+	for k, v := range labels {
+		copied[k] = v
+	}
+	f.nets[name] = &fakeNetwork{labels: copied}
+	return nil
+}
+
+func (f *fakeNetworkSubstrate) NetworkList(_ context.Context, labels map[string]string) ([]NetworkState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failListErr != nil {
+		return nil, f.failListErr
+	}
+	names := make([]string, 0, len(f.nets))
+	for name := range f.nets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var out []NetworkState
+	for _, name := range names {
+		net := f.nets[name]
+		match := true
+		for k, v := range labels {
+			if net.labels[k] != v {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+		// 列表投影：Containers/Services 归零（真实 daemon 语义）。
+		out = append(out, NetworkState{Name: name, Labels: copyLabels(net.labels), Driver: "overlay"})
+	}
+	return out, nil
+}
+
+func (f *fakeNetworkSubstrate) NetworkInspect(_ context.Context, name string) (NetworkState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failInspectErr != nil {
+		return NetworkState{}, f.failInspectErr
+	}
+	net, ok := f.nets[name]
+	if !ok {
+		return NetworkState{}, ErrNetworkNotFound
+	}
+	return NetworkState{
+		Name: name, Labels: copyLabels(net.labels), Driver: "overlay",
+		Containers: net.containers, Services: net.services,
+	}, nil
+}
+
+func (f *fakeNetworkSubstrate) NetworkRemove(_ context.Context, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removes = append(f.removes, name)
+	delete(f.nets, name)
+	return nil
+}
+
+// injectNetwork 注入一只网络对象（孤儿/归因测试的播种面）。
+func (f *fakeNetworkSubstrate) injectNetwork(name string, labels map[string]string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nets[name] = &fakeNetwork{labels: copyLabels(labels)}
+}
+
+// injectOrphan 注入一只受管但无法归因的平台前缀网（守卫②的孤儿形态）。
+func (f *fakeNetworkSubstrate) injectOrphan(name string) {
+	f.injectNetwork(name, map[string]string{state.LabelManaged: state.ManagedLabelValue})
+}
+
+// setEndpoints 设置网络的挂接容器/引用服务计数（GC 安全性判据注入面）。
+func (f *fakeNetworkSubstrate) setEndpoints(name string, containers, services int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if net, ok := f.nets[name]; ok {
+		net.containers = containers
+		net.services = services
+	}
+}
+
+// has 报告网络是否存在。
+func (f *fakeNetworkSubstrate) has(name string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.nets[name]
+	return ok
+}
+
+// removeCount 返回 remove 调用次数（回收断言面）。
+func (f *fakeNetworkSubstrate) removeCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.removes)
+}
+
+func copyLabels(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 // 编译期断言：假底座/假解析器满足引擎端口。
 var (
 	_ Substrate         = (*fakeSubstrate)(nil)
 	_ PlacementResolver = (*fakeResolver)(nil)
 	_ ImageChecker      = (*fakeImages)(nil)
 	_ Clock             = (*fakeClock)(nil)
+	_ NetworkSubstrate  = (*fakeNetworkSubstrate)(nil)
 )

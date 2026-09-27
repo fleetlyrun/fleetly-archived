@@ -73,6 +73,14 @@ func TestNonStreamingCallDeadlineBound(t *testing.T) {
 		{"TaskList", func(ctx context.Context) error { _, err := c.TaskList(ctx, "web"); return err }},
 		{"NetworkEnsure(Inspect+Create)", func(ctx context.Context) error { return c.NetworkEnsure(ctx, "net-x") }},
 		{"SwarmReady(Info)", func(ctx context.Context) error { return c.SwarmReady(ctx) }},
+		// networks.go（IMPL-T15-1 项目网对象面）：ensure/list/inspect/remove
+		// 四原语同样逐调用独立预算（D2 覆盖面随新原语同步）。
+		{"NetworkEnsureWithLabels(Inspect+Create)", func(ctx context.Context) error {
+			return c.NetworkEnsureWithLabels(ctx, "net-y", map[string]string{"fleetly.managed": "true"})
+		}},
+		{"NetworkList", func(ctx context.Context) error { _, err := c.NetworkList(ctx, nil); return err }},
+		{"NetworkInspect", func(ctx context.Context) error { _, err := c.NetworkInspect(ctx, "net-y"); return err }},
+		{"NetworkRemove", func(ctx context.Context) error { return c.NetworkRemove(ctx, "net-y") }},
 		// ImageDigest：IMPL-T1-2 起 tag 引用 registry-first（解析腿不经
 		// daemon），本地 inspect 腿的预算断言用平台本地命名空间引用触达
 		// （fleetly-local/… 跳过解析腿——v0.1 本地面语义）。

@@ -72,6 +72,14 @@ type Engine struct {
 	// reap 的扫尾面；nil = 未接线——清场如实跳过告警）。实现 =
 	// substrate.Client（WithConfigReaper）。
 	configReap ConfigReaper
+	// netSub 是底座网络对象面端口（IMPL-T15-1：项目网幂等 ensure / 对账
+	// networks 扩面 / 空网 GC；nil = 未接线——网络对账面整体跳过，项目网
+	// 生命周期调用显式报错）。实现 = substrate.Client（WithNetworkSubstrate）。
+	netSub NetworkSubstrate
+	// platformNetworks 是 recon networks 面的平台组件网名白名单（装配层
+	// 注入：ingress/state 的固定名常量；engine 不 import ingress——方向
+	// 纪律。组件网生命周期归各组件 duty，本 duty 不判罚）。
+	platformNetworks map[string]bool
 	// waterMarks 是副本水位不足判定的进程内计时（观察窗辅助信号；引擎
 	// 重启后重摆——窗口本身持久化，重启代价可接受）。
 	waterMarks map[string]time.Time
@@ -110,6 +118,15 @@ type Engine struct {
 	// 事件面）披露的进程内记忆：语义与 substrateMissingSeen 同款（持续形态
 	// 只报一次；任务回岗清零可再报；重启清零 = 重报一次，重复优于漏报）。
 	substrateDrainedSeen map[string]bool
+	// networkOrphanSeen / networkMissingSeen 是 networks 对账面（IMPL-T15-1）
+	// 两类披露的进程内记忆：按网络名节流（持续形态只报一次；条件解除清零
+	// 可再报；重启清零 = 重报一次——与 substrateMissingSeen 同语义）。
+	networkOrphanSeen  map[string]bool
+	networkMissingSeen map[string]bool
+	// projectNetNextAt 是项目网收敛 duty 的最早时刻（projectNetworkSweepInterval
+	// 频控，substrateNextAt 同模式：tick goroutine 专用；重启即清零 = 重启后
+	// 立即扫一拍）。
+	projectNetNextAt time.Time
 	// metricsQ 是 VM 瞬时查询端口（autoscaler 评估器的数据面；nil = duty
 	// 整体不在评估域——装配层经 WithMetricsQuerier 注入）。
 	metricsQ MetricsQuerier
@@ -157,6 +174,8 @@ func NewEngine(cfg Config, store *state.Store, sub Substrate, images ImageChecke
 		recoveryStuck:        map[string]bool{},
 		substrateMissingSeen: map[string]bool{},
 		substrateDrainedSeen: map[string]bool{},
+		networkOrphanSeen:    map[string]bool{},
+		networkMissingSeen:   map[string]bool{},
 		scalingDormantSeen:   map[string]bool{},
 		scalingNoDataSeen:    map[string]bool{},
 	}
@@ -190,6 +209,21 @@ func (e *Engine) WithDatabaseTemplate(p DatabaseTemplatePort) *Engine { e.dbTemp
 // compose secrets 注入链；实现 = substrate.Client——底座原语随底座适配器
 // 落，装配层接线）。
 func (e *Engine) WithSecretEnsurer(s SecretEnsurer) *Engine { e.secretEnsure = s; return e }
+
+// WithNetworkSubstrate 注入底座网络对象面端口（IMPL-T15-1：项目网 ensure/
+// 对账/GC；实现 = substrate.Client）。
+func (e *Engine) WithNetworkSubstrate(ns NetworkSubstrate) *Engine { e.netSub = ns; return e }
+
+// WithPlatformNetworks 注入 recon networks 面的平台组件网名白名单（装配层
+// 从 ingress/state 常量注入——引擎不 import ingress）。未注入 = 空集（组件
+// 网会被判为孤儿——生产装配必须注入；单测按需）。
+func (e *Engine) WithPlatformNetworks(names ...string) *Engine {
+	e.platformNetworks = map[string]bool{}
+	for _, n := range names {
+		e.platformNetworks[n] = true
+	}
+	return e
+}
 
 // Run 启动引擎主循环：启动扫描（控制面重启分类恢复）→ 周期 tick + 漂移
 // 扫描。ctx 取消返回 nil（lynx actor 契约由服务壳负责阻塞语义）。
@@ -256,7 +290,8 @@ func (e *Engine) safeCall(name string, fn func()) {
 
 // tick 是一个推进周期：恢复重试（M1-8）→ 队列拾取 → 在途推进 → 窗后巡检
 // → deleting 应用回收（H10/MG-3，时间闸降频）→ 运行期存在性对账
-// （T0-V2.2/R2，时间闸降频）→ init 孤儿服务清扫（DT-4，时间闸降频）。
+// （T0-V2.2/R2，时间闸降频；IMPL-T15-1 起含 networks 面）→ init 孤儿服务
+// 清扫（DT-4，时间闸降频）→ 项目网 GC（IMPL-T15-1，时间闸降频）。
 // 全部 duty 经 safeCall 收口（MG-5）。
 func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("recoveryRetry", func() { e.retryRecoveryIfNeeded(ctx) })
@@ -266,6 +301,7 @@ func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("reapDeletingApps", func() { e.reapDeletingApps(ctx, false) })
 	e.safeCall("substrateRecon", func() { e.substrateRecon(ctx, false) })
 	e.safeCall("sweepInitJobs", func() { e.sweepInitJobs(ctx, false) })
+	e.safeCall("reconcileProjectNetworks", func() { e.reconcileProjectNetworks(ctx, false) })
 	// 扩缩评估（W5-S1，D-V3W5-2）：收敛拍尾部——发布链路推进完毕后的稳态
 	// 求值（自有 30s 频控闸；查询面未装配时 duty 空转）。
 	e.safeCall("dutyAutoscaling", func() { e.dutyAutoscaling(ctx, false) })
@@ -637,6 +673,12 @@ func (e *Engine) planAndRelease(ctx context.Context, rec state.DeployRecord, pre
 	if err != nil {
 		return e.failTransitionErr(ctx, rec, errorf("E_RUNTIME_UNAVAILABLE", "failed to read volume registry: %v", err))
 	}
+	// 项目网投影（OT-1/IMPL-T15-1）：参与位在位 → 成员服务双挂；命名违约
+	// 显式失败（不静默丢投影——那会让 attach 语义静默失效）。
+	projectNetwork, err := projectNetworkFor(pre.app)
+	if err != nil {
+		return e.failTransitionErr(ctx, rec, err)
+	}
 	plan, err := BuildPlan(PlanInput{
 		AppID:               rec.AppID,
 		AppName:             rec.AppName,
@@ -655,6 +697,7 @@ func (e *Engine) planAndRelease(ctx context.Context, rec state.DeployRecord, pre
 		Images:              images,
 		Decision:            pre.decision,
 		Volumes:             volumes,
+		ProjectNetwork:      projectNetwork,
 	})
 	if err != nil {
 		return e.failTransitionErr(ctx, rec, err)

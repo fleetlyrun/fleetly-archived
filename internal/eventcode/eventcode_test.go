@@ -179,6 +179,14 @@ var docEvents = map[string]string{ // event → 文档出处
 	"project.deleted":        "v0.3 W2-S1 rbac-teams §6 (empty-project deletion; state projects.go DeleteProject, same transaction)",
 	"project.member_changed": "v0.3 W2-S1 rbac-teams §6 (project role override set/removed; state projects.go, same transaction)",
 
+	// T 线 OT-1 / IMPL-T15-1 项目网（设计档 OT-1 + 票面；注册表只增）：
+	// 发出来源 = internal/state/projectnetworks.go 的参与位置位/清位原语
+	//（与业务写同事务 = Outbox；API attach/detach 唯一消费点）+ engine
+	// substrateRecon 的 networks 面（孤儿/缺失披露；只披露不自动删建）。
+	"project.network_changed": "T-line OT-1/IMPL-T15-1 (explicit opt-in attach/detach of an app to its project network; state projectnetworks.go, same transaction; defaults off)",
+	"network.orphaned":        "T-line OT-1/IMPL-T15-1 DT-5 recon guard (platform-managed fleetly- network with no state attribution; disclosed only, never deleted silently)",
+	"network.missing":         "T-line OT-1/IMPL-T15-1 DT-5 recon guard (expected project network absent from the substrate; re-ensured by attach/deploy, never auto-recreated by recon)",
+
 	// v0.3 W3-S2 git SSH host key（rbac-teams §6 裁决 D-W0-8 FZ-12，注册表
 	// 只增）：发出来源 = host key 启动装载与指纹台账的比对事务
 	//（internal/state/hostkeysettings.go，与台账更新同事务 = Outbox；

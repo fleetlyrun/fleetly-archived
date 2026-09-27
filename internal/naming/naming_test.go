@@ -61,6 +61,22 @@ func TestNamesMatchDesignDocs(t *testing.T) {
 			want: "web",
 		},
 		{
+			// OT-1/IMPL-T15-1 项目网行：`fleetly-project-<projectID>`（组件网
+			// 固定前缀 + 项目平台 ID **全量**——ULID 前 8 只有 40 位时间戳
+			// 成分、256ms 窗口内撞名，截断即网络静默合并风险；设计档 OT-1
+			// 命名公式本体不变、项目段变更继续挂账——本行是新增对象族）。
+			name: "project network name",
+			got:  must(t, func() (string, error) { return ProjectNetworkName("01JABCDE9Z8Y7X6W5V4T3S2R1Q") }),
+			want: "fleetly-project-01JABCDE9Z8Y7X6W5V4T3S2R1Q",
+		},
+		{
+			// OT-1 蓝图原条款：项目网别名 = `<app>-<service>`（短名仅 app
+			// 私网——别名隔离守卫④）。
+			name: "project network alias",
+			got:  must(t, func() (string, error) { return ProjectNetworkAlias("my-api", "web") }),
+			want: "my-api-web",
+		},
+		{
 			// 流标签口径（rbac-teams §4.3 流标签行）：三段限定形。
 			name: "qualified name",
 			got:  must(t, func() (string, error) { return QualifiedName("acme", "prod", "my-api") }),
@@ -255,6 +271,92 @@ func TestNameValidation(t *testing.T) {
 	}
 }
 
+// TestProjectNetworkNameCannotCollideWithAppNetwork OT-1：项目网前缀族
+// `fleetly-project-<projectID>`（ID 全量 = ULID Crockford：大写字母+数字）
+// 与三段 slug 网络名 `fleetly-<team>-<prj>-<app>-net`（[a-z0-9._-] 字符集）
+// 结构不相交——即便 team slug 取 `project`（合法单词制），产物含小写/'-'/
+// 'net' 尾，不可能等于前缀 + 纯 Crockford 尾段。保留字清单因此无需扩
+// `project`。截断撞名的反证：两个 256ms 窗口内创建的项目 ID 前 8 位相同
+// （时间戳高位相同）——本测试以同前缀双 ID 钉死「全量 ID 才唯一」。
+func TestProjectNetworkNameCannotCollideWithAppNetwork(t *testing.T) {
+	const projectID = "01JABCDE9Z8Y7X6W5V4T3S2R1Q"
+	projectNet := must(t, func() (string, error) { return ProjectNetworkName(projectID) })
+	if projectNet != "fleetly-project-"+projectID {
+		t.Fatalf("project network name = %q, want fleetly-project-<full project id>", projectNet)
+	}
+	if !IsProjectNetworkName(projectNet) {
+		t.Fatalf("IsProjectNetworkName(%q) = false, want true", projectNet)
+	}
+	// 同 256ms 窗口内创建的两个项目：ULID 前 8 位相同（时间戳高位），
+	// 随机尾段不同——项目网名必须仍互异（截断方案会撞名的反证）。
+	const sameWindowID = "01JABCDE9Z8Y7X6W5V4T3S2R1R"
+	if sameWindowID[:8] != projectID[:8] {
+		t.Fatalf("fixture error: %q and %q must share the first 8 chars", projectID, sameWindowID)
+	}
+	otherNet := must(t, func() (string, error) { return ProjectNetworkName(sameWindowID) })
+	if otherNet == projectNet {
+		t.Fatalf("project networks of same-window projects collide: %s (full id required)", projectNet)
+	}
+	// team slug = project 的最凶形态（同为 fleetly-project- 前缀），遍历
+	// slug/app 组合断言不误判为项目网、也不等值。
+	for _, prj := range []string{"ab", "prod", "abcdefgh"} {
+		for _, app := range []string{"c", "web", "backend-1"} {
+			appNet := must(t, func() (string, error) { return NetworkName("project", prj, app) })
+			if appNet == projectNet {
+				t.Fatalf("app network %q equals the project network name (collision)", appNet)
+			}
+			if IsProjectNetworkName(appNet) {
+				t.Fatalf("IsProjectNetworkName(%q) = true for an app network (cross-family misjudgment)", appNet)
+			}
+		}
+	}
+	// 近名负路径：lowercase/含 '-'/空尾/非 Crockford 一律不判项目网。
+	for _, name := range []string{
+		"fleetly-project-01jabcde9z8y7x6w5v4t3s2r1q", // 小写
+		"fleetly-project-01JABCDE",                   // 截断形态（非全量 ID）
+		"fleetly-project-01JABCD-",                   // 非 Crockford
+		"fleetly-project-",                           // 空尾
+		"fleetly-project-web",                        // 非 ID 形态
+	} {
+		if IsProjectNetworkName(name) {
+			t.Errorf("IsProjectNetworkName(%q) = true, want false", name)
+		}
+	}
+	// 组件网/库网/既有族不误判。
+	for _, name := range []string{"fleetly-system", "fleetly-rustfs-net", "fleetly-acme-prod-web-net", "fleetly-db-acme-prod-pg-net", "fleetly-cron-acme-prod-web-x-01JABCDE"} {
+		if IsProjectNetworkName(name) {
+			t.Errorf("IsProjectNetworkName(%q) = true, want false", name)
+		}
+	}
+}
+
+// TestProjectNetworkAliasIsolationContract 别名隔离的命名侧契约（守卫④）：
+// app 私网别名 = 短名（仅服务名）；项目网别名 = <app>-<service>；两者在
+// 同名服务上必不相等。非法成分拒绝同 NetworkAlias 纪律。
+func TestProjectNetworkAliasIsolationContract(t *testing.T) {
+	short := must(t, func() (string, error) { return NetworkAlias("web") })
+	long := must(t, func() (string, error) { return ProjectNetworkAlias("my-api", "web") })
+	if short != "web" || long != "my-api-web" || short == long {
+		t.Fatalf("alias contract broken: short=%q long=%q", short, long)
+	}
+	for _, tc := range []struct {
+		name string
+		fn   func() (string, error)
+	}{
+		{"empty app", func() (string, error) { return ProjectNetworkAlias("", "web") }},
+		{"empty service", func() (string, error) { return ProjectNetworkAlias("app", "") }},
+		{"slash app", func() (string, error) { return ProjectNetworkAlias("a/b", "web") }},
+		{"colon service", func() (string, error) { return ProjectNetworkAlias("app", "we:b") }},
+		{"empty project id", func() (string, error) { return ProjectNetworkName("") }},
+		{"short project id", func() (string, error) { return ProjectNetworkName("01JA") }},
+		{"lowercase project id", func() (string, error) { return ProjectNetworkName("01jabcde9z8y7x6w5v4t3s2r1q") }},
+	} {
+		if _, err := tc.fn(); err == nil {
+			t.Errorf("%s: expected error", tc.name)
+		}
+	}
+}
+
 // must 是表驱动夹具的构造 helper（失败即测试失败）。
 func must(t *testing.T, fn func() (string, error)) string {
 	t.Helper()
@@ -290,7 +392,7 @@ func TestReservedTeamSlugs(t *testing.T) {
 			t.Errorf("ReservedTeamSlugReason(%q) empty: every reserved slug must carry its collision evidence", name)
 		}
 	}
-	for _, name := range []string{"demo", "ingress", "exec", "system", "console", "victoriametrics", "cadvisor", "node-exporter", "cronapp", "dbapp", "initapp"} {
+	for _, name := range []string{"demo", "ingress", "exec", "system", "console", "victoriametrics", "cadvisor", "node-exporter", "cronapp", "dbapp", "initapp", "project"} {
 		if IsReservedTeamSlug(name) {
 			t.Errorf("IsReservedTeamSlug(%q) = true, audit proved no collision (reserved set must stay minimal)", name)
 		}
