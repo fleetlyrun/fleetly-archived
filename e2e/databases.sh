@@ -88,7 +88,7 @@ PG_IMG='postgres:16@sha256:a3b7f434b2dc57ce85a67e171163eb8ab1a1ebcb39d27484661f2
 REDIS_IMG='redis:7@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f'
 RESTIC_IMG='restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510'
 # dbtools（私有 ghcr 包）：internal/database DefaultDatabaseToolsImage 同串。
-DBTOOLS_IMG='ghcr.io/fleetlyrun/dbtools:v0.3.0-dbtools.1@sha256:2b9288a9d844c1a924d9a52c2745861056c28e2ee2caabc6dfd9db313775bd96'
+DBTOOLS_IMG='ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382'
 # mysql/mongo 引擎镜像（v0.3 W4 D-W4-1/2，M/G 腿）：与 internal/dbtemplate
 # DefaultMySQLImage/DefaultMongoImage 同串（台账 docs/runbooks/image-prepull.md
 # #19/#20）——预拉沿 postgres 形态（公网镜像，3 次重试抗 registry 抖动）。

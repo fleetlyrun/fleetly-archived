@@ -50,16 +50,14 @@ import (
 //
 // 供应链：CI 首推 2026-09-23（run 35797985743），digest 已钉（多架构 index，
 // buildx imagetools 独立解析）——中间态豁免已摘除，与平台其余镜像同构。
-// **待发布项**：本常量现指 v0.3.0-dbtools.1（PG16 单代工具面）；本票的
-// PG16+PG18 双工具面需重发（建议 tag v0.3.1-dbtools.1）后把新 digest 回填
-// 此处 + e2e/databases.sh DBTOOLS_IMG + 台账 #22 三锚（发布命令与阻塞说明
-// 见 docs/plan/2026-09-26-torchwood-line-impl.md §4「IMPL-DB-0 实施记录」；
-// 回填前 PG18 模板的 job 会以「镜像缺该 major 工具面」显式失败——fail-loud
-// 而非静默降级）。
+// **发布记录（IMPL-DB-0，2026-09-27）**：PG16+PG18 双工具面镜像经
+// dbtools.yml dispatch 发布（run 36303530093，tag v0.3.1-dbtools.1；cosign
+// keyless 签名 + 验签门随工作流）——三锚同批回填 = 本常量 +
+// e2e/databases.sh DBTOOLS_IMG + 台账 docs/runbooks/image-prepull.md #22。
 // 工具面：PG16 16.15 + PG18 18.6（版本分区路径，按 major 显式选取）、
 // redis-cli、restic 0.19.1、mysql/mongo 工具面（与引擎逐位同版）。重建随
 // 平台 release 由 .github/workflows/dbtools.yml 承载。
-const DefaultDatabaseToolsImage = "ghcr.io/fleetlyrun/dbtools:v0.3.0-dbtools.1@sha256:2b9288a9d844c1a924d9a52c2745861056c28e2ee2caabc6dfd9db313775bd96"
+const DefaultDatabaseToolsImage = "ghcr.io/fleetlyrun/dbtools:v0.3.1-dbtools.1@sha256:c6cafbc303415f2df88410599ff5e28e97e7dcdc0fb9fb79adba4bddb1720382"
 
 // 备份计划平台缺省（§5.4 配置键 databases.backup_*；实例 settings 零值
 // 字段回落——平台缺省只在此处为常量，不进 config.yaml：备份计划属实例

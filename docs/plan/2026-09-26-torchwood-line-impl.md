@@ -1020,6 +1020,8 @@ $ FLEETLY_MANUAL_DBTOOLS=1 FLEETLY_MANUAL_DBTOOLS_IMAGE=fleetly-dbtools:local \
   3. 三锚回填：`internal/database/adapters.go` 的 `DefaultDatabaseToolsImage`、`e2e/databases.sh` 的 `DBTOOLS_IMG`、`docs/runbooks/image-prepull.md` 台账 #22 的 digest 列（cosign 签名由 workflow 自带 verify 门确认）。
 - 回填前语义：PG16 模板的 job 在旧镜像上仍全功能（显式 16 路径在旧镜像同样存在）；PG18 模板（DB-1 落条目后）的 job 会以「镜像缺该 major 工具面」显式失败（fail-loud）。
 
+**发布完成（2026-09-27，本会话执行——挂账解除）**：本票提交推送（`1574121`）后 dispatch `dbtools.yml`（run **36303530093**，tag `v0.3.1-dbtools.1`，conclusion=success，cosign 签名 + 验签门随工作流）；多架构 index digest = `sha256:c6cafbc3…20382`（`docker buildx imagetools inspect` 实测；amd64 manifest `729a7f42…`、arm64 `13a0c1e7…`）；发布产物按 digest 拉取实证双工具链（pg_dump 16.15/18.6）+ 真机探针两腿 PASS（本会话复跑）。三锚已回填：`DefaultDatabaseToolsImage`、e2e `DBTOOLS_IMG`、台账 #22。arm64 运行腿仍为 staging 待验项（本机存储限制，见下）。
+
 staging/真机待执行项（本环境不可得者，未虚构）：
 
 - **多架构 arm64 运行腿**：本机 classic image store 对同 digest 换平台报 `cannot overwrite digest`（DB-1 审查同款限制），arm64 本地不可运行验证；缺口库闭包由 `COPY` 同源 + `/usr/lib/*-linux-gnu/` 通配按构造覆盖，**CI buildx 双平台构建**为第一道门（amd64 已实证；arm64 建议 staging/dind 按 digest 独立拉取复验）。
