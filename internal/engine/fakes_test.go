@@ -135,6 +135,14 @@ func newFakeSubstrate() *fakeSubstrate {
 	}
 }
 
+// serviceUpdateCalls 返回 ServiceUpdate 的累计调用次数（收敛幂等断言面：
+// 与 updates 明细同源——每次 ServiceUpdate 恰好记一条）。
+func (f *fakeSubstrate) serviceUpdateCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.updates)
+}
+
 func (f *fakeSubstrate) SwarmReady(context.Context) error { return f.swarmErr }
 
 func (f *fakeSubstrate) NetworkEnsure(_ context.Context, name string) error {

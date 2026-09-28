@@ -999,26 +999,15 @@ func (e *Engine) applyDesired(ctx context.Context, rec state.DeployRecord, desir
 	for i := range desired {
 		spec := desired[i]
 		desiredNames[spec.Name] = true
-		// 快照/规划产出的服务 label 不含哈希（哈希后附加）——对账时以当前
-		// 发布归属补齐，保证 label 与哈希一致。
-		if spec.ServiceLabels == nil {
-			spec.ServiceLabels = map[string]string{}
-		}
-		spec.ServiceLabels[state.LabelDeployment] = rec.ID
-		spec.ServiceLabels[state.LabelDesiredHash] = spec.DesiredHash()
-
+		// 收敛原语单点（IMPL-ARCH-B）：哈希标戳 + 缺失建 + 哈希不符/换代/
+		// force 重申全部在 converge.go（引擎里不再有第二份收敛 switch）。
+		// 部署线特有条件经 opts 传入：force=重放路径恒重申（见上注）；
+		// deploymentID=打归属标 + 换代即更新（服务 label 以当前发布归属重写，
+		// 任务零替换——Spike B2）。
 		cur, ok := byName[spec.Name]
-		switch {
-		case !ok:
-			if err := e.sub.ServiceCreate(ctx, spec); err != nil {
-				return appErrOf(err, rec.ID)
-			}
-		case force ||
-			cur.DesiredHash != spec.DesiredHash() ||
-			cur.Labels[state.LabelDeployment] != rec.ID:
-			if err := e.sub.ServiceUpdate(ctx, spec.Name, spec); err != nil {
-				return appErrOf(err, rec.ID)
-			}
+		opts := convergeOptions{force: force, deploymentID: rec.ID}
+		if err := e.convergeServiceObserved(ctx, spec, cur, ok, opts); err != nil {
+			return appErrOf(err, rec.ID)
 		}
 	}
 	// 省略=删除（compose 移除服务 → 删 Swarm service；卷数据不删）。

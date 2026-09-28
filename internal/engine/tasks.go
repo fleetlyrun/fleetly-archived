@@ -373,22 +373,13 @@ func (e *Engine) convergeQueuedTask(ctx context.Context, t state.Task) {
 		e.failTask(ctx, t, err.Error())
 		return
 	}
-	cur, ierr := e.sub.ServiceInspect(ctx, spec.Name)
-	switch {
-	case errors.Is(ierr, ErrServiceNotFound):
-		if err := e.sub.ServiceCreate(ctx, spec); err != nil {
-			e.log.Warn("engine: task service create failed (retrying next tick)", "task", t.ID, "error", err)
-			return
-		}
-	case ierr != nil:
-		e.log.Warn("engine: task service inspect failed (transient)", "task", t.ID, "error", ierr)
+	// 收敛原语单点（IMPL-ARCH-B）：inspect→缺失建→哈希不符重申 + 哈希标戳
+	// 全在 converge.go。修复前任务 spec 从不打 LabelDesiredHash ⇒ 读回哈希
+	// 恒空 ⇒ 每拍无差别重申；修复后首拍落标、后续拍哈希命中即零底座写。
+	// 暂态读错原样上抛 → 告警后下一拍重试（不据此下确定性结论）。
+	if err := e.convergeService(ctx, spec, convergeOptions{}); err != nil {
+		e.log.Warn("engine: task service convergence failed (retrying next tick)", "task", t.ID, "error", err)
 		return
-	case cur.DesiredHash != spec.DesiredHash():
-		// 期望哈希不符（外部篡改/上一代残留）：以平台形态重申（spec 全量）。
-		if err := e.sub.ServiceUpdate(ctx, spec.Name, spec); err != nil {
-			e.log.Warn("engine: task service update failed (retrying next tick)", "task", t.ID, "error", err)
-			return
-		}
 	}
 	if _, changed, err := e.store.MarkTaskRunning(ctx, t.ID); err != nil {
 		e.log.Warn("engine: mark task running failed", "task", t.ID, "error", err)
@@ -409,7 +400,10 @@ func (e *Engine) observeRunningTask(ctx context.Context, t state.Task) {
 				e.failTask(ctx, t, serr.Error())
 				return
 			}
-			if cerr := e.sub.ServiceCreate(ctx, spec); cerr != nil {
+			// 重建腿走收敛原语（IMPL-ARCH-B）：哈希标戳在原语内落，重建后的
+			// 服务与首拍收敛同构（原语自查实况——缺失即建；此处 inspect 与
+			// 原语 inspect 的重复只在重建这条罕见路径上，换取 switch 单点）。
+			if cerr := e.convergeService(ctx, spec, convergeOptions{}); cerr != nil {
 				e.log.Warn("engine: task service recreate failed (retrying next tick)", "task", t.ID, "error", cerr)
 			} else {
 				e.log.Warn("engine: task service was absent from the substrate (recreated by convergence)", "task", t.ID)
