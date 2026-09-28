@@ -102,7 +102,7 @@
 | TestMethodScopeRegistryCoversDescriptor | 测试(descriptor walk) | 新 RPC 漏登 scope → 第一次 go test 红且点名 |
 | TestDisclosureModuleContract + TestScanGateDueAndAdvance | 测试(module 契约) | 披露 module 的 once/sweep/事务配对语义漂移 → 契约测试红 |
 | TestEngineToolsTableConsistency | 测试(表一致性) | 新引擎条目缺件/幻影 → 表测试红 |
-| TestStoreErrTable 六件套 | 测试(表投影) | 映射行状态码/注册码改错 → 既有 handler 测试+表测试同时红 |
+| TestStoreErrTable* 等六守卫 | 测试(表投影) | 映射行状态码/注册码改错 → 既有 handler 测试+表测试同时红 |
 | TestPollStreamSharedSkeletonServesBothFamilies | 测试(共路) | task sink 误接 ring/循环分叉 → 共路测试红 |
 
 共同效果:把「穷尽性」从提交者记性与评审者记忆搬进 CI 枚举守卫——同类问题从验收期(如 F1 于整线验收发现)前移到提交期。

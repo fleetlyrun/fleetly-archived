@@ -578,7 +578,7 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构结果；
 | 补充：compose 归一化/哈希/差分/白名单 | `TestConfigsNormalization` / `TestConfigsTargetChangeHashesAndDiffs` / `TestConfigsNameValidation` / `TestWhitelistGolden`（再生成） |
 | 补充：底座投影形态 | `TestBuildSwarmSpecConfigFileTargetFullValues`（ID+Name+File 0:0/0444）/`TestBuildSwarmSpecConfigNotEnsuredFailsExplicitly`/`TestServiceToStateProjectsConfigs` |
 | 补充：state/CLI/Console | `TestAppConfigsStore` / `TestAppConfigsMigrationUpDown`；`TestConfigsCRUDSurface`（CLI 全链 + 用法错误）；`AppConfigsPage.test.tsx`（7 测：列表/新增/编辑锁定/删除确认/明文查看/空态/viewer 只读） |
-| 事件/错误码只增纪律 | `TestDocCodeSetMatchesRegistry` / `TestRegisteredCountByKind`（80 E + 5 W）/ `TestGoldenSnapshot`（显式再生成）/ `TestRegistryCodesReferencedInProduction`（E_CONFIG_NOT_FOUND 有生产发出来源） |
+| 事件/错误码只增纪律 | `TestDocCodeSetMatchesRegistry` / `TestRegisteredCountByKind`（80 E + 5 W；勘误 2026-09-29：该计数断言测试已于 IMPL-ARCH-F1 删除（22915fa），计数漂移兜底改由 golden 快照 + docCodes 集相等承担）/ `TestGoldenSnapshot`（显式再生成）/ `TestRegistryCodesReferencedInProduction`（E_CONFIG_NOT_FOUND 有生产发出来源） |
 
 一手验证证据：
 
@@ -1362,7 +1362,7 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 | 设计点 5（TTL/孤儿双向） | 见守卫③⑥ + `TestTaskFailureOnContainerTaskFailure`（容器任务 failed → `task.failed` 终态 + 错误摘要） |
 | 日志入 VL（task 标签归因） | `TestTaskLogsIngestWithTaskAttribution`（task 归因行、app/service 空、游标回收）`TestTaskLogsSkippedInJSONLMode`（诚实边界）`TestBuildLogsQLTaskFilter`（过滤器 + 注入负路径） |
 | scope 门/令牌词表 | `TestTasksServiceScopeRegistration`（六 RPC 登记 `tasks`；read/deploy 不蕴含、admin 蕴含） |
-| 事件/错误码只增纪律 | eventcode `TestDocEventSetMatchesRegistry`/`TestGoldenSnapshot`（95）+ errcode `TestDocCodeSetMatchesRegistry`/`TestRegisteredCountByKind`（82 E/5 W）/`TestGoldenSnapshot`（均显式再生成） |
+| 事件/错误码只增纪律 | eventcode `TestDocEventSetMatchesRegistry`/`TestGoldenSnapshot`（95）+ errcode `TestDocCodeSetMatchesRegistry`/`TestRegisteredCountByKind`（82 E/5 W；勘误 2026-09-29：该计数断言测试已于 IMPL-ARCH-F1 删除（22915fa），计数漂移兜底改由 golden 快照 + docCodes 集相等承担）/`TestGoldenSnapshot`（均显式再生成） |
 | 迁移纪律 | `TestMigrationsAreAdditiveOnly`（00026 + golden 再生成） |
 | 结构纪律 | `TestTickDutiesAllGoThroughSafeCall`（tick duty 清单 11 条含两新 duty）；apex `TestReservedTeamSlugs`（taskgroup 保留） |
 | CLI 面 | `TestTasksCLISurface`（network ensure → run --json → ls → stop → rm → logs 诚实报错 + 用法 64） |
@@ -1536,7 +1536,7 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 | Dockerfile 入口 | `TestValidateUploadDockerfile`（缺省/嵌套/缺失/目录/越界/反斜杠/符号链外指）+ `TestBuildFromUploadNestedDockerfileEntry`（`./deploy/Dockerfile` 归一落库） |
 | 配置/装配与零回归 | `TestConfigUploadsRootNormalized`（根并入 ContextRoots + 上限缺省）`TestBuildSettingsUploadsRootAndLimit`（runtime 键与派生）`TestBuildAppLessRoundtrip`（builds.app_id 可空 + FK 不回退）迁移 golden 再生成；既有 TriggerBuild/构建队列/CLI 测试零回归 |
 | CLI/SDK | `TestBuildsUploadCLIFlow`（upload --json → 小写化 ref/digest → get 回读双形态）`TestBuildsUploadCLIUsage`（--name 必填 64；未知 ID 1） |
-| 错误码只增纪律 | errcode `TestRegisteredCountByKind`（84 E + 5 W）/`TestDocCodeSetMatchesRegistry`/`TestGoldenSnapshot`（均显式再生成）；apperr 413 映射抽样 |
+| 错误码只增纪律 | errcode `TestRegisteredCountByKind`（84 E + 5 W；勘误 2026-09-29：该计数断言测试已于 IMPL-ARCH-F1 删除（22915fa），计数漂移兜底改由 golden 快照 + docCodes 集相等承担）/`TestDocCodeSetMatchesRegistry`/`TestGoldenSnapshot`（均显式再生成）；apperr 413 映射抽样 |
 
 一手验证证据（原始输出摘要）：
 
