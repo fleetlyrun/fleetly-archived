@@ -36,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -193,22 +192,22 @@ func (e *Engine) DriftShow(ctx context.Context, appName string) (*DriftReport, e
 	if err != nil {
 		return nil, err
 	}
-	return e.computeAppDrift(ctx, app.ID, app.Name)
+	return e.computeAppDrift(ctx, app)
 }
 
 // computeAppDrift 是漂移判定的共享核心（检测器与 DriftShow 同源）。期望
 // 副本先经 pinScalingReplicaOverrides 钉平台运行期覆盖（autoscaler 写通道
 // ——D-V3W5-2：平台自己写的副本不被漂移误报，外部 scale 照常检出）。
-func (e *Engine) computeAppDrift(ctx context.Context, appID, appName string) (*DriftReport, error) {
-	report := &DriftReport{App: appName}
-	source, specs, err := e.lastSucceededSpecs(ctx, appID)
+func (e *Engine) computeAppDrift(ctx context.Context, app state.App) (*DriftReport, error) {
+	report := &DriftReport{App: app.Name}
+	source, specs, err := e.lastSucceededSpecs(ctx, app.ID)
 	if err != nil {
 		return nil, err
 	}
 	if source == nil {
 		return report, nil // 无成功部署：无期望态，无从判定漂移
 	}
-	overrides, err := e.store.ListScalingReplicaOverrides(ctx, appID)
+	overrides, err := e.store.ListScalingReplicaOverrides(ctx, app.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,22 +252,19 @@ func (e *Engine) computeAppDrift(ctx context.Context, appID, appName string) (*D
 		report.Services = append(report.Services, sd)
 	}
 	// 期望集之外的多余受管服务（外部创建/未清理）也是漂移（省略=删除的
-	// 期望语义；收敛原语会删）。例外：一次性 job 服务（fleetly-cron- /
-	// fleetly-init- 前缀）—它们是平台瞬时对象，收敛原语**不会**删（对账
-	// 删除扫描豁免），标漂移与此前提自相矛盾；生命周期归 cron 调度器与
-	// init 相位/sweepInitJobs。
-	existing, err := e.sub.ServiceList(ctx, map[string]string{
-		state.LabelManaged: state.ManagedLabelValue,
-		state.LabelApp:     appName,
-	})
+	// 期望语义；收敛原语会删）。归属过滤与一次性 job 豁免经 scopeManaged
+	// Services 单点定义（IMPL-ARCH-A：此前此处以裸 app.Name 手写过滤——
+	// W2-S3 起 fleetly.app 值为三段限定形，裸名精确匹配恒空，本腿死了；
+	// job 豁免的原始理由见下）——例外：一次性 job 服务（fleetly-cron- /
+	// fleetly-init- 前缀）是平台瞬时对象，收敛原语**不会**删（对账删除扫
+	// 描豁免），标漂移与此前提自相矛盾；生命周期归 cron 调度器与 init 相
+	// 位/sweepInitJobs。
+	existing, err := e.scopeManagedServices(ctx, app)
 	if err != nil {
 		return nil, err
 	}
 	for _, s := range existing {
 		if desiredNames[s.Name] {
-			continue
-		}
-		if naming.IsCronJobName(s.Name) || naming.IsInitJobName(s.Name) {
 			continue
 		}
 		report.Services = append(report.Services, ServiceDrift{
@@ -468,7 +464,7 @@ func (e *Engine) driftScan(ctx context.Context) {
 		if inFlight[app.ID] {
 			continue
 		}
-		report, err := e.computeAppDrift(ctx, app.ID, app.Name)
+		report, err := e.computeAppDrift(ctx, app)
 		if err != nil {
 			e.log.Warn("engine: drift scan app", "app", app.Name, "error", err)
 			continue

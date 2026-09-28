@@ -60,12 +60,10 @@ func (e *Engine) reapDeletingApp(ctx context.Context, app state.App) {
 	} else if has {
 		return
 	}
-	// 受管服务发现（与 applyDesired/漂移检测同一 label 约定：managed +
-	// app 限定形值——v0.3 流标签口径，team/prj/app）。
-	existing, err := e.sub.ServiceList(ctx, map[string]string{
-		state.LabelManaged: state.ManagedLabelValue,
-		state.LabelApp:     app.QualifiedName(),
-	})
+	// 受管服务发现（与漂移 extras 腿同一 label 约定——归属过滤单点
+	// appServiceFilter：managed + app 限定形值 team/prj/app）。注意此处
+	// **无**一次性 job 豁免：app 删除是全量清场，job 服务一并移除。
+	existing, err := e.sub.ServiceList(ctx, appServiceFilter(app))
 	if err != nil {
 		// 底座瞬态（不可达/超时）：duty 内消化，不落 app 终态——下拍重试。
 		e.log.Warn("engine: deleting-app service scan", "app", app.Name, "error", err)

@@ -34,7 +34,6 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -126,10 +125,7 @@ func (e *Engine) AwaitAppSwap(ctx context.Context, appID string, timeout time.Du
 	if err != nil {
 		return err
 	}
-	label := map[string]string{
-		state.LabelManaged: state.ManagedLabelValue,
-		state.LabelApp:     app.QualifiedName(),
-	}
+	label := appServiceFilter(app)
 	deadline := e.now().Add(timeout)
 	for {
 		svcs, err := e.sub.ServiceList(ctx, label)
@@ -180,17 +176,14 @@ func countRunningTasks(tasks []TaskState) int {
 // label 值已随改派切换，旧值选择器扫不到的窗口 = 一次 MoveApp 与一次
 // DeleteApp 的罕见叠加，诚实挂账遗留记录；config 族同款）。
 func (e *Engine) SweepMovedServices(ctx context.Context, oldQualified string) (int, error) {
-	olds, err := e.sub.ServiceList(ctx, map[string]string{
-		state.LabelManaged: state.ManagedLabelValue,
-		state.LabelApp:     oldQualified,
-	})
+	olds, err := e.sub.ServiceList(ctx, qualifiedServiceFilter(oldQualified))
 	if err != nil {
 		return 0, err
 	}
 	removed := 0
 	for _, s := range olds {
-		if naming.IsCronJobName(s.Name) || naming.IsInitJobName(s.Name) {
-			continue // 在途 job 让位：跑完由各自所有者收口
+		if oneShotJobService(s.Name) {
+			continue // 在途 job 让位：跑完由各自所有者收口（豁免谓词单点）
 		}
 		if err := e.sub.ServiceRemove(ctx, s.Name); err != nil {
 			return removed, err

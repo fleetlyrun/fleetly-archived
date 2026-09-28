@@ -22,7 +22,6 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/build"
 	"github.com/fleetlyrun/fleetly/internal/compose"
 	"github.com/fleetlyrun/fleetly/internal/envlayer"
-	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/placement"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -1029,7 +1028,7 @@ func (e *Engine) applyDesired(ctx context.Context, rec state.DeployRecord, desir
 	// initjobs 相位 + sweepInitJobs）。
 	for _, s := range existing {
 		if !desiredNames[s.Name] {
-			if naming.IsCronJobName(s.Name) || naming.IsInitJobName(s.Name) {
+			if oneShotJobService(s.Name) { // 豁免谓词单点（ownership.go）
 				continue
 			}
 			if err := e.sub.ServiceRemove(ctx, s.Name); err != nil {

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -19,18 +20,31 @@ import (
 const driftProbeValue = "super-secret-plaintext-9f2c"
 
 func TestDriftHashStabilityAndSensitivity(t *testing.T) {
+	// label 夹具经 naming 写入器造数（生产 planner 同源形态：三段限定形
+	// fleetly.app + team/project 两键；deployment/desired-hash 是簿记键，
+	// 测试自拟占位值）。IMPL-ARCH-A：不再手写前 W2-S3 的裸名 label 夹具。
+	labelsFor := func(deployment, desiredHash string) map[string]string {
+		t.Helper()
+		labels, err := naming.ServiceLabels("acme", "prod", "demo", "web", deployment)
+		if err != nil {
+			t.Fatalf("service labels: %v", err)
+		}
+		labels[state.LabelDesiredHash] = desiredHash
+		return labels
+	}
+	containerLabels, err := naming.ContainerLabels("acme", "prod", "demo")
+	if err != nil {
+		t.Fatalf("container labels: %v", err)
+	}
 	base := ServiceSpec{
-		Name:     "fleetly-acme-prod-demo-web",
-		Image:    "alpine:3@sha256:aaa",
-		Command:  []string{"sleep", "infinity"},
-		Env:      []string{"A=1", "B=2"},
-		Replicas: 2,
-		Networks: []NetworkAttach{{Name: "fleetly-acme-prod-demo-net", Aliases: []string{"web"}}},
-		ServiceLabels: map[string]string{
-			state.LabelManaged: "true", state.LabelApp: "demo",
-			state.LabelDeployment: "d1", state.LabelDesiredHash: "h1",
-		},
-		ContainerLabels: map[string]string{state.LabelApp: "demo"},
+		Name:            "fleetly-acme-prod-demo-web",
+		Image:           "alpine:3@sha256:aaa",
+		Command:         []string{"sleep", "infinity"},
+		Env:             []string{"A=1", "B=2"},
+		Replicas:        2,
+		Networks:        []NetworkAttach{{Name: "fleetly-acme-prod-demo-net", Aliases: []string{"web"}}},
+		ServiceLabels:   labelsFor("d1", "h1"),
+		ContainerLabels: containerLabels,
 		Healthcheck:     &HealthcheckSpec{Test: []string{"CMD", "true"}, Interval: time.Second},
 	}
 	baseHash := driftHash(base)
@@ -43,10 +57,7 @@ func TestDriftHashStabilityAndSensitivity(t *testing.T) {
 		t.Fatal("env order changed the drift hash")
 	}
 	bookkeeping := base
-	bookkeeping.ServiceLabels = map[string]string{
-		state.LabelManaged: "true", state.LabelApp: "demo",
-		state.LabelDeployment: "OTHER", state.LabelDesiredHash: "OTHER",
-	}
+	bookkeeping.ServiceLabels = labelsFor("OTHER", "OTHER")
 	if driftHash(bookkeeping) != baseHash {
 		t.Fatal("bookkeeping labels changed the drift hash")
 	}
@@ -324,14 +335,31 @@ func TestDriftGlobalServiceNoFalsePositive(t *testing.T) {
 		t.Fatalf("ensure app: %v", err)
 	}
 
+	// 期望态来源：succeeded 部署行 + 密文快照（绕过引擎主链——受控子集已
+	// 拒 global，只有存量行能到达该形态）。label 夹具经 naming 写入器造数
+	//（三段限定形 fleetly.app——IMPL-ARCH-A：不再手写前 W2-S3 裸名形态）。
+	rec, err := h.store.CreateDeployment(ctx, state.DeployRecord{
+		AppID: app.ID, AppName: "demo", Kind: "deploy",
+	})
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	serviceLabels, lerr := naming.ServiceLabels(app.TeamSlug, app.ProjectSlug, app.Name, "agent", rec.ID)
+	if lerr != nil {
+		t.Fatalf("service labels: %v", lerr)
+	}
+	containerLabels, clerr := naming.ContainerLabels(app.TeamSlug, app.ProjectSlug, app.Name)
+	if clerr != nil {
+		t.Fatalf("container labels: %v", clerr)
+	}
 	// 期望侧：规划层对 global 服务的产出形态（副本缺省 1 + stop-first）。
 	spec := ServiceSpec{
 		Name:              "fleetly-demo-agent",
 		Image:             "alpine:3",
 		Global:            true,
 		Replicas:          1,
-		ServiceLabels:     map[string]string{state.LabelManaged: "true", state.LabelApp: "demo", state.LabelProcess: "agent"},
-		ContainerLabels:   map[string]string{state.LabelApp: "demo"},
+		ServiceLabels:     serviceLabels,
+		ContainerLabels:   containerLabels,
 		Networks:          []NetworkAttach{{Name: h.demoNet(), Aliases: []string{"agent"}}},
 		UpdateOrder:       "stop-first",
 		UpdateParallelism: 1,
@@ -341,8 +369,6 @@ func TestDriftGlobalServiceNoFalsePositive(t *testing.T) {
 	if err := h.sub.ServiceCreate(ctx, spec); err != nil {
 		t.Fatalf("seed global service: %v", err)
 	}
-	// 期望态来源：succeeded 部署行 + 密文快照（绕过引擎主链——受控子集已
-	// 拒 global，只有存量行能到达该形态）。
 	raw, err := canonicalJSON([]ServiceSpec{spec})
 	if err != nil {
 		t.Fatalf("canonical json: %v", err)
@@ -351,16 +377,10 @@ func TestDriftGlobalServiceNoFalsePositive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encrypt snapshot: %v", err)
 	}
-	rec, err := h.store.CreateDeployment(ctx, state.DeployRecord{
-		AppID: app.ID, AppName: "demo", Kind: "deploy", DesiredSpec: string(ct),
-	})
-	if err != nil {
-		t.Fatalf("create deployment: %v", err)
-	}
 	if err := h.store.InTx(ctx, func(tx *state.Tx) error {
 		_, err := tx.ExecContext(ctx,
-			`UPDATE deployments SET status = 'succeeded', desired_hash = ? WHERE id = ?`,
-			spec.DesiredHash(), rec.ID)
+			`UPDATE deployments SET status = 'succeeded', desired_hash = ?, desired_spec = ? WHERE id = ?`,
+			spec.DesiredHash(), string(ct), rec.ID)
 		return err
 	}); err != nil {
 		t.Fatalf("seed succeeded row: %v", err)
