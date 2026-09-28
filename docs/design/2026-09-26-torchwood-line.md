@@ -11,6 +11,7 @@
 | T-0 | 线路优先级 | **torchwood MessageLoop 部署是 fleetly 立项的原因，替代 dokploy 必须最高优先级支持**；本线为 v0.3 最高优先级输入 |
 | T-1 | 兼容约束 | 自有项目 + 内测阶段，**不需要向后兼容**——过渡兼容层不做，直奔终态 |
 | T-2 | 设计立场 | 从总体最优设计出发，**有足够硬的理由可推翻既有设计与约定**（本档 OT 编号即推翻项） |
+| T-3 | 双部署形态（用户直裁 2026-09-28） | **torchwood/messageloop 必须继续支持原有 dokploy / docker 直接部署**（docker.sock 执行底座），与 fleetly 形态并存、按配置选择——部分推翻 T-1「无兼容」在部署维度的适用：T2-3 的「零 docker client」承诺改为「fleetly 驱动路径零 docker client，docker 驱动为受支持的一等底座」。触发证据：T2-3 重写了 dokploy 栈（必填 FLEETLY_* 插值 + 二进制仅 fleetly 后端）→ 现役 dokploy 部署报错。承接票 = IMPL-T2-5 |
 
 ## 1. 需求还原（证据基础）
 

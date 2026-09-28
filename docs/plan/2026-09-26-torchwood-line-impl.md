@@ -146,6 +146,27 @@ IMPL-T1-6(SDK TLS,独立)   IMPL-T3-*(P2,后置)
 - **守卫与验收**：全栈健康门过；函数端到端（部署 zip→执行→回收）；割接记录含数据决策；回滚 = dokploy 栈未拆。
 - **依赖**：T2-3、DB-1、T2-0④。**预估** 2-3d（+真机窗口）。
 
+### IMPL-T2-5 torchwood 双执行底座（T-3 裁决承接；dokploy/docker 直接部署恢复）
+
+- **背景**：T2-3 把 `docker/dokploy/` 一并改成 fleetly 客户端形态（必填 `${TORCHWOOD_FUNCTIONS_FLEETLY_*:?}` 插值 + dispatcher 二进制仅 fleetly 后端 + `ValidateFunctionsFleetlyConfig` 强制 endpoint/token）→ 现役 dokploy 部署 compose 插值即失败；用户直裁 T-3：dokploy/docker 直接部署必须继续可用。
+- **目标**：dispatcher 双底座——`functions.driver: docker|fleetly` 配置选择，两形态各自完整可用；dokploy 文件恢复自包含；fleetly 形态不受影响。
+- **现状锚点**：`dispatcher/daemon.go:56`（Daemon 接口，后端中立：EnsureProjectNetwork/SpawnInstance/InspectInstance→(running,ip)/Stop/Remove）；git 历史 `54b666b:dispatcher/daemon.go`（docker 底座完整实现，spawn/health/IP 寻址/网络 attach/构建）；`internal/pkg/bootkit/config.go:47`（ValidateFunctionsFleetlyConfig）；proto Functions 段 docker.host/network 字段号已 reserved。
+- **改动点**（torchwood 仓）：①`functions.driver` 显式枚举（docker|fleetly），未设/未知 fail-closed 报错列出两选项；②docker 底座从 54b666b 复活并适配现行 Daemon 接口（单机形态即可，多节点细胞模型维持退役；registry 模式随旧实现一并复归或裁剪至 local——实现票裁量，记录偏离）；③proto Functions 增 docker 后端配置新字段（旧字段号 reserved 不复用）；④bootkit 按驱动分发校验；⑤`docker/dokploy/` compose+config.yaml+README 恢复自包含 docker.sock 形态（sock 挂载/user: root/driver: docker/零 FLEETLY_* 变量；保留「fleetly 形态见 docker/fleetly/」指引）；⑥`docker/fleetly/config.yaml` 钉 `driver: fleetly`；⑦T2-3 的「零 docker client」机制测试改为「fleetly 驱动路径零 docker client」口径。
+- **守卫与验收**：①driver 未设 → 启动失败点名两选项；②docker 底座本地 dind E2E（spawn→health→分发→回收）绿；③dokploy 形态 compose config 渲染零缺变量（`docker compose config` 过）+ 老配置（driver: docker）Validate 过；④fleetly 形态回归（dind E2E 复跑）；⑤池语义回归零变化（池测试全绿）。
+- **依赖**：无（独立于 staging 窗口）。**预估** 3-5d。**止血**（票外运维）：dokploy 服务源钉 git commit `54b666b`（compose+config+镜像同源一致）直到本票合入。
+
+### IMPL-F1 task-group 网络对账豁免（验收发现的 fleetly 缺陷整改）
+
+- **缺陷**：T2-1 实施记录声称「task-group 网 label=归属锚，孤儿判定跳过」，实际 `reconNetworks`（internal/engine/projectnetwork.go:111-136）只豁免 LabelProjectNetwork——长活 task-group 网会被周期性误披露 `network.orphaned`（只披露不删，安全性质在，但属披露噪声+记录虚报）。
+- **改动**：reconNetworks 期望集并入任务网络（或 LabelTaskGroup 豁免），补「ensure 任务网不被误披露」回归测试；实施记录同步勘误。
+- **预估** 0.5d。
+
+### IMPL-F2 00023 迁移 Down 腿测试（验收发现的记录虚报整改）
+
+- **缺陷**：T1-1 实施记录守卫表引用 `TestPlatformSettingsMigrationUpDown` 声称覆盖 00023（domains protocol/cert_mode 列）Up/Down，实际该测试只覆盖 00011——00023 Down 腿零测试执行。
+- **改动**：补 00023 Down 迁移测试（或扩展既有迁移测试至 DownTo 22）；实施记录勘误。
+- **预估** 0.25d。
+
 ### T3（P2 简票，启动前细化）
 
 - **T3-1** 宿主回环端口 opt-in：label `fleetly.ports`（仅回环绑定，平台端口登记防冲突，UDP 供 QUIC/KCP）。
@@ -224,7 +245,7 @@ IMPL-T1-6(SDK TLS,独立)   IMPL-T3-*(P2,后置)
 | CLI 同步 | `TestDomainsCRUDSurface` + `domains_list` golden |
 | Console 写面与角色门 | `AppDomainsPage.test.tsx`（4 测：viewer 无写控件 / admin 新增 / developer 编辑删除 / 平台管理员只读说明） |
 | access-log 反解不回归 | `TestStripAccessRouterKey`（分组后缀用例） |
-| 迁移纪律 | `TestPlatformSettingsMigrationUpDown`（00023 Up/Down）+ additive golden |
+| 迁移纪律 | `TestPlatformSettingsMigrationUpDown`（00023 Up/Down）+ additive golden。**勘误（2026-09-28 验收发现，IMPL-F2 修正）**：原引用失实——该测试只覆盖 00011（DownTo 10），00023 的 Down 腿当时零测试执行；00023 Up/Down 现由 `TestDomainsEndpointColumnsMigrationUpDown`（internal/state/domains_test.go，DownTo 22 穿腿回滚 + 列消失/数据行为断言）覆盖，原文保留备查 |
 
 验证证据（一手）：`go test ./... -count=1` 全绿；变更包 `-race` 全绿（state/ingress/api/logs/engine/compose/eventcode/cmd）；`go vet ./...` 净；`golangci-lint run` 无新增问题（存量欠账不计）；console `pnpm test` 321 全绿（基线 313 + 新 4 测 + 既有计数）、`pnpm typecheck`/`pnpm lint`/`pnpm build` 净。
 
@@ -1251,7 +1272,7 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
    - **internal 支持矩阵**：只对 `task-group` 支持（DT-7 不可信隔离面）；`app`/`project` 带 `internal=true` **fail-closed 拒绝**（`E_TASK_UNSUPPORTED`，文案点名理由——app/project 网承载自身出网，转 internal 会切断其正常出口，不可静默降级）；已存在网的 internal 与请求不一致同样拒绝（错变体不可静默接受）。
    - **任务只按名加入既有网**：CreateTask 前置 `NetworkInspect`——缺失即 `E_TASK_UNSUPPORTED`（不代建）；tasks.v1 请求面**不存在 attach 入参**（类型层不可表示，守卫⑤；`TaskScope` 只是网络引用）。app 网/project 网由既有机制创建（部署 / 项目网 attach），task-group 网由 `EnsureTaskNetwork` 创建。
 2. **EnsureNetwork 语义 = task-group 网长活 + 幂等 + 自描述 label + 控制面一次性挂靠（经发布管线）**：
-   - 长活：创建后**不随任务回收**，也不进 tasks 对账的孤儿判定（`fleetly.task-group` label = 归属锚；孤儿判定跳过——与项目网同款「归属明确不误删」口径）。
+   - 长活：创建后**不随任务回收**，也不进 tasks 对账的孤儿判定（`fleetly.task-group` label = 归属锚；孤儿判定跳过——与项目网同款「归属明确不误删」口径）。（**IMPL-F1 勘误（2026-09-28 验收发现）**：T2-1 实现漏落本句——`reconNetworks` 当时只豁免 `LabelProjectNetwork`，task-group 长活网被周期性误披露 `network.orphaned`；已按本句口径补 `LabelTaskGroup` 自描述锚豁免（reconNetworks）+ 回归 `TestNetworkReconExemptsEnsuredTaskGroupNetworks`（ensure 网跨周期零披露）与 `TestNetworkReconStillDisclosesNonTaskGroupOrphans`（无 label 的冒名网仍披露），原文保留如上。）
    - 幂等：`NetworkEnsureWithOptions`（已存在 + 变体一致即成功；创建竞态已存在即成功）；label = `managed=true` + `fleetly.task-group=<ref>` +（internal 时）`fleetly.network-internal=true`。
    - **控制面挂靠的落地形态（裁决）**：`EnsureTaskNetworkRequest.members[{app, service}]` → state `task_network_members`（主键 (ref, app_id, service) = 防重复）→ **新成员入队该 app 的发布管线重部署**（复用 `EnqueueNetworkRedeploy`；无成功部署史 = `ErrNoRedeploySource` → 状态 `pending`，下次发布生效）。**为什么不直改 spec**：app 服务的唯一写通道是发布管线（IMPL-T15-1 审查记录 E.1 已冻结「直改 spec 与快照比对成漂移且需第二写通道」）；DT-5 的「一次 service update，摊销在项目创建时刻」在平台纪律内的等价形态 = **一次重部署**（applyDesired 对成员服务各一次 ServiceUpdate），幂等键 = state 声明，重复调用零新增。在途部署 409 拒绝（旧快照不得覆盖在途发布，与项目网 attach 同门）。
    - 语义代价如实披露：挂靠生效依赖成员 app 下一次发布；成员 app 无部署史时只有声明（`pending`），不做越权直写。
@@ -2230,5 +2251,142 @@ staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构�
 - **窗口前硬前置**：`TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT` 的容器可达性与明文/TLS 兼容（staging 控制面 TLS 现状 vs T2-3 明文客户端）；
 - 建议窗口内同时核对：`W_ENV_PLATFORM_OVERRIDE` 对平台 env 键的呈现；`fleetly placement show` 的卷注册与 §3.2.1 预建卷名一致。
 
+
+### IMPL-T2-5 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（无停工级矛盾；4 处设计裁决 + 2 处偏离登记如下，全部有可执行落点）。** 票面第 0 步五项检查逐项执行；基线 torchwood 仓 `310fa67`（T2-4 后、工作区干净）。
+
+#### ① 54b666b docker daemon × 现行 Daemon 接口差异
+
+| 面 | 54b666b docker 实现 | 现行接口/fleetly 实现 | 适配裁决 |
+|---|---|---|---|
+| `InspectInstance → (running, ip)` | 容器 bridge IP（NetworkSettings 首个非空地址） | fleetly = `TaskView.dns_name` | 池只把 ip 当「网络内 HTTP 寻址」消费（pool.go 零改动即兼容两形态）；`Instance.IP` 字段注释补双语义说明（仅注释） |
+| `EnsureProjectNetwork` | 自建 bridge `tw-func-<project>[-int]` + 自 attach（陈旧 endpoint 自愈）+ callback 容器 attach；**无平台发布管线** | fleetly EnsureTaskNetwork + members 声明 | 旧语义原样保留；members 概念在 docker 形态无对应物（attach 即时生效，无需声明），不补建 |
+| 接口方法覆盖 | 旧接口多一个 `EnsureImage`（registry 模式冷启动钩子）；现行七方法旧实现全部有对应物 | — | `EnsureImage` 不复活（registry 模式裁剪，见 ④） |
+| `InstanceLogsTail` | 真实容器日志（stdcopy 解复用） | fleetly = 平台台账投影 | docker 形态恢复真实日志读取 |
+| `ImportImage/BuildImage/RemoveImage` | 本地 docker 编排 | fleetly 平台 API + Redis 产物映射 | docker 形态逻辑名即本地 tag，**零 Redis 映射**（`imageRefStore` 仅 fleetly 消费） |
+
+无「现行接口在旧实现无对应物」的方法——接口是旧 docker 面的收窄超集，适配方向单一。
+
+#### ② proto 字段号核对（reserved 不复用）
+
+- `Functions`：reserved 1（executor）；已用 2–6、8–11（7 从未分配，一并跳过）。**`driver` 用新号 12**。
+- `Functions.Docker`：reserved 1,2 + 名 `host`/`network`；`registry = 3`。**新 `host = 4`、`network = 5`、`callback_container = 6`**（`callback_container` 之名 reserved 在 `Functions.Dispatcher` 作用域（8 号），Docker 消息内为新名不冲突）。
+- `Functions.Dispatcher` reserved 8、12–16 不触碰。config.proto 走 protoc 直生成（非 buf 管辖），`mise run generate:config` 工具链已验证零漂移。
+
+#### ③ bootkit 校验分发点与 config 绑定
+
+- 分发点：`cmd/dispatcher/provides.go NewAppConfig` 现调 `ValidateFunctionsFleetlyConfig`（唯一调用方）→ 替换为按驱动分发的 `ValidateFunctionsDriverConfig`；fleetly 校验函数原样保留为 fleetly 分支。
+- **绑定裁决（偏离 #1）**：`driver` 用**封闭值集 string 字段**（"docker"/"fleetly"）而非 proto enum——config 绑定是 lynx v1.17 结构体驱动逐叶解码（mapstructure 语义，`internal/pkg/config/bind.go`），proto enum 的 int32 承载解不了 YAML 字符串；仓库先例 `storage.provider`/`idgen.default_strategy` 同为封闭值集 string + 校验层 fail-closed。未设/未知值在启动期拒绝并列出两选项与各自配置键。
+
+#### ④ 旧实现多节点模型依赖面与裁剪
+
+依赖已删除模型的代码面：`dispatcherPushEnabled`（routing_mode/registry_push，Dispatcher 字段 12–16 已 reserved）、`pushBuiltImage`/`ensureImage`/`EnsureImage`（registry 路由模式）、compose 多节点 env（NODE_ID/NODE_URL/ROUTING_MODE/REGISTRY_PUSH）。**裁决：单机 local 模式全量复归（必达）；registry push/pull 模式不复归**，`functions.docker.registry` 维持现行纯命名前缀语义（与 fleetly 形态同款，`ImageName` 零改动）。`ImportImage`（BYO 镜像源本地编排）复归——它属镜像部署源路径而非跨节点分发。compose 多节点清理维持退役，历史注记保留。
+
+#### ⑤ 「零 docker client」三层断言改口径（可执行口径）
+
+现状 = `dispatcher/import_guard_test.go`（源扫描 dispatcher+cmd/dispatcher+infra/functions 三根；`go list -deps ./...` 整仓；守卫自测）。docker 底座复活后整仓断言必然失效，改为 **fleetly 驱动路径零 docker client**：
+
+- **包边界隔离（偏离 #2 的实现机制）**：docker 底座落独立子包 `dispatcher/dockerdriver`（实现 `dispatcher.Daemon`；经注册函数注入组合根）——`dispatcher` 包与 `internal/infra/functions` 保持零 docker import。
+- 层 1（源扫描）：根收敛为 `dispatcher`（跳过 `dockerdriver/` 子目录）+ `internal/infra/functions`；`cmd/dispatcher`（组合根，显式 blank-import 驱动包）与 `dockerdriver`（隔离边界本身）豁免。
+- 层 2（依赖图）：`go list ./...` 排除 `dispatcher/dockerdriver` 与 `cmd/dispatcher` 两包后 `go list -deps`，禁 docker/moby——server/worker/packer 与 dispatcher 池/服务面在链接层可证零容器运行时。
+- 层 3（守卫自测）：嵌套违规检测原样保留。
+
+**为什么不停工**：五项检查全部有确定性收敛路径，无票面前提被证伪；两处偏离（string 枚举、包边界隔离）均属实现载体选择且更保守，不改变票面目标与完成标准。
+
+### IMPL-T2-5 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 改动全部落在 torchwood 仓（基线 `310fa67`，工作区干净）；fleetly 仓仅本文档。两形态 e2e 与全量门禁本地实证绿（原始输出摘要见下）。
+
+变更文件清单（每文件一句）：
+
+**执行底座与选择点（torchwood 仓）**
+
+- `dispatcher/dockerdriver/`（新包）：docker 直接执行底座——`docker.go`（New/init 注册 + EnsureProjectNetwork〔tw-func-<project>[-int] bridge 网 + 自 attach 陈旧 endpoint 自愈 + callback 容器 attach〕+ SpawnInstance〔加固/资源规格/TW_MAX_REQUESTS 注入/镜像缺失 ImageMissingMarker 类型化上抛〕+ Inspect/Stop/Remove/LogsTail + BuildImage〔共享 PrepareBuildContext → TarDir → ImageBuild → 共享验证 spawn〕）与 `importimage.go`（BYO 镜像导入编排：host 准入 → 本地命中零 pull → pull/凭证 → digest 钉死 → retag 平台命名 → 强制契约验证）。registry push/pull 路由不复归（见偏离）。
+- `dispatcher/driver.go`（新）：双执行底座集成面——`RegisterDockerDriver`（驱动注册，dockerdriver init 调用）+ `newDaemonForConfig`（按 `functions.driver` fail-closed 选择）+ 驱动共享面导出（PrepareBuildContext/TarDir/SpawnVerifyInstance/ValidateImageRegistryHost/ParseImageReferenceHost/NewHTTPProber）。
+- `dispatcher/service.go`：NewService 经 `newDaemonForConfig` 选择底座（失败拒绝启动，签名加 error）；启动日志加 driver 字段。
+- `cmd/dispatcher/provides.go`：blank-import `dispatcher/dockerdriver`（注册 docker 驱动）+ 校验点换 `ValidateFunctionsDriverConfig`；`wire_gen.go` 重新生成（NewService error 收口）。
+- `internal/infra/functions/docker.go`：恢复 `ResolveNetworkName`/`ResolveInternalNetworkName`（docker 底座专用；fleetly 底座不经此）。
+- `dispatcher/daemon.go`：fleetly 实现行为零变化，仅注释/接口类型名对齐双底座叙事（`healthProber`→导出 `HealthProber`，为 dockerdriver 的探针注入缝；Instance.IP 注释补双语义）。
+
+**配置与校验**
+
+- `internal/pkg/config/config.proto`：`Functions.driver = 12`（string 封闭值集）+ `Functions.Docker` 新字段 `host = 4`/`network = 5`/`callback_container = 6`（1/2 号**字段号**维持 reserved 不复用；名称解禁随键复归，见审查报告②勘误）；`config.pb.go` 重新生成。
+- `internal/pkg/config/functions_driver.go`（新）：`FunctionsDriverDocker/FunctionsDriverFleetly` 常量。
+- `internal/pkg/bootkit/config.go`：新增 `ValidateFunctionsDriverConfig`（未设/未知 fail-closed 点名两选项与配置键；按驱动分发——fleetly 分支复用原 `ValidateFunctionsFleetlyConfig`（口径零变化），docker 分支零必填键）。
+
+**部署形态文件**
+
+- `docker/dokploy/docker-compose.yml`：dispatcher 恢复自包含 docker.sock 形态（`user: root` + sock 挂载 + `TORCHWOOD_FUNCTIONS_DRIVER: docker` + `TORCHWOOD_FUNCTIONS_DOCKER_CALLBACK_CONTAINER: torchwood-server`），三个 `FLEETLY_*` 必填插值删除；server/worker 注释对齐容器名 DNS 回访；多节点退役注记保留。
+- `docker/dokploy/config.yaml`：`driver: docker` + docker 底座键（host 缺省 sock 路径/network 空/callback_container）+ fleetly 段保留（本形态不消费）；头注改「functions 段两文件分叉，其余键位两处同改」。
+- `docker/fleetly/config.yaml`：钉 `driver: fleetly`（compose/env 零改动）；头注同步分叉说明。
+- `docker/dokploy/README.md`：§8 Functions 双段改写（docker 底座模型 + 镜像持久化/自愈语义）、§12 改「平台执行形态（并存）」、§11 文件清单措辞。
+- `configs/config.yaml.template`：functions 段 driver + docker 三键 + execution 双拓扑说明。
+
+**测试与守卫**
+
+- `dispatcher/import_guard_test.go`：三层断言改「fleetly 驱动路径零 docker client」口径（源扫描跳过 dockerdriver 子目录；组合根仅豁免 dockerdriver 注册 import；依赖图排除 dockerdriver+cmd/dispatcher 后禁 docker/moby）；新增组合根豁免自测。
+- `dispatcher/driver_test.go`（新）：驱动选择守卫（fleetly 行为零变化 / docker 未链接 fail-closed / 未设未知 fail-closed / 注册协议 / NewService 启动期收口）。
+- `dispatcher/dockerdriver/network_test.go`、`importimage_test.go`（新）：54b666b 用例原样适配（attach 自愈六用例；导入编排十四用例）。
+- `dispatcher/dockerdriver/e2e_test.go`（新）：docker 底座本地 dind e2e（编排器 + runner 双，env 门控）。
+- `dispatcher/testdata/e2e/docker-driver-e2e.sh`、`Dockerfile.driver-docker`（新）、`fleetly-dind.sh`/`in-e2e-boot.sh`/`in-e2e-run.sh`/`README.md`：docker 形态编排脚本（新）与 fleetly 形态脚本适配（见下「平台演进适配」）；`internal/pkg/bootkit/config_test.go`、`internal/pkg/config/bind_test.go`：驱动校验/绑定用例。
+
+一手验证证据（原始输出摘要）：
+
+```
+$ mise run generate:config（protoc 钉版） → config.pb.go 重新生成零漂移工具链
+
+$ go build ./... && go vet ./... && gofmt -l .        # 全净（VET_OK，gofmt 零输出）
+$ go test -race -count=1 ./dispatcher/ ./dispatcher/dockerdriver/ ./internal/pkg/bootkit/
+ok  dispatcher  15.031s | ok  dispatcher/dockerdriver  1.529s | ok  bootkit  7.402s
+
+$ docker compose -f docker/dokploy/docker-compose.yml config（设 10 个既有必填 env）
+COMPOSE_CONFIG_OK（渲染零缺变量；渲染结果含 TORCHWOOD_FUNCTIONS_DRIVER: docker、
+user: root、/var/run/docker.sock 挂载、CALLBACK_CONTAINER；FLEETLY_* 零命中）
+
+$ sh dispatcher/testdata/e2e/docker-driver-e2e.sh      # docker 底座 dind e2e
+spawned container: 9aa018df… (ip=172.19.0.3)
+runner self-retired (container exited)
+E2E PASS: spawn -> health -> dispatch -> TW_MAX_REQUESTS self-retire -> reaper reclaim -> idempotent Stop/Remove
+--- PASS: TestE2EDockerDriverLifecycle (1.10s) → 退出码 0
+
+$ FLEETLY_REPO=…/fleetly sh dispatcher/testdata/e2e/fleetly-dind.sh   # fleetly 形态复跑
+t=0 status=queued → t=5 running → t=15 stopped（API 台账轮询）
+--- PASS: TestE2EFleetlyTaskLifecycle (7.25s)
+E2E PASS: spawn -> health -> dispatch -> TW_MAX_REQUESTS self-retire -> platform reclaim
+E2E-RESULT: PASS → 退出码 0
+
+$ mise run test   # 全量门禁（lint:go + lint:golangci + sdk/console 测试 + go test -race ./... -cover）
+[lint:golangci] 0 issues.
+[test] ok ×80 包（含 dispatcher/dispatcher/dockerdriver/worker/documentdb…），FAIL ×0
+Finished in 158.68s → 退出码 0
+（注：首轮全量与 dind e2e 并发跑时 documentdb 包出现 test-db lifecycle lock
+ 超时——负载互踩，非代码回归；该包单跑 -race 116s ok，串行复跑全量绿。）
+```
+
+守卫与验收条款对应表：
+
+| 票面完成标准 | 证据 |
+|---|---|
+| ① driver 未设 → 启动失败点名两选项 | `bootkit config_test`（未设文案含 fleetly/docker 两选项与 `TORCHWOOD_FUNCTIONS_DRIVER`）+ `driver_test`（newDaemonForConfig/NewService 双收口）；两测试绿 |
+| ② docker 底座本地 E2E | docker-driver-e2e.sh dind 全链绿（spawn→health→分发×2→自退→reaper→幂等回收，1.10s） |
+| ③ compose config 零缺变量 + 老配置 Validate 过 | COMPOSE_CONFIG_OK（渲染含 driver: docker/sock 挂载/user: root）；bootkit docker 分支用例 + config 包 `TestFunctionsDriverBinding`（老配置 `docker.host` 键零改动绑定）绿 |
+| ④ fleetly 形态回归 | fleetly-dind.sh 复跑 `E2E-RESULT: PASS`（TestE2EFleetlyTaskLifecycle 7.25s）；fleetlyDaemon 相关单测全绿 |
+| ⑤ 池语义回归 | dispatcher 包全量测试零变化通过（pool.go 一行未动）；全量门禁见下 |
+| 全量 `go test ./...` / vet / gofmt | `mise run test`（lint:go + lint:golangci + sdk/console 测试 + `go test -race ./... -cover`）全绿 |
+
+平台演进适配（非本票引入的回归，脚本侧收敛）：
+
+- fleetly 引擎现行为：任务容器完成后即移除底座服务 → `in-e2e-run.sh` 的 `docker service ps/logs` 轮询与日志收集失效。改为 `fleetly tasks ls --all` 轮询 API 台账（queued→running→stopped 真值）+ `fleetly tasks logs`（VictoriaLogs 任务标签流）取日志，`docker service logs` 降级为兜底腿。
+- 冷启动 dind 上 VL 后端未应答窗口：`in-e2e-boot.sh` 增 VL `/health` 等待；`in-e2e-run.sh` 对 `E_LOGS_BACKEND_UNAVAILABLE` 有界重试（5s×36）。
+- 编排后日志回收需 `read` scope：e2e 机具令牌铸造改为 `scopes:["tasks","build","read"]`（tasks/build 仍是被测 dispatcher 的真实面；read 仅供脚本回收任务日志）。
+
+偏离清单（审查裁决 → 实施落点）：
+
+1. **`functions.driver` 为 string 封闭值集而非 proto enum**：config 绑定是结构体驱动逐叶解码（mapstructure 语义），enum 的 int32 承载解不了 YAML 字符串；先例 `storage.provider`。fail-closed 语义不受影响（bootkit 启动期拒绝 + dispatcher 选择点兜底）。
+2. **docker 底座按包边界隔离（`dispatcher/dockerdriver` 子包）**：源扫描文件豁免会让 `./dispatcher` 的依赖图失去 docker-free 可证性，包边界让三层断言全部存活（fleetly 驱动路径在源与链接两层可证零 docker client）；代价是驱动共享面需要导出（driver.go 单点桥 + `HealthProber` 导出，fleetly 行为零变化）。
+3. **`Functions.Docker` 的 host/network 以新字段号（4/5）复归同名键**：字段号 1/2 维持 reserved 永不复用（proto 注释明示号段封存）；proto `reserved "host","network"` 名称封锁随键复归解除——语义不变的同名键回归，实施记录在此对审查报告②作勘误补充（审查时未展开名称封锁与复归的互斥）。
+4. **registry push/pull 路由模式不复归**（票面授权裁量）：`functions.docker.registry` 维持现行纯命名前缀语义（与 fleetly 形态同款）；`ImportImage`（BYO 镜像源本地编排）复归。多节点细胞模型维持退役。
+5. **依赖图最小漂移**：`go.mod` 复增 docker client v28.5.2+incompatible（与 54b666b 同版）及其传递闭包；otel 1.45→1.46 / otelhttp 0.67→0.69 为 docker client otel 面在当前 latest 解析下的 MVS 结果（已回钉 containerd/log、httpsnoop、grpc-gateway 至原版，非必要升级归零）。
 
 

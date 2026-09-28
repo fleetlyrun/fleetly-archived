@@ -2,10 +2,14 @@ package state
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/pressly/goose/v3"
 )
 
 // domains 台账读写测试（T2.15/T2.16 + IMPL-T1-1 资源面）：域名资源 CRUD
@@ -258,5 +262,94 @@ func TestUpdateAppDomainKeepsHostAndMovesService(t *testing.T) {
 	}
 	if err := st.RemoveAppDomain(ctx, app.ID, "move.example.test"); !errors.Is(err, ErrDomainNotFound) {
 		t.Fatalf("second remove err = %v, want ErrDomainNotFound", err)
+	}
+}
+
+// TestDomainsEndpointColumnsMigrationUpDown 迁移 00023 的 Up/Down 往返
+// （IMPL-F2 整改：实施记录守卫表曾误引 TestPlatformSettingsMigrationUpDown
+// ——00023 的 Down 腿此前零测试执行。goose 演练；生产回滚 = 恢复快照——
+// Down 仅证明回滚 SQL 可执行）。
+func TestDomainsEndpointColumnsMigrationUpDown(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	fsys, err := migrationFiles()
+	if err != nil {
+		t.Fatalf("migrationFiles: %v", err)
+	}
+	provider, err := goose.NewProvider(goose.DialectSQLite3, db, fsys)
+	if err != nil {
+		t.Fatalf("goose provider: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if !columnExists(t, db, "domains", "protocol") || !columnExists(t, db, "domains", "cert_mode") {
+		t.Fatal("domains.protocol/cert_mode should exist after Up")
+	}
+	// 行为冒烟：归属父行先行保证 FK 干净；一条显式 h2c/wildcard 落库，一条
+	// 缺省行取 NOT NULL DEFAULT（http/http01 = 既有行现行行为，迁移文件头
+	// 注释口径）。
+	if _, err := db.Exec(`INSERT INTO teams (id, slug, name, created_by, created_at) VALUES ('t1', 't1', 'x', 'u', 1)`); err != nil {
+		t.Fatalf("insert team: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO projects (id, team_id, slug, name, description, created_at) VALUES ('p1', 't1', 'p1', 'x', '', 1)`); err != nil {
+		t.Fatalf("insert project: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO apps (id, name, lifecycle, created_at, updated_at, project_id, team_id) VALUES ('a1', 'x', 'active', 1, 1, 'p1', 't1')`); err != nil {
+		t.Fatalf("insert app: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO domains (id, app_id, service, domain, created_at, port, protocol, cert_mode)
+		VALUES ('d1', 'a1', 'web', 'h2c.example.test', 1, '8080', 'h2c', 'wildcard')`); err != nil {
+		t.Fatalf("insert domain (explicit): %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO domains (id, app_id, service, domain, created_at, port)
+		VALUES ('d2', 'a1', 'web', 'legacy.example.test', 2, '80')`); err != nil {
+		t.Fatalf("insert domain (defaults): %v", err)
+	}
+	var protocol, certMode string
+	if err := db.QueryRow(`SELECT protocol, cert_mode FROM domains WHERE id = 'd2'`).Scan(&protocol, &certMode); err != nil || protocol != "http" || certMode != "http01" {
+		t.Fatalf("default columns = (%s, %s) (err %v), want (http, http01)", protocol, certMode, err)
+	}
+
+	// Down 到 00022：00023 的 Down 腿 DROP cert_mode 再 DROP protocol。
+	// DownTo 从 00027 一路穿过 00023（此前零执行的那条腿），版本号钉在 22。
+	if _, err := provider.DownTo(ctx, 22); err != nil {
+		t.Fatalf("DownTo 22: %v", err)
+	}
+	if version, err := provider.GetDBVersion(ctx); err != nil || version != 22 {
+		t.Fatalf("version after DownTo = %d (err %v), want 22", version, err)
+	}
+	if columnExists(t, db, "domains", "protocol") || columnExists(t, db, "domains", "cert_mode") {
+		t.Fatal("domains.protocol/cert_mode should be gone after DownTo 22")
+	}
+	// Down 只摘本迁移的列：00006 的列与数据行原样保留（DROP COLUMN 语义
+	// 不牵连同行其余列）。
+	if !columnExists(t, db, "domains", "port") {
+		t.Fatal("domains.port (from 00006) should survive DownTo 22")
+	}
+	var service, port string
+	if err := db.QueryRow(`SELECT service, port FROM domains WHERE id = 'd1'`).Scan(&service, &port); err != nil || service != "web" || port != "8080" {
+		t.Fatalf("row after DownTo = (%s, %s) (err %v), want (web, 8080)", service, port, err)
+	}
+
+	// 再 Up：列恢复；既有行取 NOT NULL DEFAULT——h2c/wildcard 已随 Down
+	// 丢弃（DROP COLUMN 丢列数据），回来只有 DEFAULT 可填（http/http01）。
+	if _, err := provider.Up(ctx); err != nil {
+		t.Fatalf("Up (again): %v", err)
+	}
+	if !columnExists(t, db, "domains", "protocol") || !columnExists(t, db, "domains", "cert_mode") {
+		t.Fatal("domains.protocol/cert_mode should exist after re-Up")
+	}
+	for _, id := range []string{"d1", "d2"} {
+		if err := db.QueryRow(`SELECT protocol, cert_mode FROM domains WHERE id = ?`, id).Scan(&protocol, &certMode); err != nil {
+			t.Fatalf("read %s after re-Up: %v", id, err)
+		}
+		if protocol != "http" || certMode != "http01" {
+			t.Fatalf("row %s after re-Up = (%s, %s), want defaults (http, http01)", id, protocol, certMode)
+		}
 	}
 }

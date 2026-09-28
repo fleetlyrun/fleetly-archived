@@ -204,6 +204,84 @@ func TestProjectNetworkReconDisclosesInjectedOrphanWithinOneScan(t *testing.T) {
 	}
 }
 
+// TestNetworkReconExemptsEnsuredTaskGroupNetworks IMPL-F1 回归①：ensure 过的
+// task-group 长活网（公开与 internal 两变体）在连续多个对账周期内零 orphaned
+// 披露、零 missing 误判、对象原位不动（修正前每拍误披露 network.orphaned——
+// 披露噪声 + 记录虚报）。
+func TestNetworkReconExemptsEnsuredTaskGroupNetworks(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	publicNet, _, err := h.eng.EnsureTaskNetwork(ctx, "drillgrp", false, nil)
+	if err != nil {
+		t.Fatalf("ensure public task-group network: %v", err)
+	}
+	internalNet, _, err := h.eng.EnsureTaskNetwork(ctx, "drillgrpinternal", true, nil)
+	if err != nil {
+		t.Fatalf("ensure internal task-group network: %v", err)
+	}
+	if !h.nets.has(publicNet) || !h.nets.has(internalNet) {
+		t.Fatalf("task-group networks missing from the substrate: %s / %s", publicNet, internalNet)
+	}
+
+	// 连续三个对账周期：零披露（豁免必须跨周期稳定，不是单拍巧合）。
+	for range 3 {
+		h.eng.SubstrateRecon(ctx)
+	}
+	if got := countEventsByName(t, h, "network.orphaned"); got != 0 {
+		t.Fatalf("network.orphaned events = %d for ensured task-group networks, want 0 (exemption broken)", got)
+	}
+	if got := countEventsByName(t, h, "network.missing"); got != 0 {
+		t.Fatalf("network.missing events = %d, want 0 (task-group networks are not project networks)", got)
+	}
+	// 披露面只读：豁免对象原位不动（长活语义——不随对账回收）。
+	if !h.nets.has(publicNet) || !h.nets.has(internalNet) {
+		t.Fatal("ensured task-group networks must stay in place across recon cycles")
+	}
+}
+
+// TestNetworkReconStillDisclosesNonTaskGroupOrphans IMPL-F1 回归②：豁免不
+// 回退机制验收——state 外注入的真正无法归因孤儿（非任务网）仍在一个对账
+// 周期内被披露（事件 + 审计在）；连「冒名」形态（task-group 命名前缀 + 合法
+// ref 尾段，但不带 LabelTaskGroup 归属 label）也不豁免——豁免锚是 label 归属
+// 事实，不是命名前缀（TestProjectNetworkReconDisclosesInjectedOrphanWithinOneScan
+// 的注入手法同源）。
+func TestNetworkReconStillDisclosesNonTaskGroupOrphans(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	ensured, _, err := h.eng.EnsureTaskNetwork(ctx, "drillgrp", true, nil)
+	if err != nil {
+		t.Fatalf("ensure task-group network: %v", err)
+	}
+	h.nets.injectOrphan("fleetly-orphan-drill-net")
+	h.nets.injectNetwork("fleetly-taskgroup-impostor", map[string]string{
+		state.LabelManaged: state.ManagedLabelValue,
+	})
+
+	h.eng.SubstrateRecon(ctx)
+
+	if got := countEventsByName(t, h, "network.orphaned"); got != 2 {
+		t.Fatalf("network.orphaned events = %d, want 2 (generic orphan and name impostor both disclosed)", got)
+	}
+	rows, err := h.store.RecentAudits(ctx, 100)
+	if err != nil {
+		t.Fatalf("audits: %v", err)
+	}
+	audited := map[string]bool{}
+	for _, r := range rows {
+		if r.Action == "reconcile.network_orphaned" {
+			audited[r.Target] = true
+		}
+	}
+	for _, target := range []string{"network:fleetly-orphan-drill-net", "network:fleetly-taskgroup-impostor"} {
+		if !audited[target] {
+			t.Fatalf("reconcile.network_orphaned audit row missing for %s", target)
+		}
+	}
+	if audited["network:"+ensured] {
+		t.Fatalf("ensured task-group network %s misjudged as orphan (exemption anchor is the label, and the label is present)", ensured)
+	}
+}
+
 // TestProjectNetworkReconDisclosesMissingMemberNetwork state→swarm 方向：
 // 成员项目的项目网在底座缺失（外部移除）→ network.missing 披露（一个对账
 // 周期内暴露）；项目网收敛 duty 幂等重 ensure（派生修正）后不再重复披露。

@@ -200,6 +200,46 @@
 
 ---
 
+## PROMPT · IMPL-T2-5（torchwood 双执行底座——T-3 裁决承接，2026-09-28 验收轮新增）
+
+```
+【仓库与背景】你在 D:/Codes/qiulin/torchwood 工作（Go BaaS）。背景：T2-3（commit 78ea1a4）把 dispatcher 的 docker.sock 交互面清零、docker/dokploy/ 栈改成 fleetly 客户端形态（必填 ${TORCHWOOD_FUNCTIONS_FLEETLY_*:?} 插值），导致现役 dokploy 部署报错。用户直裁（T-3，2026-09-28）：torchwood 必须继续支持原有 dokploy / docker 直接部署，与 fleetly 形态并存。先读：仓库 AGENTS.md/CLAUDE.md、fleetly 仓 docs/design/2026-09-26-torchwood-line.md 的 T-3 裁决行、docs/plan/2026-09-26-torchwood-line-impl.md 的 IMPL-T2-5 票全文（需求真值）、dispatcher/daemon.go（现行 Daemon 接口与 fleetlyDaemon）、git 历史 54b666b:dispatcher/daemon.go（docker 底座完整旧实现）。
+
+【第 0 步：方案可行性审查（强制，先于任何代码）】①对比 54b666b 的 docker daemon 与现行 Daemon 接口的方法签名差异（尤其 InspectInstance 的 ip 语义、EnsureProjectNetwork 的网络/成员挂靠语义在 docker 底座下的对应物——docker 底座是自建 bridge 网络自 attach，无平台发布管线）；②确认 proto Functions 段 reserved 字段号清单（docker.host/network 旧号不可复用，新字段用新号）；③确认 bootkit 校验分发点；④列出 54b666b 旧实现中依赖已删除多节点模型的代码面（nodes/capacity/routing 钩子）并裁决裁剪方案（单机 local 模式为必达，registry 模式复归与否记录偏离）。差异/矛盾 → 停，输出审查报告等人工裁决；通过 → 记录后实现，偏离记入实施记录。
+
+【硬约束】仓库命名约定；用户可见文案英文、注释中文；池语义（租约/保温/熔断/TW_MAX_REQUESTS）一行不动——只加执行底座；fleetly 驱动路径不得引入 docker client 依赖（机制测试按此口径改写）；导出标识符不用缩写。
+
+【本票要点】①functions.driver: docker|fleetly 显式枚举，未设/未知 fail-closed 报错列出两选项与各自配置键；②docker 底座复活+适配现行接口（含 per-project 网络 tw-func-<project>[-int] 与 server attach 回访——旧实现语义）；③proto 新字段（docker 后端 host/network）；④bootkit 按驱动分发校验（driver=docker 时不要求 fleetly 段，反之亦然）；⑤docker/dokploy/ 三件（compose/config.yaml/README）恢复自包含 docker.sock 形态：sock 挂载、user: root、driver: docker、零 FLEETLY_* 变量、多节点细胞模型维持退役（历史注记保留）；README 保留 fleetly 指引章；⑥docker/fleetly/config.yaml 钉 driver: fleetly；⑦「零 docker client」三层机制断言改口径为 fleetly 驱动路径（源扫描排除 docker 底座文件、依赖图按构建标签或包边界裁量——给出可执行的口径并记录）。
+
+【完成标准】票内五条守卫逐条落测试；全量 go test ./... 绿（含既有池测试零变化）；本地 dind E2E 两形态各跑一遍（docker 底座 spawn→health→分发→回收；fleetly 底座复跑既有 E2E）；docker compose -f docker/dokploy/docker-compose.yml config 渲染零缺变量。输出：变更清单/审查结论/偏离清单/两形态 E2E 原始输出；不 commit（用户验收后统一提交）。
+```
+
+## PROMPT · IMPL-F1（task-group 网络对账豁免——fleetly 仓整改小票）
+
+```
+【仓库与背景】你在 D:/Codes/qiulin/fleetly 工作。T 线验收发现：T2-1 实施记录声称 task-group 网有归属锚不被孤儿判定命中，实际 reconNetworks（internal/engine/projectnetwork.go:111-136）只豁免 LabelProjectNetwork——长活 task-group 网会被周期误披露 network.orphaned（披露噪声+记录虚报；不删网，安全性质在）。先读：docs/plan/2026-09-26-torchwood-line-impl.md 的 IMPL-F1 票、internal/engine/projectnetwork.go 与 internal/engine/tasks.go 的网络面、IMPL-T2-1 实施记录的对应句。
+
+【第 0 步】核实缺陷（读代码确认 task-group 网确实落入孤儿判定）；确认豁免的正确锚点（任务网 label 形态以 internal/naming 与 EnsureTaskNetwork 实际落的 label 为准）。
+
+【改动】reconNetworks 期望集并入任务网（或等价豁免），补回归测试：ensure 过的 task-group 网零 orphaned 披露、state 外注入的真正孤儿网仍被披露（机制验收不回退）；IMPL-T2-1 实施记录句勘误标注。
+
+【完成标准】新测试+全量 go test ./... 绿；输出变更清单/审查结论；不 commit。
+```
+
+## PROMPT · IMPL-F2（00023 迁移 Down 腿测试——fleetly 仓整改小票）
+
+```
+【仓库与背景】你在 D:/Codes/qiulin/fleetly 工作。T 线验收发现：IMPL-T1-1 实施记录守卫表引用 TestPlatformSettingsMigrationUpDown（internal/state/s3settings_test.go:218）声称覆盖 00023（domains protocol/cert_mode 列）Up/Down，实际只覆盖 00011——00023 Down 腿零测试执行。先读：docs/plan/2026-09-26-torchwood-line-impl.md 的 IMPL-F2 票、internal/state/migrations/ 的 00023 迁移文件、既有迁移测试形态。
+
+【第 0 步】核实 00023 迁移的 Up/Down SQL 内容与表结构变化（domains 行增列），确认 Down 测试的正确断言面（回滚后列消失/旧数据保全）。
+
+【改动】补 00023 Down 腿迁移测试（建库→Up 全量→写域名行→Down 到 22→断言列消失与数据行为；或扩展既有 DownTo 用例）；IMPL-T1-1 实施记录该行勘误标注。
+
+【完成标准】新测试+全量 go test ./... 绿；输出变更清单；不 commit。
+```
+
+---
+
 ## 未分发（启动前细化再补 prompt）
 
 - IMPL-T3-1/T3-2/T3-3（P2 简票：宿主回环端口 opt-in、托管 redis AOF 选项、通配证书沿 W5）。
