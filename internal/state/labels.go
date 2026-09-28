@@ -48,17 +48,6 @@ const (
 	// 与 secret 清场按此 label 选择。
 	LabelDatabase = "fleetly.db"
 
-	// LabelProjectNetwork 标记项目网 overlay 归属（网络对象 label，值 =
-	// 项目平台 ID；OT-1/IMPL-T15-1）。识别面用途：①对账/GC 无需从前缀
-	// 反解项目（id8 是有损截断）即可归因；②孤儿网判定不靠前缀猜测
-	//（前缀族众多，票面明确要求自描述 label）。服务 label 集不含此键
-	// （仅网络对象写入）。
-	LabelProjectNetwork = "fleetly.project-network"
-
-	// LabelTaskGroup 标记 task-group 网络归属（网络对象 label，值 = 调用方
-	// ref；DT-5/IMPL-T2-1）。与 LabelProjectNetwork 同款自描述锚：task-group
-	// 网长活、不随任务回收，识别面据此与孤儿网判定解耦（只披露不误删）。
-	LabelTaskGroup = "fleetly.task-group"
 	// LabelNetworkInternal 标记网络的 internal 变体（网络对象 label，值
 	// "true"；DT-7 不可信隔离面——internal overlay 无出网、无外部 DNS）。
 	// 底座 network inspect 的 Internal 字段是权威；label 是平台侧
@@ -91,6 +80,57 @@ const (
 	// 常量先行）。
 	LabelPlacementNode = "fleetly.placement.node"
 )
+
+// ── 归属锚 label（网络对象自描述归属——孤儿披露豁免的声明地）────────────────
+//
+// 锚常量块、集合 ownershipAnchorLabels 与谓词 IsOwnershipAnchor 同文件相邻
+// 维护：新锚 = 本块加常量 + 集合加条目两步；只加常量不进集合即
+// TestOwnershipAnchorConstantsCoveredByPredicate 红（F1 复发形态——契约在
+// 声明地补了、兑现点没跟上——提交期拦下）。
+const (
+	// LabelProjectNetwork 标记项目网 overlay 归属（网络对象 label，值 =
+	// 项目平台 ID；OT-1/IMPL-T15-1）。识别面用途：①对账/GC 无需从前缀
+	// 反解项目（id8 是有损截断）即可归因；②孤儿网判定不靠前缀猜测
+	//（前缀族众多，票面明确要求自描述 label）。服务 label 集不含此键
+	// （仅网络对象写入）。
+	LabelProjectNetwork = "fleetly.project-network"
+
+	// LabelTaskGroup 标记 task-group 网络归属（网络对象 label，值 = 调用方
+	// ref；DT-5/IMPL-T2-1）。与 LabelProjectNetwork 同款自描述锚：task-group
+	// 网长活、不随任务回收，识别面据此与孤儿网判定解耦（只披露不误删）。
+	LabelTaskGroup = "fleetly.task-group"
+)
+
+// ownershipAnchorLabels 是归属锚 label 的有序集合（条目与上方锚常量块一一
+// 对应；有序 = 枚举测试与失败输出稳定）。
+var ownershipAnchorLabels = []string{LabelProjectNetwork, LabelTaskGroup}
+
+// OwnershipAnchorLabels 返回归属锚 label 集的副本（识别面的枚举读口：
+// reconNetworks 级守卫据此对新锚自动获得覆盖；返回副本防调用方污染集合
+// 本体）。
+func OwnershipAnchorLabels() []string {
+	anchors := make([]string, len(ownershipAnchorLabels))
+	copy(anchors, ownershipAnchorLabels)
+	return anchors
+}
+
+// IsOwnershipAnchor 报告 label 集中是否任一归属锚 label 带非空值（「有主」
+// 判定的声明地单点——孤儿网披露豁免等识别面据此消费，不再逐锚手写）。
+//
+// 与 GC 分支的关系（两者语义不同，不得为形式统一互相替代）：项目网收敛
+// duty（engine reconcileProjectNetworks）的回收判定只认本集合的**子集**
+// LabelProjectNetwork——「无成员即回收」的判据来自 state 侧成员台账
+// （ProjectNetworkMembers），只有项目网有；task-group 网无 state 行、长活
+// 零成员合法，进回收环即被误删（F1 裁决：长活网只披露不回收）。孤儿披露
+// 豁免则覆盖全集（披露面只读，豁免从严——归属明确即不披露）。
+func IsOwnershipAnchor(labels map[string]string) bool {
+	for _, key := range ownershipAnchorLabels {
+		if labels[key] != "" {
+			return true
+		}
+	}
+	return false
+}
 
 // IsReservedLabel 报告 key 是否落在平台保留命名空间（fleetly.*）：
 // 用户声明该命名空间内的 label 时上游应拒绝（E_LABEL_RESERVED）。

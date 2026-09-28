@@ -11,8 +11,8 @@ package engine
 //  2. 对账披露（substrateRecon 的 networks 面，reconNetworks）：读面列举
 //     managed 网络 + state 推导期望集——state 外 `fleetly-` 前缀网 →
 //     network.orphaned（只披露不删：无法归因 ⇒ 不静默删他人物件）；带归属
-//     锚 label 的对象不进孤儿面（项目网漏网对象归第 3 条 GC 分支；task-group
-//     长活网按 LabelTaskGroup 自描述锚豁免——IMPL-F1）；期望项目网缺失 →
+//     锚 label 的对象不进孤儿面（豁免判据 = state.IsOwnershipAnchor 声明地
+//     单点；项目网漏网对象归第 3 条 GC 分支——IMPL-F1）；期望项目网缺失 →
 //     network.missing（披露；修正归第 3 条 duty）。瞬态读错不结论
 //     （services 面同纪律）；持续形态每进程只报一次（seen 记忆，恢复清零
 //     可再报）。
@@ -110,13 +110,12 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 	}
 	actualNames := map[string]bool{}
 	sort.Slice(actual, func(i, j int) bool { return actual[i].Name < actual[j].Name })
-	// ① 孤儿方向：managed + fleetly- 前缀 + 不在期望集 + 无归属锚 label。
-	//    项目网漏网对象归 GC 分支——归属明确，零端点即回收；task-group 长活
-	//    网按 LabelTaskGroup 自描述锚豁免（IMPL-F1）——网本身无 state 行
-	//    （不入台账，零成员 ensure 合法），state 期望集不可枚举，label 由
-	//    唯一写者（EnsureTaskNetwork）落下、fleetly.* 命名空间用户不可伪造，
-	//    是归属事实而非猜测；命名前缀（IsTaskGroupNetworkName）不作豁免
-	//    依据——防异物冒名，冒名对象照常披露。
+	// ① 孤儿方向：managed + fleetly- 前缀 + 不在期望集 + 无归属锚 label
+	//    （锚集与谓词见 state.IsOwnershipAnchor——豁免判据的声明地单点，
+	//    本处不再逐锚手写）。豁免语义（IMPL-F1 裁决）：归属锚 label 由唯一
+	//    写者落下、fleetly.* 命名空间用户不可伪造，是归属事实而非猜测；
+	//    命名前缀（IsTaskGroupNetworkName）不作豁免依据——防异物冒名，冒名
+	//    对象照常披露。项目网漏网对象归 GC 分支（归属明确，零端点即回收）。
 	orphanSet := map[string]bool{}
 	for _, net := range actual {
 		actualNames[net.Name] = true
@@ -126,11 +125,8 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 		if expected[net.Name] {
 			continue
 		}
-		if net.Labels[state.LabelProjectNetwork] != "" {
-			continue
-		}
-		if net.Labels[state.LabelTaskGroup] != "" {
-			continue // task-group 长活网：自描述 label 归属明确，不进孤儿面
+		if state.IsOwnershipAnchor(net.Labels) {
+			continue // 任一归属锚 label 非空 = 自描述归属明确，不进孤儿面
 		}
 		orphanSet[net.Name] = true
 		if e.networkOrphanSeen[net.Name] {
@@ -190,8 +186,8 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 //	组件网   = 装配层注入白名单（ingress/state 常量；生命周期归各组件 duty）。
 //
 // task-group 长活网不进期望集（网无 state 行——不入台账、零成员 ensure
-// 合法，state 不可枚举）；豁免走 reconNetworks 的 LabelTaskGroup 自描述锚
-// （IMPL-F1）。
+// 合法，state 不可枚举）；豁免走 reconNetworks 的归属锚谓词
+// （state.IsOwnershipAnchor，IMPL-F1）。
 func (e *Engine) expectedNetworks(ctx context.Context) (map[string]bool, map[string]string, error) {
 	expected := map[string]bool{}
 	for name := range e.platformNetworks {

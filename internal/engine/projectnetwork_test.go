@@ -8,6 +8,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/fleetlyrun/fleetly/internal/naming"
@@ -279,6 +280,59 @@ func TestNetworkReconStillDisclosesNonTaskGroupOrphans(t *testing.T) {
 	}
 	if audited["network:"+ensured] {
 		t.Fatalf("ensured task-group network %s misjudged as orphan (exemption anchor is the label, and the label is present)", ensured)
+	}
+}
+
+// TestNetworkReconExemptsEveryOwnershipAnchor IMPL-ARCH-C1 锚集枚举守卫
+// （reconNetworks 级）：谓词集合（state.OwnershipAnchorLabels）里每个锚
+// label 携带网都不进孤儿面（新锚入集即自动获得本测试覆盖）；无 label 孤儿
+// 与形似名冒名网（项目网名形、managed-only 不带锚 label）照常披露——豁免
+// 锚是 label 归属事实，不是命名形似（F1 手法同源）。
+func TestNetworkReconExemptsEveryOwnershipAnchor(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	anchors := state.OwnershipAnchorLabels()
+	if len(anchors) == 0 {
+		t.Fatal("ownership anchor set is empty (contract regression)")
+	}
+	anchorNet := func(i int) string { return fmt.Sprintf("fleetly-anchor-drill-%d", i) }
+	for i, key := range anchors {
+		h.nets.injectNetwork(anchorNet(i), map[string]string{
+			state.LabelManaged: state.ManagedLabelValue,
+			key:                "drill-anchor-value",
+		})
+	}
+	h.nets.injectOrphan("fleetly-orphan-drill-net")
+	h.nets.injectNetwork("fleetly-project-00000000", map[string]string{
+		state.LabelManaged: state.ManagedLabelValue,
+	})
+
+	h.eng.SubstrateRecon(ctx)
+
+	if got := countEventsByName(t, h, "network.orphaned"); got != 2 {
+		t.Fatalf("network.orphaned events = %d, want exactly 2 (unlabeled orphan + name lookalike); anchor-carried networks must all be exempt", got)
+	}
+	rows, err := h.store.RecentAudits(ctx, 100)
+	if err != nil {
+		t.Fatalf("audits: %v", err)
+	}
+	disclosed := map[string]bool{}
+	for _, r := range rows {
+		if r.Action == "reconcile.network_orphaned" {
+			disclosed[r.Target] = true
+		}
+	}
+	if !disclosed["network:fleetly-orphan-drill-net"] || !disclosed["network:fleetly-project-00000000"] {
+		t.Fatalf("orphan disclosure audit rows missing: %v", disclosed)
+	}
+	for i, key := range anchors {
+		name := anchorNet(i)
+		if disclosed["network:"+name] {
+			t.Fatalf("anchor-carried network %s disclosed as orphan (anchor %q is in the ownership anchor set)", name, key)
+		}
+		if !h.nets.has(name) {
+			t.Fatalf("anchor-carried network %s removed (the disclosure face is read-only)", name)
+		}
 	}
 }
 
