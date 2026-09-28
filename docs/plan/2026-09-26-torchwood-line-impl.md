@@ -1735,4 +1735,158 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 - **真 staging 域名 `grpc.<域名>:443` 的 TLS 握手**（Traefik/Let's Encrypt 证书 + h2c 后端）：本票以测试内 TLS 终结前脸 + 自签 CA 复现拓扑与 SDK 凭据路径；公共 CA 链的系统根验证待 T1-5 割接后真机执行（`DialGRPC("grpc.<域名>:443", WithTLS())` + 一次发布/订阅往返）。
 - **割接后域名通道端到端联调**（可选，与 T1-5 验收探针合并执行）。
 
+### IMPL-T1-5 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 本票改动全部落在 messageloop 仓（`D:/Codes/qiulin/messageloop`，基线 `b009c71`）：新增 `docker/fleetly/` 四件套、`sdks/go/example/recoverprobe/` 探针、`docker/dokploy/README.md` §10 指引章；fleetly 仓只记本文档。
+
+#### A. 逐行核对 dokploy compose × 受控子集白名单（改写清单终态）
+
+受控面真值 = `internal/compose/validate.go`（白名单/拒绝清单）+ `testdata/whitelist.golden`；现役形态真值 = messageloop 仓 `docker/dokploy/docker-compose.yml`。逐项裁决（原形态 → 终态 → 承接面）：
+
+| # | 原形态（dokploy） | 终态 | 承接面 |
+|---|---|---|---|
+| 1 | 顶层 `name: messageloop` | 保留 | app 标识（`^[a-z0-9][a-z0-9_-]*$` 合规） |
+| 2 | `x-app-env`/`x-bridge-env` 锚点 | 内联为各服务 `environment` | 插值禁用后无共享需求；loader 将 `x-*` 移入 Extensions |
+| 3 | redis image/`command --appendonly yes`/卷/healthcheck | 保留 | 平台卷注册表 + 健康门（缺省 5s/3s/3/10s） |
+| 4 | redis `restart: unless-stopped` | **删除** | 平台重启策略缺省 `any`/delay 5s（不在服务白名单） |
+| 5 | messageloop `image: ${MESSAGELOOP_IMAGE:-…:latest}` | 字面 sha tag | 部署期 tag→digest（DT-2）；升级 = 改 compose 重部署 |
+| 6 | `pull_policy: always` | **删除** | Redeploy 重解析 tag = always 等价物（§B） |
+| 7 | `command: --config /etc/messageloop/mlbridge.yaml` | 保留（路径不变） | Config target 对齐原 bind 路径 |
+| 8 | bind mount `./mlbridge.yaml` | **删，改 Config 资源** | 顶层 `configs: external: true` + 服务级 `{source,target}`（OT-3/T1-4） |
+| 9 | `networks: [default, dokploy-network]`（服务级） | **全删** | 平台 app overlay；别名 = compose 服务名（external 网络在拒绝清单） |
+| 10 | Traefik label ×13（含 80 跳转） | **全删** | 域名资源 API 三条 `domains add`（§D）；80→443 不做 |
+| 11 | `ports`（回环 9090/9091）/QUIC 注释行 | **删除** | 宿主端口发布退回 T3-1（P2 opt-in）；gRPC 走域名（T1-6 已落地） |
+| 12 | `environment` 全量 `${VAR}` 插值 | 字面量基线 + 密钥上平台 env | `fleetly env set`（平台层>compose，同键出 `W_ENV_PLATFORM_OVERRIDE`） |
+| 13 | messageloop `depends_on: redis healthy` | **删除** | 发布管线编排（`serviceRejectList` 显式拒；自愈窗口如实披露） |
+| 14 | mlbridge image/`pull_policy`/`environment`/networks/depends_on | 同上 5/6/12/9/13 | 同上 |
+| 15 | 顶层 `networks: dokploy-network: external` | **删除** | `networkDefReject.external` 拒绝；平台建网 |
+| 16 | 顶层 `volumes: redis_data:` | 保留 | `naming.VolumeName` = `fleetly-<app>-redis_data-<appid8>` |
+| 17 | `env.dokploy` 插值守卫/变量模板 | 平台 env 清单（README §4）+ runbook §2 | 插值禁用；必填经平台 env（应用侧 fail-closed） |
+| 18 | SSH 隧道运维（§4.4/§7） | 域名直连 + 平台 CLI | Server API 域名 h2c + Bearer；metrics 走平台观测面 |
+
+静态实证（一手）：dokploy 文件过 validate 即拒（首错 = `services.messageloop.depends_on`，`E_COMPOSE_UNSUPPORTED`）；终态 compose 过 validate **零告警**（`messageloop: valid (spec_hash 947204131109, 3 services, 1 volumes)`，退出码 0）。初稿曾带 `W_DEPLOY_NO_HEALTHCHECK`（mlbridge 无健康探针）——为达成「零告警」，为 mlbridge 增补 `["CMD","nc","-z","127.0.0.1","9070"]` TCP 存活探针（busybox nc 在 alpine 3.22 实测 `-z` 可用；镜像无 HTTP 健康面、gRPC health 在容器内无探针客户端，深度检查留验收探针——诚实标注入 README §6）。
+
+#### B. 镜像引用形态裁决（tag vs digest）
+
+**裁决：compose 钉 sha tag（`sha-b009c71` / `sha-39d254d`），不用 `latest`、不用裸 digest；升级/回滚 = 改 tag 重部署。** 依据：
+
+- 平台已把可变引用收敛为部署期钉定（DT-2）：tag→digest 经 registry 解析、digest 进 revision spec 与漂移对账，**Redeploy 重解析 = `pull_policy: always` 的干净等价物**——compose 写 tag 不丢 reproducibility；
+- 不用 `latest`：Redeploy 会静默换版（现役 dokploy 的既有风险面），部署形态应显式表达版本；
+- 不用 digest 字面：sha tag 已一一对应 commit 且可读；平台记录 digest 已满足审计；digest 字面会把日常 patch 升级变成查 digest 手术；
+- 版本锚点经 GHCR registry API 一手查证（2026-09-28）：messageloop 仓 `sha-b009c71`（= main tip，含 T1-6）digest `sha256:19ba81f02f131799dbb47ca8d1ee03421f17a75881ef36e8731151db0ddcc8cc`；mlbridge 仓 `sha-39d254d`（= origin/main tip）digest `sha256:153cf41c2293efda83ca5ff203cee369d79c5e79ab481a81477a2fbc41993170`，且 `latest` 指向同一 digest；messageloop 最新 semver 镜像 `1.3.1` 未采用——该 tag（`v1.3.1` = 6c90ca8，仅改 `sdks/ts/package.json` 的 TS 发布提交）**不是 main 祖先**（`git merge-base --is-ancestor` 退出 1），割接锚点应取 main 线代码（`sdks/ts/v1.3.1` 之后还有 6 个提交）；mlbridge 无任何 semver tag，sha 是唯一不可变选项；两镜像 sha 形态保持一致；
+- 硬冻结备选：逐行替换为 `@sha256:19ba…/153c…`（免解析、airgap 快路径），runbook §7 记录实际使用形态。digest 可直接进部署（T1-2 digest 直通语义）。
+
+#### C. mlbridge.yaml → Config 资源
+
+- 挂载路径改写点：bind mount `./mlbridge.yaml:/etc/messageloop/mlbridge.yaml:ro` → 顶层 `configs: {mlbridge.yaml: external: true}` + 服务级 `{source: mlbridge.yaml, target: /etc/messageloop/mlbridge.yaml}`（target 合规：绝对、规范、单文件、不撞 `/run/secrets`）；容器内路径与 `command --config` 参数**零改动**；
+- 内容上传：`fleetly configs set messageloop mlbridge.yaml --from-file docker/fleetly/mlbridge.yaml`（需 app 先存在 → bootstrap 第二阶段）；内容变更 = 新内容寻址对象 + 引用服务滚动（T1-4 语义）；
+- 源文件处置：在 `docker/fleetly/` 留同内容副本（fleetly 目录自足），与 `docker/dokploy/mlbridge.yaml` 的同步义务写进两份文件头注（dokploy 退役后前者为唯一真源）。
+
+#### D. env 与域名面
+
+- **平台 env（不落仓库）**：`MESSAGELOOP_SERVER_API_AUTH_TOKENS`、`MLBRIDGE_MESSAGELOOP_API_TOKEN`（同值，dokploy 靠 `${}` 复用 → fleetly 靠两次 `env set`）、`MLBRIDGE_TORCHWOOD_PROJECTS`、`MLBRIDGE_TORCHWOOD_BASE_URL`（覆盖 compose 占位）；可选 `MESSAGELOOP_SERVER_HTTP_AUTH_TOKEN`/`…ALLOWED_ORIGINS`/`…REDIS_PASSWORD`；
+- **compose 字面量**：监听地址三键、broker 五键、传输行为、WS 跨域、mlbridge 九键（与 dokploy 同基线的非敏感值）；
+- **鸡与蛋与首部署语义（源码取证）**：应用随首次部署创建（`ensureApp`），而 `env set`/`configs set`/`domains add` 都要求应用存在；缺必填 env 时 messageloop（api auth_tokens 前置校验）与 mlbridge（`torchwood.base_url`/`projects` Validate）均 fail-closed 退出 → 首部署预期失败；失败未切流走 `failUnswitched` → 首发无历史版本 → `scaleToZero` + `substrate_halted`（`releasing.go:274-295`）——**全栈 scale=0 保留现场**，正是 DT-8 灌卷窗口；`fleetly deployments cancel`（未切流）同样落到 scale=0（`recovery.go:66-96`）；
+- **三域名**：`domains add` 三条（service=messageloop；9080 http / 9090 h2c / 9091 h2c；cert_mode 缺省 http01）；端口显式进路由（`dynamic.go:294-303` 后端 `<swarm 服务名>:<port>`，h2c 出 `h2c://`）；T1-1 语义（host 全局独占、写后收敛、ACME HTTP-01 依赖解析已指向边缘、80→443 不做）沿用；
+- **宿主回环端口裁决**：**不再需要**。DT-2 降级项的正解（T1-6 `DialGRPC` TLS）已验收落地；Server API 走 9091 域名 h2c；隧道兜底退回 T3-1 opt-in。runbook 记录「无宿主管端口」为验收核对项；
+- `MLBRIDGE_TORCHWOOD_BASE_URL` 临时公网形态：compose 占位 `https://torchwood.example.com` + 注释「必须改」；平台 env 层覆盖（可见 `W_ENV_PLATFORM_OVERRIDE`）；T2 后切 `http://torchwood-server:9080`（项目网别名 `<app>-<service>`）。
+
+#### E. 数据面（DT-8）机制核查——含一处关键实证修正
+
+- **「BGSAVE→RDB 落卷」在 `--appendonly yes` 下不成立（本地 Docker 29.7.2 实证）**：Redis 7 发现 `appendonlydir`（哪怕为空）即只认 AOF，**不加载 `dump.rdb`**——只灌 RDB 会静默得到空库（`GET ml2:broker:epoch` 空、`XLEN` 0；实验输出见实施记录）。**回灌载体 = 复制 `/data` 整目录（appendonlydir + dump.rdb）**；runbook §3.1.4 的 `rm -rf appendonlydir && cp -a /src/.` 实测通过（epoch/流原样在场、旧 AOF 的陈旧键被清除）。这不是票面歧义而是机制性修正：DT-8「回灌或明示清零」的两选一与探针要求不变；
+- **灌卷窗口**：首部署失败的 scale=0 保留现场（§D），无运行任务占用卷；runbook 附占用守卫（`docker ps --filter volume`）；
+- **客户端 recover 探针的能力边界（源码 + 本地实证）**：服务端对**新会话**恢复只把 `cursor.offset` 当续读下界（`recover.go:323-334`；客户端携带的 `stream_epoch` 不参与判定，`04-cluster.md:238` 同口径），epochReset 仅存在于 resume 快照路径（`recover.go:307-313`）；因此「数据是否回灌」的**决定性断言 = Redis 侧 `ml2:broker:epoch` 前后相等 + 样本流在场**，客户端探针证明的是「携偏移被接受、无重复回放、新边缘 live 往返」。本地三态实证（同数据新进程 PASS；空实例旧游标也 PASS 但 epoch 不等判死）——边界如实写进 runbook §6.2/附录 B；
+- **回滚**：dokploy 栈未拆；§3 只读复制不改旧 redis；重启旧容器 + DNS 回切即回滚（runbook §8）。
+
+#### F. 其他平台面事实核查（实施依据）
+
+- 服务别名 = compose 服务名（`planner.go:252,314`），`redis:6379`/`messageloop:9091` 的栈内 DNS 语义与现役一致；
+- 平台永不删除 app 卷（engine/substrate 端口无 `VolumeRemove`；`省略=删除` 只删服务）——卷名公式 `fleetly-<app>-<key>-<appid8>`（`naming.VolumeName`，`placement.go:313` 注册）；`fleetly placement show` 可读出卷名；
+- `expose` 三个端口声明合规（`expose` 为白名单键；域名端口由资源显式携带）；
+- 域名的 `service` 是 compose 服务名、只做形态校验，服务存在性属底座事实（`read.go:430-433`）。
+
+### IMPL-T1-5 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 改动全部落在 messageloop 仓（`D:/Codes/qiulin/messageloop`，基线 `b009c71`）；fleetly 仓仅本文档。**本票未执行真机割接**（无 staging 凭据/访问权）：真机段在 runbook 逐处标注「待使用者执行窗口」，本地等价实证（Redis 迁移实验、recover 探针三态）附原始输出。
+
+变更文件清单（每文件一句，均 messageloop 仓）：
+
+- `docker/fleetly/docker-compose.yml`（新）：fleetly 受控子集栈——redis（AOF+named volume+ping 探针）、messageloop（sha tag、Config 挂载、三端口 expose、/health 探针、字面量 env 基线）、mlbridge（sha tag、TCP 存活探针、env 基线）、顶层 `configs`/`volumes`；`MLBRIDGE_TORCHWOOD_BASE_URL` 公网占位 + T2 切内网注释。
+- `docker/fleetly/mlbridge.yaml`（新）：Config 上传源（与 dokploy 同内容；头注写明上传命令与同步义务）。
+- `docker/fleetly/README.md`（新）：改写清单 25 行对照表、三域名声明命令、平台 env/Config 清单、镜像引用形态裁决（含 digest 锚点）、诚实标注（无 80 跳转/无宿主管端口/编排自愈窗口/mlbridge 探针深度）。
+- `docker/fleetly/cutover-runbook.md`（新）：§0 前置检查 → §2 两阶段 bootstrap（首部署预期失败 + scale=0 窗口）→ §3 DT-8 二选一（回灌=冻结+BGREWRITEAOF+整目录复制+灌卷；清零=明示记录）→ §5 域名/DNS/证书 → §6 验收探针（数据面/客户端 recover/域名传输）→ §7 记录模板 → §8 回滚；附录 A（RDB-only 反例实证）、附录 B（探针边界实证）。
+- `sdks/go/example/recoverprobe/main.go`（新，票面外支撑件）：DT-8 客户端 recover 探针（record/verify 两阶段；ws/grpc、可选 TLS/token；断言「游标续读点被接受、无 ≤ 游标的重复回放、live marker 往返」）。
+- `docker/dokploy/README.md`：新增 §10「fleetly 部署（割接目标形态）」指引章（指向 `docker/fleetly/` 三件套 + 五条行为差异）+ 文首迁移中提示。
+
+一手验证证据（原始输出摘要）：
+
+```
+$ cd D:/Codes/qiulin/fleetly && go run ./cmd/fleetly validate D:/Codes/qiulin/messageloop/docker/dokploy/docker-compose.yml
+E_COMPOSE_UNSUPPORTED: service "messageloop" uses an unsupported field "depends_on": rejected field in v0.1
+  (orchestration order is managed by the platform release pipeline)   ← 现役形态首错，改写必要性成立
+exit status 1
+
+$ go run ./cmd/fleetly validate D:/Codes/qiulin/messageloop/docker/fleetly/docker-compose.yml
+messageloop: valid (spec_hash 947204131109, 3 services, 1 volumes)   ← 零告警，退出码 0
+$ … validate --json …
+{"valid": true, "name": "messageloop",
+ "spec_hash": "947204131109217cd3b30e88c9cd95f64bab4623b76461aba52a0f12fea4df01",
+ "services": 3, "volumes": 1}
+
+$ ghcr registry API（匿名 token + manifests）：
+messageloopio/messageloop:sha-b009c71 -> sha256:19ba81f02f13…ddcc8cc（tags 含 1.3.1/1.3/latest/15×sha-*）
+messageloopio/mlbridge:sha-39d254d    -> sha256:153cf41c2293…493170；mlbridge:latest -> 同一 digest（仅在 12 个 tag）
+
+$ Redis 7 机理实验（本地 Docker 29.7.2；见 runbook 附录 A）：
+① 仅复制 dump.rdb → 启动后 GET ml2:broker:epoch = 空、XLEN = 0（RDB-only 静默不生效）；
+② 整目录（appendonlydir + dump.rdb）灌入 → epoch 原值在场、XLEN 5 → XRANGE 数据原样；
+③ 首跑空卷（含空 appendonlydir + stale:key）→ 灌卷手术完成后启动：旧 epoch 在场、
+   XLEN 2、stale:key 空（陈旧键不残留）、DBSIZE 4）——runbook §3.1.4 命令逐字复跑。
+
+$ recover 探针本地三态（redis:7-alpine + go run ./cmd/server，require_auth=false/namespace=default，
+  channel=default:cutover.probe；与 runbook §3.1.0/§6.2 同流程）：
+record → ML_PROBE_OFFSET=1877546826914070528；epoch=f7665176-f8b0-4e0c-98b9-975cb757fb6d；XLEN=2
+重启 server（同 redis，模拟新边缘）→ epoch 不变；verify →
+  verify: subscribed default:cutover.probe with cursor (epoch=f7665176-… offset=1877546826914070528); settle window 5s
+  verify ok: cursor honored (no replay at or below offset 1877546826914070528); marker delivered live
+  verify_exit=0；XLEN=3（+marker）
+重置对照（空 redis、旧 epoch/offset）：verify 亦 exit 0（无旧史可回放），但 epoch=0fe082f8-… ≠ 旧值
+  → 判死由 runbook §6.1① 的 epoch 比对承担（探针边界，实证写进附录 B）。
+
+$ go build ./example/recoverprobe；gofmt -l（零输出）；go vet ./example/recoverprobe（零输出）   ← sdks/go 模块
+$ sh -n <提取 README+runbook 全部 bash 块> → exit 0；两文件 grep '2>/dev/null' 零命中   ← 可复跑性纪律
+```
+
+守卫与验收条款对应表：
+
+| 票面守卫/验收 | 证据 |
+|---|---|
+| compose 过 fleetly validate 零告警 | 原始输出上述（含初稿警告 → mlbridge 探针修复过程） |
+| 白名单逐行核对表 | 审查 §A 25 行 + messageloop 仓 README §2（终态表） |
+| 割接探针（DT-8） | runbook §6.1/§6.2 命令 + 本地三态实证（附录 A/B）；真机待窗口 |
+| WebSocket 域名真机连通 | runbook §6.3（`domains verify` + wss 握手 + 探针 live 往返）；**真机待窗口** |
+| gRPC/API 域名连通 | runbook §6.3（ALPN h2 检查 + SDK `DialGRPC(WithTLS())` 指引）；**真机待窗口** |
+| 回滚 = dokploy 栈未拆 | runbook §8（旧栈只停不拆、旧 redis 只读复制、DNS 回切） |
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **票面外新增 `sdks/go/example/recoverprobe`**：runbook 的客户端 recover 探针若以 heredoc 内联则不可编译验证；落地为 SDK 同级 example（`go run ./example/recoverprobe`），本会话完成三态本地实证与 build/vet/gofmt。属「runbook 可复跑」的支撑件，不与票面产出冲突。
+2. **mlbridge 新增 TCP 存活探针**（票面未列）：初稿 compose 过 validate 出 `W_DEPLOY_NO_HEALTHCHECK`，与「零告警」完成标准冲突；镜像无 HEALTHCHECK/HTTP 端口，选用 busybox `nc -z`（alpine 实测可用、非 root 可执行），把启动期故障拦进发布健康门；深度依赖检查如实标注为验收探针职责。
+3. **镜像钉 sha tag 而非 semver tag/`latest`**：messageloop 最新 semver 镜像 `1.3.1` 构建自 `v1.3.1`（6c90ca8，非 main 祖先的 TS 发布提交）、mlbridge 无 semver tag——sha 是唯一「可读 + 不可变 + 与现役 latest 行为中立」的形态；digest 硬冻结作为备选写进 README §5/runbook §7。
+4. **`mlbridge.yaml` 在 docker/fleetly/ 留副本**：不在 fleetly 目录内引用 dokploy 的 bind 源（保证 fleetly 目录自足、dokploy 退役后不悬空）；同步义务写入两份文件头注。
+5. **首部署路径 = 「预期失败 → scale=0 窗口」**：不新增 bootstrap-redis 类票外编排形态；应用创建与回灌窗口复用平台自有语义（failUnswitched→scaleToZero），runbook 给出 `deployments cancel` 提前收口选项。
+6. **`MLBRIDGE_TORCHWOOD_BASE_URL` compose 保留占位**：若不写，遗漏平台 env 时 mlbridge 启动报错但健康门（副本级）可能不拦；占位 + 注释 + runbook 必填清单把「忘配」显式化（平台 env 覆盖时出 `W_ENV_PLATFORM_OVERRIDE` 可见）。
+7. **runbook 占位符引号化**：`sh -n` 全量通过（`<...>` 不裸用，防被解析为重定向）；禁 `2>/dev/null` 纪律全量扫描零命中。
+8. **DT-8 机制修正（审查 §E）**：票面「BGSAVE→RDB 落卷」在 AOF 形态下不成立，改写为「整目录（AOF）复制」并保留 BGREWRITEAOF/BGSAVE 作为写入冻结与压缩步骤；两选一（回灌/清零）与探针要求不变。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认四项裁决与八项偏离：①镜像形态 = sha tag（Redeploy 重解析 = always 等价；硬冻结备选写进 README/runbook）；②宿主回环端口不再需要（T1-6 已落地，隧道兜底退 T3-1）；③Config target 逐字对齐原 bind 路径；④DT-8 数据面 = 整目录 AOF 复制（机制修正；验收会话 Redis 实验复现：RDB-only 静默空库 / 整目录数据在场）或明示清零，epoch 比对为决定性判据；及全部登记偏离（recoverprobe 支撑件、mlbridge nc 探针、sha tag、mlbridge.yaml 副本、预期失败→scale=0 窗口、base URL 占位、占位符引号化、DT-8 修正）。真机割接段待使用者窗口按 runbook 执行。
+
+staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构）：
+
+- runbook §2 两阶段 bootstrap 的实机失败判定与 `env/configs/domains` 实写；
+- runbook §3 冻结/复制/灌卷（本地等价实证已附；真机另需确认 dokploy 容器名与磁盘空间）；
+- runbook §5 DNS 切换 + ACME HTTP-01 签发（T1-1 ⑤ 一并复验）+ §6.3 gRPC `h2c`/API 域名连通（含 SDK `DialGRPC(WithTLS())` 公共 CA 链）；
+- 建议窗口内同时核对：`fleetly domains verify` 输出中各域名 :80/:443 与证书 SAN；`W_ENV_PLATFORM_OVERRIDE` 在部署输出中对 4 个平台 env 键的呈现；mlbridge→Torchwood 公网网关连通（T2 前）。
+
+
 
