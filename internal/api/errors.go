@@ -3,6 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	sharedv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/shared/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
@@ -25,8 +27,9 @@ import (
 //（*apperr.Error 实现 GRPCStatus()，detail 信封随之上线）。
 //
 // 调用纪律：handler 对 state 层哨兵一律经 mapStoreErr 收口；表外哨兵原样
-// 透传（不吞）。真正的特例（权限门 403 族、E_APP_AMBIGUOUS 候选列投影、
-// 需要额外载荷的富投影）保留在调用面，理由见各站点盘点。
+// 透传（不吞）。真正的特例（权限门 403 族、需要额外载荷的富投影）保留在
+// 调用面，理由见各站点盘点；E_APP_AMBIGUOUS 候选列投影收编为本文件
+// ambiguousRefErr 唯一构造点（IMPL-ARCH-L：六站同码异文案统一，见文末）。
 
 // notFound 构造退化信封 NotFound。
 func notFound(message string) error {
@@ -274,4 +277,28 @@ func (e storeErrEntry) render(err error, args []any) error {
 	default:
 		return err
 	}
+}
+
+// ── E_APP_AMBIGUOUS 标准构造（IMPL-ARCH-L）──────────────────────────────────
+
+// ambiguousRefErr 构造 E_APP_AMBIGUOUS 标准信封——全仓该注册码 detail 的
+// 唯一构造点（基准措辞取自 ownership.resolveApp 的 appAmbiguousErr 先例，
+// 用户裁决；此前的「reference it by id or use the qualified read face」
+// 「…or the platform id」异形文案收编于此，此后改文案只改本处）。
+// kindName 是资源类型词（app/database），兼任信封 context 键（六站既有键
+// 逐一保持）；qualifiedForm 是可行动指引的限定形样例（team/prj/app、
+// team/prj/db）；ref 是用户输入的引用值；candidates 是歧义行候选列（限定
+// 形名，归属 slug 缺失的行退化列平台 ID），由站点枚举、本函数排序，非空
+// 才投影 context（空列不投影——错误面不留空指引，非基准站点的信封形态
+// 保持原样）。
+func ambiguousRefErr(kindName, qualifiedForm, ref string, candidates []string) error {
+	sort.Strings(candidates)
+	projected := apperr.New("E_APP_AMBIGUOUS",
+		"%s %q resolves to multiple rows across projects; use the %s qualified form",
+		kindName, ref, qualifiedForm).
+		WithContext(kindName, ref)
+	if len(candidates) > 0 {
+		projected = projected.WithContext("candidates", strings.Join(candidates, ","))
+	}
+	return projected
 }

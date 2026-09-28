@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
-	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/engine"
 	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -340,9 +339,7 @@ func (s *ProjectsService) resolveAppRefForMove(ctx context.Context, ref string) 
 	row, err := s.st.GetAppByName(ctx, ref)
 	if err != nil {
 		if errors.Is(err, state.ErrAppAmbiguous) {
-			return state.App{}, apperr.New("E_APP_AMBIGUOUS",
-				"app %q resolves to multiple rows across projects; use the team/prj/app qualified form or the platform id", ref).
-				WithContext("app", ref)
+			return state.App{}, ambiguousRefErr("app", "team/prj/app", ref, nil)
 		}
 		return state.App{}, mapStoreErr(err, ref)
 	}
@@ -462,9 +459,7 @@ func (s *ProjectsService) resolveDatabaseRefForMove(ctx context.Context, ref str
 	row, err := s.st.GetDatabaseInstanceByName(ctx, ref)
 	if err != nil {
 		if errors.Is(err, state.ErrDatabaseAmbiguous) {
-			return state.DatabaseInstance{}, apperr.New("E_APP_AMBIGUOUS",
-				"database %q resolves to multiple rows across projects; use the team/prj/name qualified form or the platform id", ref).
-				WithContext("database", ref)
+			return state.DatabaseInstance{}, ambiguousRefErr("database", "team/prj/db", ref, nil)
 		}
 		return state.DatabaseInstance{}, databaseNotFound(ref, "not found")
 	}

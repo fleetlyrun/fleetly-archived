@@ -136,9 +136,7 @@ func (s *DatabaseService) CreateDatabase(ctx context.Context, req *serverv1.Crea
 	case err == nil:
 		return nil, conflict(fmt.Sprintf("database instance name %q is already registered in project %q (names stay reserved across the lifecycle)", req.GetName(), proj.Slug))
 	case errors.Is(err, state.ErrDatabaseAmbiguous):
-		return nil, apperr.New("E_APP_AMBIGUOUS",
-			"database %q resolves to multiple rows across projects; reference it by id or use the qualified read face", req.GetName()).
-			WithContext("database", req.GetName())
+		return nil, ambiguousRefErr("database", "team/prj/db", req.GetName(), nil)
 	case !errors.Is(err, state.ErrDatabaseNotFound):
 		return nil, err
 	}

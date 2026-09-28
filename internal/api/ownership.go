@@ -284,8 +284,10 @@ func resolveAppInVisibleProjects(ctx context.Context, st *state.Store, name stri
 	}
 }
 
-// appAmbiguousErr 构造 E_APP_AMBIGUOUS（候选列 team/prj/app——可行动指引；
-// 归属 slug 缺失的行退化列平台 ID，不阻塞错误面）。
+// appAmbiguousErr 构造 app 裸名歧义信封（候选列 team/prj/app——可行动指引；
+// 归属 slug 缺失的行退化列平台 ID，不阻塞错误面）。候选列在本站点枚举，
+// 文案与信封经 ambiguousRefErr 统一产出（IMPL-ARCH-L：注册码 detail 全仓
+// 唯一构造点）。
 func appAmbiguousErr(ctx context.Context, st *state.Store, name string) error {
 	var rows []state.App
 	if apps, err := st.ListAppRowsByName(ctx, name); err == nil {
@@ -299,11 +301,7 @@ func appAmbiguousErr(ctx context.Context, st *state.Store, name string) error {
 		}
 		candidates = append(candidates, app.QualifiedName())
 	}
-	sort.Strings(candidates)
-	return apperr.New("E_APP_AMBIGUOUS",
-		"app %q resolves to multiple rows across projects; use the team/prj/app qualified form", name).
-		WithContext("app", name).
-		WithContext("candidates", strings.Join(candidates, ","))
+	return ambiguousRefErr("app", "team/prj/app", name, candidates)
 }
 
 // resolveDatabaseRef 按引用取库实例行（app 面同款可见域感知；限定形
@@ -338,9 +336,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 		inst, err := st.GetDatabaseInstanceByName(ctx, ref)
 		if err != nil {
 			if errors.Is(err, state.ErrDatabaseAmbiguous) {
-				return state.DatabaseInstance{}, apperr.New("E_APP_AMBIGUOUS",
-					"database %q resolves to multiple rows across projects; use the team/prj/db qualified form", ref).
-					WithContext("database", ref)
+				return state.DatabaseInstance{}, ambiguousRefErr("database", "team/prj/db", ref, nil)
 			}
 			return state.DatabaseInstance{}, mapStoreErr(err)
 		}
@@ -368,9 +364,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 	case 0:
 		return state.DatabaseInstance{}, databaseNotFound(ref, "not found in your visible projects (pass team/prj/db to resolve across teams)")
 	default:
-		return state.DatabaseInstance{}, apperr.New("E_APP_AMBIGUOUS",
-			"database %q resolves to multiple rows across projects; use the team/prj/db qualified form", ref).
-			WithContext("database", ref)
+		return state.DatabaseInstance{}, ambiguousRefErr("database", "team/prj/db", ref, nil)
 	}
 }
 

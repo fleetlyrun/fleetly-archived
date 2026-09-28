@@ -106,9 +106,7 @@ func (s *BuildsService) TriggerBuild(ctx context.Context, req *serverv1.TriggerB
 		}
 		app, err = ensureApp(ctx, s.st, spec.Name, proj)
 	} else if errors.Is(err, state.ErrAppAmbiguous) {
-		return nil, apperr.New("E_APP_AMBIGUOUS",
-			"app %q resolves to multiple rows across projects; reference it by id or use the qualified read face", spec.Name).
-			WithContext("app", spec.Name)
+		return nil, ambiguousRefErr("app", "team/prj/app", spec.Name, nil)
 	}
 	if err != nil {
 		return nil, err
