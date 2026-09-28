@@ -13,6 +13,7 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/engine"
 	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
+	"github.com/fleetlyrun/fleetly/internal/substrate"
 )
 
 // Manager 主体：采集循环 / Follow / History / 清理（类型与构造在 logs.go）。
@@ -92,7 +93,7 @@ func (m *Manager) scanOnce(ctx context.Context) {
 		red := m.red.forApp(ctx, app.ID)
 		for _, svc := range services {
 			candidates[accessRouterName(app.TeamSlug, app.ProjectSlug, app.Name, svc)] = accessTarget{app: app, service: svc}
-			m.pollStream(ctx, app, svc, red)
+			m.pollAppStream(ctx, app, svc, red)
 		}
 		// E5 Cron / DT-4：一次性 job 服务（fleetly-cron- / fleetly-init- 前缀，
 		// 服务名不进命名公式发现面）的日志同管线采集，归属 (app, compose
@@ -109,15 +110,22 @@ func (m *Manager) scanOnce(ctx context.Context) {
 // 式；logs 包统一经此处取值，便于口径单点）。
 func qualifiedAppOf(app state.App) string { return app.QualifiedName() }
 
-// pollStream 拉取长驻服务的单条流（compose 服务名 → 命名公式 swarm 名；
+// pollAppStream 拉取长驻服务的单条流（compose 服务名 → 命名公式 swarm 名；
 // v0.3 三段公式——team/prj 段随 app 行 slug）。
-func (m *Manager) pollStream(ctx context.Context, app state.App, service string, red *redactor) {
+func (m *Manager) pollAppStream(ctx context.Context, app state.App, service string, red *redactor) {
 	swarmName, err := naming.ServiceName(app.TeamSlug, app.ProjectSlug, app.Name, service)
 	if err != nil {
 		m.log.Warn("logs: swarm service name resolve failed", "app", app.Name, "service", service, "error", err.Error())
 		return
 	}
-	m.pollStreamNamed(ctx, app, service, swarmName, streamKey(qualifiedAppOf(app), service), red, false)
+	m.pollStream(ctx, streamPoll{
+		swarmName:     swarmName,
+		cursorKey:     streamKey(qualifiedAppOf(app), service),
+		cursorApp:     qualifiedAppOf(app),
+		cursorAppID:   app.ID,
+		cursorService: service,
+		sink:          m.appSink(app, service, red),
+	})
 }
 
 // jobCursorKey 是一次性 job 采集游标键（与长驻 (app, service) 键隔离——
@@ -138,10 +146,10 @@ func taskCursorPrefix() string { return "\x00task\x00" }
 // task 标签归因入湖（VL）；发现即从零全量回读（任务生命周期秒级/分钟级，
 // 历史即全部），服务消失后游标当轮回收。仅 VL 后端采集——纯 jsonl 形态
 // 无任务检索面（不落盘：落盘面按 app 分文件，任务无 app 归属），诚实边界
-// 记录在 proto 与 runbook。
+// 记录在 proto 与 runbook（承载点 = taskSink）。
 func (m *Manager) pollTaskServices(ctx context.Context) {
 	if !m.vlEnabled() {
-		m.evictTaskCursors(map[string]bool{})
+		m.evictCursors(taskCursorPrefix(), map[string]bool{})
 		return
 	}
 	states, err := m.port.TaskServiceStates(ctx)
@@ -156,18 +164,29 @@ func (m *Manager) pollTaskServices(ctx context.Context) {
 		if taskID == "" {
 			continue
 		}
-		seen[taskCursorKey(taskID)] = true
-		m.pollTaskStream(ctx, taskID, s.Name)
+		key := taskCursorKey(taskID)
+		seen[key] = true
+		m.pollStream(ctx, streamPoll{
+			swarmName: s.Name,
+			cursorKey: key,
+			// 任务无 app 归属：游标归属三值皆空（app 级延迟淘汰不适用，
+			// 回收由发现集对账〔evictCursors〕承载）。
+			fromStart: true, // 发现即零点全量回读（一次性/短生命周期语义）。
+			sink:      m.taskSink(taskID),
+		})
 	}
-	m.evictTaskCursors(seen)
+	m.evictCursors(taskCursorPrefix(), seen)
 }
 
-// evictTaskCursors 回收已消失任务的采集游标（发现集之外的 task 游标 = 任务
-// 已回收；evictJobCursors 同款）。
-func (m *Manager) evictTaskCursors(seen map[string]bool) {
+// evictCursors 回收前缀族内发现集之外的采集游标（job 与 task 两族共用的
+// 一份实现；族 = 游标键前缀）：本轮发现集之外的游标 = 客体已消失（job 服
+// 务被调度器/发布管线删除〔完成收口〕或残留清扫；任务被任务平台回收）——
+// 游标失去客体，立即回收不悬挂。hub ring 不在此清理范围（job 行与长驻服
+// 务同面合流共享 (app,service) 键；任务行不进 ring）；job 游标另受 app 级
+// 延迟淘汰（M7-6）整体兜底。
+func (m *Manager) evictCursors(prefix string, seen map[string]bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	prefix := taskCursorPrefix()
 	for key := range m.streams {
 		if strings.HasPrefix(key, prefix) && !seen[key] {
 			delete(m.streams, key)
@@ -175,44 +194,16 @@ func (m *Manager) evictTaskCursors(seen map[string]bool) {
 	}
 }
 
-// pollTaskStream 拉取单条任务流的本轮增量并入湖（task 标签归因；不落盘/
-// 不进 ring——任务检索面在日志库）。
-func (m *Manager) pollTaskStream(ctx context.Context, taskID, swarmName string) {
-	key := taskCursorKey(taskID)
-	m.mu.Lock()
-	cur, ok := m.streams[key]
-	if !ok {
-		// 首拍零点全量回读（job 同口径：一次性/短生命周期作业从服务创建起
-		// 的全部输出）。
-		cur = &stream{app: "", appID: "", service: "", lastAt: time.Time{}}
-		m.streams[key] = cur
-	}
-	since := cur.lastAt
-	m.mu.Unlock()
-
-	lines, err := m.port.StreamServiceLogs(ctx, swarmName, since, false)
-	if err != nil {
-		m.log.Debug("logs: task stream open failed", "task", taskID, "error", err.Error())
-		return
-	}
-	watchdog := time.NewTimer(m.pollWatchdog())
-	defer watchdog.Stop()
-	var last time.Time
-deliver:
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-watchdog.C:
-			m.log.Error("logs: task poll round exceeded watchdog deadline, abandoning this round", "task", taskID)
-			return
-		case line, ok := <-lines:
-			if !ok {
-				break deliver
-			}
-			if !line.At.IsZero() && line.At.After(last) {
-				last = line.At
-			}
+// taskSink 返回任务流家族的入库面（IMPL-ARCH-H 收编后，原 pollTaskStream
+// 与 app 循环的唯一真差异所在）：task 标签归因直推入湖批量器。「jsonl 后端
+// ⇒ 不收任务日志」的诚实边界由本 sink 与族入口门承载、不是循环骨架的参数：
+// 仅 VL 后端采集（门在 pollTaskServices，纯 jsonl 形态无任务检索面，采集面
+// 整体跳过）；不 redact（任务无 app env 脱敏面，值由调用方自持）；不进
+// ring（直播面按 (app,service) 寻址，任务无归属）；不落盘（落盘面按 app
+// 分文件）。边界记录另见 proto 注释与 docs/runbooks/dynamic-tasks.md。
+func (m *Manager) taskSink(taskID string) streamSink {
+	return streamSink{
+		deliver: func(_ context.Context, line substrate.LogLine) {
 			m.ing.Add(Entry{
 				Task:   taskID,
 				At:     line.At,
@@ -220,14 +211,13 @@ deliver:
 				Line:   line.Line, // 任务无 app env 脱敏面（值由调用方自持）
 				Source: SourceContainer,
 			})
-		}
-	}
-	if !last.IsZero() {
-		m.mu.Lock()
-		if last.After(cur.lastAt) {
-			cur.lastAt = last
-		}
-		m.mu.Unlock()
+		},
+		openFailed: func(err error) {
+			m.log.Debug("logs: task stream open failed", "task", taskID, "error", err.Error())
+		},
+		watchdogFired: func() {
+			m.log.Error("logs: task poll round exceeded watchdog deadline, abandoning this round", "task", taskID)
+		},
 	}
 }
 
@@ -258,7 +248,7 @@ func jobServiceRefOf(app string, s engine.ServiceState) (JobServiceRef, bool) {
 // （一次性作业的历史即全部，长驻服务「发现时刻起采、不回灌历史」的口径不
 // 适用），行按 (app, compose 服务) 归属与长驻同面（ring/落盘/History/Follow
 // 同键合流）；服务删除后流自然断、游标当轮回收，无悬挂 goroutine
-//（pollStreamNamed 同步排空 + MG-1 看门狗兜底）。
+//（pollStream 同步排空 + MG-1 看门狗兜底）。
 func (m *Manager) pollJobServices(ctx context.Context, app state.App, red *redactor) {
 	states, err := m.port.JobServiceStates(ctx, qualifiedAppOf(app))
 	if err != nil {
@@ -274,50 +264,75 @@ func (m *Manager) pollJobServices(ctx context.Context, app state.App, red *redac
 		}
 		key := jobCursorKey(qualifiedAppOf(app), ref.JobService)
 		seen[key] = true
-		m.pollStreamNamed(ctx, app, ref.Service, ref.JobService, key, red, true)
+		m.pollStream(ctx, streamPoll{
+			swarmName:     ref.JobService,
+			cursorKey:     key,
+			cursorApp:     qualifiedAppOf(app),
+			cursorAppID:   app.ID,
+			cursorService: ref.Service,
+			fromStart:     true, // 一次性作业历史即全部：零点全量回读。
+			sink:          m.appSink(app, ref.Service, red),
+		})
 	}
-	m.evictJobCursors(qualifiedAppOf(app), seen)
+	m.evictCursors(jobCursorPrefix(qualifiedAppOf(app)), seen)
 }
 
-// evictJobCursors 回收已消失 job 服务的采集游标：本轮发现集之外的 job 游
-// 标 = 服务已被调度器/发布管线删除（完成收口）或残留清扫——游标失去客体，
-// 立即回收不悬挂（app 级延迟淘汰继续作为整体兜底；hub ring 归 (app,service)
-// 键，与长驻服务共享，不在此列清理范围）。
-func (m *Manager) evictJobCursors(app string, seen map[string]bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	prefix := jobCursorPrefix(app)
-	for key := range m.streams {
-		if strings.HasPrefix(key, prefix) && !seen[key] {
-			delete(m.streams, key)
-		}
-	}
+// streamSink 是流家族的入库面（轮询循环骨架的家族差异收敛点）：deliver
+// 消费一条已投递的底座行（Entry 构造与入库路由的族内单点）；openFailed /
+// watchdogFired 承载族专属诊断日志（消息与字段各族自持，骨架不感知家族
+// 身份）。
+type streamSink struct {
+	deliver       func(ctx context.Context, line substrate.LogLine)
+	openFailed    func(err error)
+	watchdogFired func()
 }
 
-// pollStreamNamed 拉取单条流（swarm 服务名 swarmName）的本轮增量并入库
-// （ring + 落盘 + 扇出）。cursorKey 是采集游标键（长驻 = (app,service)；
-// 一次性 job 另带 job 服务名维度）；fromStart 报告新游标是否从零起算——
-// job = true（一次性作业全量回读），长驻服务保持 M7「发现时刻起采」口径。
-func (m *Manager) pollStreamNamed(ctx context.Context, app state.App, service, swarmName, cursorKey string, red *redactor, fromStart bool) {
+// streamPoll 是单条流的一轮拉取参数（循环骨架的全部家族差异）。
+type streamPoll struct {
+	// swarmName 是底座流名（StreamServiceLogs 的打开目标）。
+	swarmName string
+	// cursorKey 是采集游标键（m.streams 表键；三族互不撞键：长驻 =
+	// streamKey(app, service)，job = jobCursorKey，任务 = taskCursorKey）。
+	cursorKey string
+	// cursorApp / cursorAppID / cursorService 是游标首拍归属初值（仅
+	// get-or-init 的 miss 分支读取；app 级延迟淘汰〔M7-6〕按 cur.app 对账
+	// ——任务族三值皆空，任务无 app 归属，游标回收由发现集对账承载）。
+	cursorApp     string
+	cursorAppID   string
+	cursorService string
+	// fromStart 报告首拍锚点是否从零起算：job/任务 = true（一次性/短生命
+	// 周期作业的历史即全部），长驻服务 = false（M7「发现时刻起采」口径）。
+	fromStart bool
+	// sink 是入库面（Entry 构造 + 路由 + 族专属诊断日志）。
+	sink streamSink
+}
+
+// pollStream 拉取单条流（swarm 服务名 p.swarmName）的本轮增量并交 p.sink
+// 入库——全部流家族共用的唯一轮询循环骨架（IMPL-ARCH-H 第三次 fork 收编：
+// 原 pollStreamNamed 与逐行重抄的 pollTaskStream 只剩这一份）：cursor 取/
+// 置（m.mu 下）/推进、StreamServiceLogs 调用、MG-1 看门狗、deliver select、
+// last 时间戳跟踪各一份实现；家族差异全部收敛为 streamPoll（游标键/首拍
+// 锚点口径/归属初值）与 streamSink。访问日志面（pollAccess）游标为独立
+// 标量、行级路由带归属反解，不在本骨架（见 access.go）。
+func (m *Manager) pollStream(ctx context.Context, p streamPoll) {
 	m.mu.Lock()
-	cur, ok := m.streams[cursorKey]
+	cur, ok := m.streams[p.cursorKey]
 	if !ok {
 		anchor := m.clock()
-		if fromStart {
-			// 首拍零点全量回读：since 零值 = 底座不设过滤起点（job 从服务
-			// 创建起的全部输出；行短量小，一次性语义天然有界）。
+		if p.fromStart {
+			// 首拍零点全量回读：since 零值 = 底座不设过滤起点（job/任务从
+			// 服务创建起的全部输出；行短量小，一次性语义天然有界）。
 			anchor = time.Time{}
 		}
-		cur = &stream{app: qualifiedAppOf(app), appID: app.ID, service: service, lastAt: anchor}
-		m.streams[cursorKey] = cur
+		cur = &stream{app: p.cursorApp, appID: p.cursorAppID, service: p.cursorService, lastAt: anchor}
+		m.streams[p.cursorKey] = cur
 	}
 	since := cur.lastAt
 	m.mu.Unlock()
 
-	lines, err := m.port.StreamServiceLogs(ctx, swarmName, since, false)
+	lines, err := m.port.StreamServiceLogs(ctx, p.swarmName, since, false)
 	if err != nil {
-		// 服务不存在（未部署/已删）安静跳过；其余底座暂态 debug 级。
-		m.log.Debug("logs: stream open failed", "app", app.Name, "service", service, "error", err.Error())
+		p.sink.openFailed(err)
 		return
 	}
 	// MG-1 纵深防御：单轮看门狗。scanLines 修复后底座流恒会排水结束，此处
@@ -335,8 +350,7 @@ deliver:
 		case <-ctx.Done():
 			return
 		case <-watchdog.C:
-			m.log.Error("logs: poll round exceeded watchdog deadline, abandoning this round",
-				"app", app.Name, "service", service)
+			p.sink.watchdogFired()
 			return
 		case line, ok := <-lines:
 			if !ok {
@@ -353,12 +367,29 @@ deliver:
 			} else if at.After(last) {
 				last = at // 游标只随可信时间戳行推进。
 			}
+			p.sink.deliver(ctx, line)
+		}
+	}
+	if !last.IsZero() {
+		m.mu.Lock()
+		if last.After(cur.lastAt) {
+			cur.lastAt = last
+		}
+		m.mu.Unlock()
+	}
+}
+
+// appSink 返回 app 家族（长驻服务与一次性 job 共用）的入库面：redact →
+// 直播面（ring + 扇出）→ 入湖/落盘路由。
+func (m *Manager) appSink(app state.App, service string, red *redactor) streamSink {
+	return streamSink{
+		deliver: func(ctx context.Context, line substrate.LogLine) {
 			e := Entry{
 				// app = 三段限定形（v0.3 流标签口径——入湖 label / ring 键 /
 				// 落盘文件名同值；消费面 Follow/History 按限定形寻址）。
 				App:     qualifiedAppOf(app),
 				Service: service,
-				At:      at,
+				At:      line.At,
 				Stderr:  line.Stderr,
 				Line:    red.redact(line.Line),
 				Source:  SourceContainer,
@@ -374,14 +405,15 @@ deliver:
 			} else if err := m.dsk.append(ctx, e); err != nil {
 				m.log.Warn("logs: disk append failed", "app", app.Name, "error", err.Error())
 			}
-		}
-	}
-	if !last.IsZero() {
-		m.mu.Lock()
-		if last.After(cur.lastAt) {
-			cur.lastAt = last
-		}
-		m.mu.Unlock()
+		},
+		openFailed: func(err error) {
+			// 服务不存在（未部署/已删）安静跳过；其余底座暂态 debug 级。
+			m.log.Debug("logs: stream open failed", "app", app.Name, "service", service, "error", err.Error())
+		},
+		watchdogFired: func() {
+			m.log.Error("logs: poll round exceeded watchdog deadline, abandoning this round",
+				"app", app.Name, "service", service)
+		},
 	}
 }
 

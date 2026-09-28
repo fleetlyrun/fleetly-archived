@@ -15,8 +15,8 @@ package logs
 // 与 CLI logs backend show 消费）。
 //
 // 脱敏纪律（state-model §2.9 延续）：进本批量器的行必须已脱敏——容器行
-// 在 pollStreamNamed 的 redact 之后接入；build 行在 IngestBuildLine 内过
-// 同一 redactor。批量器自身不做二次脱敏（单一管线纪律）。
+// 在 pollStream 的 redact（appSink）之后接入；build 行在 IngestBuildLine
+// 内过同一 redactor。批量器自身不做二次脱敏（单一管线纪律）。
 
 import (
 	"context"
