@@ -1,8 +1,8 @@
-# 架构评审机制缺口整改批(IMPL-ARCH-A/B/C1/C2/D)
+# 架构评审机制缺口整改批(IMPL-ARCH-A~H)
 
 | 状态 | 日期 | 关联 |
 |---|---|---|
-| 已实现(五票,2026-09-28) | 2026-09-28 | 2026-09-28 架构评审(三路走查报告,临时 HTML 未入仓;候选编号本文沿用)→ 机制缺口排查 → rethink 复查(两修正五补充);还原点 **28ad020**(A)/ **1ead912**(B)/ **46dc3da**(C1)/ **dc88c00**(C2)/ **c266e91**(D) |
+| 已实现(九票:A/B/C1/C2/D 2026-09-28;E/F/G/H 2026-09-29) | 2026-09-29 | 2026-09-28 架构评审(三路走查报告,临时 HTML 未入仓;候选编号本文沿用)→ 机制缺口排查 → rethink 复查(两修正五补充);还原点 **28ad020**(A)/ **1ead912**(B)/ **46dc3da**(C1)/ **dc88c00**(C2)/ **c266e91**(D)/ **211adf6**(E)/ **22915fa**(F)/ **5124337**(G)/ **148e689**(H);docs 记录 **45b05a1**(首批) |
 
 ## 1. 背景与元类判定
 
@@ -47,6 +47,32 @@
 - **缺陷**:methodScopes 漏登史(MoveApp/MoveDatabase)= fail-closed 静默降级 admin-only,不可见,无兜底;E2 MCP 将新增成打 RPC。
 - **修法**:纯测试票零生产改动。`TestMethodScopeRegistryCoversDescriptor`:descriptor walk(28 文件/158 方法,零手抄清单)四向完备——缺登记红 / methodScopes 幻影红 / 豁免幻影红 / 豁免清单≡authExemptMethods 双向相等;豁免 4 条各带理由;盘点结论=现状零出入(154+4)。
 
+## 2b. 第二批(E/F/G/H,2026-09-29,按「按顺序继续」推进)
+
+### IMPL-ARCH-E(211adf6)对账「披露一次」骨架收敛(候选 1,评审首推)
+
+- **缺陷**:披露 idiom(只报一次/恢复清零/事件+审计同事务/节拍门)手写约十遍:8 个 xxxSeen 裸 map 各带逐字近同契约散文、六处散布 delete 清零环、report* 事务对 10 处跨 6 文件、6 个 xxxNextAt 门;T 线 tasks face 整套再抄,F1 整改被迫在两处各动一刀。
+- **修法**:`internal/engine/disclosure.go` 包内单点——`disclosureSet`(reported/mark/clear/sweep,零值可用,契约散文全引擎一份)+ `writeDisclosure`/`discloseTx`/`discloseOnce`(事件先审计后同事务配对,事务失败不标记下拍重试)+ `scanGate`(到期判定+推进一份逻辑,5/6 门收编)。逐面裁决:recoveryNextAt **不并入**(M1-8 臂闸语义,arm 时推进读时不推进,与读时到期即推进相反);state/janitor.go staleSeen 跨包挂账。
+- **证据**:事件码/审计 action 零变化(17 个点分字符串 HEAD↔工作树逐一计数相等);`TestDisclosureModuleContract` 五场景;既有对账测试断言零修改逐个点名重跑。
+
+### IMPL-ARCH-F(22915fa)三小票(候选 10)
+
+- **F1 errcode/eventcode 单一真源化**:Code/Event 加 `Source` 出处字段(逐字机械迁移);docCodes/docEvents 手抄 map(89+105 条)删除改注册表投影;硬编码计数断言删除;golden 再生且逐行核对 append-only;码值/只增零变化;第四份码清单盘点=不存在。
+- **F2 rotate 命名归族**:rotate.go 三处手搓名改经既有 `naming.DBJobName`(fleetly-dbjob-* 族=一次性 DB 作业防 sweep/对账误伤的家;红→绿);`qualifiedOf` 删除改 `inst.QualifiedName()`;消费面盘点=旧形态零逻辑依赖。
+- **F3 dbtemplate engineTools 表**:先核 managed-databases §2.6(钉接口逐字+行为/脚本语义,不钉内部分派形状⇒方案 a 相容);7 处引擎 switch 中 6 处转 `map[Engine]engineTools`(pgToolDir 保留,真轴=Distribution×Major);`TestEngineToolsTableConsistency`(表⇆注册表双向覆盖+四件套非空)。
+
+### IMPL-ARCH-G(5124337)哨兵→信封映射表(候选 7)
+
+- **缺陷**:errors.go 自称唯一登记点实装 2/94,tasks.go 对 ErrTaskNotFound 同哨兵映射三处;每调用点私有知识=哨兵→状态码→信封助手→文案。
+- **修法**:`storeErrTable` 46 行登记(五形态 kind;contexts 三值源)+ 单点入口 `mapStoreErr(err, args...)`(签名偏差披露并批准:函数式映射点调用站本不传文案,format 留调用站则无法收敛);58 站点迁表、17 站点保留特例逐站注记(同哨兵异语义/E_APP_AMBIGUOUS 族/额外载荷/控制流);删局部映射函数 7 个;文案逐字由表测试硬编码期望钉住,既有 handler 测试断言零修改;红态演示(改错一行映射,既有测试与表测试同时红)。
+- **遗留**:ErrTaskNotFound 无 handler 级查无 404 直打;E_APP_AMBIGUOUS 族 6 站文案三形统一需产品裁决。
+
+### IMPL-ARCH-H(148e689)轮询循环骨架收编(候选 8)
+
+- **缺陷**:internal/logs 三份循环;pollTaskStream 逐行重抄 pollStreamNamed(唯一真差异=sink 硬编循环体内没能成为参数)+ evict 孪生。
+- **修法**:`pollStream(ctx, streamPoll)` 唯一骨架 + `streamSink` 三钩子(deliver/openFailed/watchdogFired);appSink(redact→ring→VL/盘)与 taskSink(VL 直推)两适配;**jsonl 不收任务日志的诚实边界留在 taskSink**,不外泄成循环参数;`evictCursors` 收编孪生;键构造不同构保留;行为保持对照十点逐字核对;唯一微差披露=task get-or-init 多一次纯读 clock()。
+- **新发现挂账**:`evictStaleStreamState` 按 cur.app 对账,task 游标 app="" 永不在 active 集,连续运行超 5min 后存活任务游标被 app 级淘汰误收(下轮从零重读,重复优于丢失,幂等;建议后续小票豁免);第四号循环 pollAccess 游标为独立标量不同构,保留,接缝已预留。
+
 ## 3. 守卫清单与验收句
 
 | 守卫 | 层 | 验收句(下一个同类问题在哪被拦) |
@@ -56,21 +82,27 @@
 | TestOwnershipAnchorConstantsCoveredByPredicate(+recon 级枚举) | 静态+测试 | 新锚声明不进谓词集 → 提交期红 |
 | TestNoBareTaskStatusWrites | 静态(源码扫描) | tasks 表裸状态写 → CI 红 |
 | TestMethodScopeRegistryCoversDescriptor | 测试(descriptor walk) | 新 RPC 漏登 scope → 第一次 go test 红且点名 |
+| TestDisclosureModuleContract + TestScanGateDueAndAdvance | 测试(module 契约) | 披露 module 的 once/sweep/事务配对语义漂移 → 契约测试红 |
+| TestEngineToolsTableConsistency | 测试(表一致性) | 新引擎条目缺件/幻影 → 表测试红 |
+| TestStoreErrTable 六件套 | 测试(表投影) | 映射行状态码/注册码改错 → 既有 handler 测试+表测试同时红 |
+| TestPollStreamSharedSkeletonServesBothFamilies | 测试(共路) | task sink 误接 ring/循环分叉 → 共路测试红 |
 
 共同效果:把「穷尽性」从提交者记性与评审者记忆搬进 CI 枚举守卫——同类问题从验收期(如 F1 于整线验收发现)前移到提交期。
 
-## 4. 遗留挂账(评审候选未落部分)
+## 4. 遗留挂账
 
-| 候选 | 内容 | 状态 |
+| 候选/项 | 内容 | 状态 |
 |---|---|---|
-| 1 | 对账「披露一次」骨架收敛为 disclosure module(评审**首推**;×10 站点/×8 seen 字段/×6 节拍门) | 未落,下一批首选 |
-| 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 需 rbac-teams 红线显式裁决(fail-closed 登记制搬家) |
-| 7 | 哨兵→信封映射表(errors.go 实装 2/95) | 未落 |
-| 8 | logs 轮询 sink 参数化(第三 fork 收编) | 未落 |
-| 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 跨仓,Speculative,值得 ADR |
-| 10 | 小票:errcode `Source` 字段 / rotate.go RotateJobName(前缀族落错,未修)/ dbtemplate engineTools | 未落 |
+| 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 挂账,需 rbac-teams 红线显式裁决(fail-closed 登记制搬家) |
+| 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 挂账,跨仓决策,值得 ADR |
+| E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 挂账,需跨包 helper 形态裁决 |
+| F 尾 | eventcode 头注计数叙事停在 95、实注册 105(既有注释漂移) | 挂账,随下次事件增补重算 |
+| F 尾 | database/move.go:67 手工复述三段限定形,疑似查询值与写入值不同形 | 挂账,需独立小票核查 |
+| G 尾 | ErrTaskNotFound 无 handler 级查无 404 直打(仅表测试钉住) | 挂账,小票补测 |
+| G 尾 | E_APP_AMBIGUOUS 族 6 站文案三形统一 | 挂账,需产品裁决 |
+| H 尾 | evictStaleStreamState 误收 task 游标(app="" 不在 active 集,幂等无害) | 挂账,小票豁免 |
 | ③类守卫 | docs 守卫表 TestXxx 名存在性扫描(限活跃 impl 档,防腐化需白名单) | 挂账 |
 
 ## 5. 验证
 
-五道验收门均为一手取证:`go test ./... -count=1` 32 包全绿(每阶段独立跑);每张守卫测试红态演示(白名单外注入→红→撤除→绿);新测试独立 `-count=1` 重跑;diff 范围核对(阶段范围圈:engine → engine → state+engine → state → api 单测试文件);全局一致性检查(applyDesired W2-S3 决策未动 / GC 分支未动 / 导出签名零改动 / F1 既有守卫全绿)。
+九道验收门均为一手取证:`go test ./... -count=1` 32 包全绿(每阶段独立跑);每张守卫/映射测试红态演示(白名单外注入/改错映射行/误接 sink → 红 → 撤除 → 绿);新测试独立 `-count=1` 重跑;diff 范围核对;全局一致性检查(applyDesired W2-S3 决策未动 / GC 分支未动 / 导出签名零改动 / F1 既有守卫全绿 / 事件码零变化 / 文案逐字保持)。
