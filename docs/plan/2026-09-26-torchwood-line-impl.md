@@ -1598,4 +1598,141 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 - **多节点并发构建上限**：多 fleetlyd 进程共享 SQLite/队列的生产形态（semaphore 是进程内的既有口径，本票未改变）；staging 按既有构建面回归。
 - **大上下文时延**：256MiB 级上传在真实公网/网关下的时延与内存（本机 bufconn/回环已验限流路径零残留；T2-3 dispatcher 实际上下文为 KB 级）。
 
+### IMPL-T1-6 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 本票改动全部落在 messageloop 仓（`D:/Codes/qiulin/messageloop`），fleetly 仓只记本文档。
+
+#### A. insecure 硬编码位置与全部调用方（逐处取证）
+
+1. **`sdks/go/grpc.go:9,64-65`**——`newGRPCTransport` 的 default dial options 恒含 `grpc.WithTransportCredentials(insecure.NewCredentials())`（insecure 硬编码本体）。
+2. **调用方全量**（`newGRPCTransport|DialGRPC` 全仓 grep）：
+   - `sdks/go/client.go:275`（`DialGRPC` 首次拨号，未传任何 dial options）；
+   - `sdks/go/client.go:364`（`client.dialTransport` 的 gRPC 分支——**重连/重新拨号路径**，未传 dial options）→ 改一处必须两处同迁，否则重连静默回落明文；
+   - SDK 包内无测试/示例直接调用 `newGRPCTransport`；示例与 `_examples/chatroom` 均经 `DialGRPC` 入口（明文用法）。
+3. **`sdks/go/proxy.go:11,433-435`**——`NewProxyServer` 在 `Insecure=true` 时 `grpc.Creds(insecure.NewCredentials())`；这是 SDK 用户自托管 ProxyService 的**服务端构造器**，与 DialGRPC 客户端路径不同面（裁决见 B.4）。
+4. **测试面**：`sdks/go/e2e_process_test.go:20,195`（Server API 控制面测试夹具的 insecure 客户端，非 SDK API）。
+5. **文档引用面**：`docker/dokploy/README.md:109-123`（§4.2 欠账原文：明文实现 + SSH 隧道 + 「TLS 支持跟进后，域名通道即插即用」）、`docker/dokploy/docker-compose.yml:176-180`（隧道兜底注释引「DialGRPC 当前为明文实现」）、`docs/developer/07-sdk-go.md:109/132-133/245`（选项表 "QUIC/KCP" 限定 + 「连接使用 insecure 凭据」正文）、`sdks/go/options.go:77-83/204-215`（注释 "used by DialQUIC"）、`sdks/go/README.md:20`（快速开始只给明文示例，无 TLS 断言）。
+
+#### B. API 兼容策略裁决（推荐 + 理由 + 否定项）
+
+**推荐 ①：新增/扩展 options（不破签名、默认零回归）。**
+
+1. `WithTLSConfig(cfg)` 语义扩展到 gRPC：**`Options.TLSConfig` 非 nil 即启用 TLS**（clone 后经 `credentials.NewTLS` 注入；nil 保持既有的 insecure 明文默认）；新增 `WithTLS()` 便捷形态 = 系统根（置空 `tls.Config{}`，如 `WithTLSConfig(&tls.Config{})` 的糖）。
+2. `WithInsecureSkipVerify()` 保持「TLS 启用时的校验开关」修饰语义（与 QUIC/KCP 一致）：单独出现**不**把 gRPC 从明文翻成 TLS——守住「无 TLS 配置时保持 insecure」的单一判据。
+3. **理由**：本地明文路径零回归（默认分支逐字保留 `insecure.NewCredentials()`）；无签名变更、既有调用方/示例/`_examples` 零改动；函数式选项是本 SDK 既有机制（`quicTLSConfig` 先例）；显式可测，且首次拨号与重连共用同一判定函数（B.2 的「两处同迁」由单一 helper 收口）。
+4. **否定项**：②改 `DialGRPC` 签名（破坏全部既有调用面，收益仅是少一个选项——不取）；③环境变量开关（隐式全局状态、同进程多客户端不可分、与函数式选项先例冲突、测试面脏——不取）；④按端口 443 推断 TLS（隐式魔法；非 443 的 TLS 域不可表达；自定 CA/ServerName 仍无表达面——不取）。
+5. **`proxy.go` 裁决：不纳入本票。** `NewProxyServer` 是 SDK 用户自托管 proxy 的**服务端**构造器：其行为已在注释声明「never installs TLS credentials」（Insecure=false 也是明文，建议前置 TLS 终结），`Insecure` 显式开关保持现状即自洽；messageloop 内核到 proxy 后端的 gRPC **客户端**本就支持 TLS（`proxy/grpc.go:42-55`：系统根 + `ServerName` + `InsecureSkipVerify`）。「DialGRPC TLS」与「proxy server 装载 TLS 凭据」是两件事，后者无 staging 部署需求驱动（dokploy 栈内 mlbridge 走内网明文），登记为界限而非缺口。
+
+#### C. TLS 凭据形态与 clone 语义
+
+- **系统根**：`WithTLS()` → `credentials.NewTLS(&tls.Config{})`（gRPC credentials 自行补 ALPN `h2`；staging 域名的正路）。
+- **自定 CA / 客户端证书**：`WithTLSConfig(&tls.Config{RootCAs: pool, Certificates: ...})`（mTLS 可表达）。
+- **ServerName 覆盖**：随 `tls.Config.ServerName` 代入（IP 直拨 + DNS 证书的场景）。
+- **clone 语义**：沿 `quicTLSConfig` 先例——clone 调用方配置后在 clone 上应用 `InsecureSkipVerify`，**不 mutate 调用方配置**（既有 `TestQUICTLSConfig_ClonesUserConfig` 钉住该契约，随本票通用化）。
+
+#### D. 本地 TLS 端到端可行性（测试形态选定）
+
+1. **服务端可挂 TLS creds 的扩展点存在（候选②成立）**：`transport.grpc.tls.cert_file/key_file`（`config/config.go:286-290`）→ `cmd/server/runtime.go:47` → `pkg/transport/grpc/server.go:71-77`（`credentials.NewServerTLSFromFile`）；仓内 server 并非只有 h2c 面。
+2. **但 staging 部署形态 = TLS 在平台边缘（Traefik）终结、后端 scheme=h2c**（T1-1 记录 h2c 语义 + dokploy README §4.2）。SDK 集成测试取与部署形态同构者。
+3. **选定 ①（测试内 TLS 终结前脸）**：测试起 `tls.Listen`（自签证书，`NextProtos=h2`）+ 双向字节转发到真实 server 进程的明文 gRPC 监听；复用既有两进程黑盒夹具（`buildE2EServerBinary`/`startE2EServer`）。TLS 终结在字节层透明——明文侧就是客户端发给 h2c 后端的 HTTP/2 帧，与 Traefik 终结组成等价；SDK 侧走完整 `credentials.NewTLS` 路径，TLS 握手 + Connected + 订阅 + 发布 + 接收往返可全验。另覆盖 `WithTLS()+WithInsecureSkipVerify()` 与 `ServerName` 覆盖两形态。
+4. **反例实测（一手）**：明文 insecure 客户端对新立 TLS 前脸的 `MessageLoop` fail-fast（约 1.5ms，`rpc error: code = Unavailable ... error reading server preface: EOF`）——可作对照子测，证明 TLS 由新选项启用。
+5. **未做（如实标注）**：真 staging 域名 `grpc.<域名>:443` 的真机握手本环境无访问权；系统根形态仅覆盖「空 tls.Config 直通 + 自签 CA 验证」代码路径，对真实 Let's Encrypt 证书的验证属 staging 待执行项。
+
+### IMPL-T1-6 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 改动全部落在 messageloop 仓（`D:/Codes/qiulin/messageloop`，基线 `471cac3`，工作区只有本票改动）；fleetly 仓仅本文档。审查小节 A–D 已在 `471cac3` 上逐项复核成立（insecure 硬编码位置与两处调用点、`proxy.go` 服务端面、文档引用面、服务端 `transport.grpc.tls` 扩展点均在），按裁决执行。
+
+**API 兼容策略裁决（一句话）**：推荐 ① 落地——`Options.TLSConfig` 非 nil 即启用 TLS（新增 `WithTLS()` 系统根糖），`WithInsecureSkipVerify` 保持「启用后的校验开关」修饰语义（单独出现不把 gRPC 从明文翻成 TLS），`DialGRPC` 签名不变、默认明文路径零回归；并加固为「gRPC 构造器必须收到凭据」——漏传时拨号 fail-closed 报 `no transport security`，而非静默明文（见偏离 1）。
+
+变更文件清单（每文件一句，均 messageloop 仓）：
+
+- `sdks/go/options.go`：`TLSConfig`/`InsecureSkipVerify` 文档扩展到三种传输；新增 `WithTLS()`（系统根 = 空 `tls.Config`）；`WithTLSConfig`/`WithInsecureSkipVerify` 注释同步（clone 契约、不单独启用 TLS）。
+- `sdks/go/grpc.go`：新增 `grpcDialOptions`/`grpcTransportCredentials`/`grpcTLSConfig`（唯一凭据判定点：有 TLS 配置走 `credentials.NewTLS`，否则明文 insecure；clone 后应用 `InsecureSkipVerify`，不 mutate 调用方）；`newGRPCTransport` 移除内置 insecure 默认、凭据必经构造器。
+- `sdks/go/client.go`：`DialGRPC` 与 `dialTransport`（重连拨号）两处同迁到 `grpcDialOptions(options)`；`DialGRPC` 注释写明 TLS/明文两形态。
+- `sdks/go/grpc_test.go`（新）：clone 契约、凭据选择矩阵（nil/无 TLS/skip-verify 单独/TLS）、构造器漏凭据 fail-closed、`WithTLS` 启用断言。
+- `sdks/go/grpc_tls_e2e_test.go`（新）：测试内 TLS 终结前脸（`tls.Listen` + 字节转发）+ 自签证书夹具 + 正/反例场景（见下测试表）。
+- `sdks/go/e2e_process_test.go`：`TestE2EProcess` 增 `GRPCTLSFront` 子测（固定 memory broker——TLS 场景不依赖 Redis，避免 Redis 缺失连带跳过）。
+- `sdks/go/README.md`：快速开始 gRPC 行补 TLS 选项提示。
+- `docker/dokploy/README.md`：§4.2 重写——TLS 域名用法示例（`WithTLS()`/`WithTLSConfig`）+ 自签形态 + 明文/隧道降级说明保留。
+- `docker/dokploy/docker-compose.yml`：宿主回环端口注释更新（SDK 已可域名直连；不传 TLS 选项仍明文兜底）。
+- `docs/developer/07-sdk-go.md`：gRPC 概览段/选项表（增 `WithTLS` 行、扩 `WithTLSConfig`/`WithInsecureSkipVerify`）/「gRPC 客户端」章节同步，消除「连接使用 insecure 凭据」旧断言。
+
+测试清单与完成标准逐条对应表（TLS e2e 形态 = 测试内 TLS 终结前脸 + 字节转发到真实 server 的明文 gRPC 监听，等价 Traefik 边缘 TLS→h2c）：
+
+| 完成标准 | 回归测试（测试名） |
+|---|---|
+| ① TLS 握手 + 一次发布/订阅往返（local TLS 端到端） | `TestE2EProcess/GRPCTLSFront/CustomCAPool`（自定 CA + 完整订阅/发布/接收往返）、`.../InsecureSkipVerify`（`WithTLS()+WithInsecureSkipVerify()` 往返）、`.../ServerNameOverride`（DNS-only 证书 + `ServerName` 覆盖往返）、`.../ReconnectDialPathUsesTLS`（重连拨号路径经 `dialTransport` 仍走 TLS）；单测 `TestGRPCTransportCredentials_SecurityProtocol`（5 态矩阵）、`TestNewGRPCTransport_RequiresCredentials`、`TestGRPCTLSConfig_ClonesUserConfig`、`TestWithTLS_EnablesTLS` |
+| ① 反例（TLS 由新选项启用、校验未关） | `.../PlaintextRejectedByTLSFront`（默认明文拨 TLS 前脸 → `error reading server preface: EOF`）、`.../SystemRootsRejectSelfSigned`（`WithTLS()` 对自签 → `certificate signed by unknown authority`）、`.../ServerNameMismatchFailsClosed`（DNS-only 证书缺 `ServerName` → 主机名校验失败） |
+| ② insecure 路径回归 | `TestE2EProcess/MemoryBroker`（WS 全流程 + 历史回放 + gRPC 明文传输场景 4 + Server API smoke，全绿）；SDK 包既有全量测试零回归 |
+| ③ 全量 `go test ./...` 绿 | 根模块 24 包：20 包 ok、3 包无测试文件、`cmd/server` 唯一失败为既有环境项（本机 gitignored 陈旧 `config.yaml`，只影响 `TestRepositoryConfigsValidateAndPrebind` 的一个子测；CI 检出无此文件即自动 skip，见下证据）；`shared` 与 `sdks/go` 两子模块 `go test ./...` 全绿 |
+| ④ README §4.2 更新 | `docker/dokploy/README.md` §4.2（TLS 用法 + 隧道降级保留）；同步 `docker-compose.yml` 注释、`docs/developer/07-sdk-go.md`、`sdks/go/README.md`（审查 A.5 文档引用面收口） |
+
+一手验证证据（原始输出摘要）：
+
+```
+$ go test -count=1 -v .（sdks/go 模块全量，终版）
+--- PASS: TestE2EProcess (3.75s)   ← 含 MemoryBroker PASS / RedisBroker SKIP / GRPCTLSFront 7 子测全 PASS
+--- PASS: ...（其余既有测试全 PASS；新增 4 个单测同列）
+PASS
+ok  github.com/messageloopio/messageloop/sdks/go  7.581s
+
+$ go test -run 'TestE2EProcess/GRPCTLSFront' -v -count=1 .（TLS 场景原始输出摘要）
+--- PASS: TestE2EProcess/GRPCTLSFront (0.14s)
+    --- PASS: .../CustomCAPool（自定 CA：TLS 握手 + 发布/订阅往返）
+    --- PASS: .../InsecureSkipVerify
+    --- PASS: .../ServerNameOverride
+    --- PASS: .../ReconnectDialPathUsesTLS
+    --- PASS: .../ServerNameMismatchFailsClosed
+        ... "transport: authentication handshake failed: tls: failed to verify certificate:
+        x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs"
+    --- PASS: .../SystemRootsRejectSelfSigned
+        ... "x509: certificate signed by unknown authority"
+    --- PASS: .../PlaintextRejectedByTLSFront
+        ... "error reading server preface: EOF"（与审查 D.4 一手观测同形）
+ok  github.com/messageloopio/messageloop/sdks/go  2.989s
+
+$ go test -count=1 -v .（全量中的 RedisBroker 子测）
+--- SKIP: TestE2EProcess/RedisBroker (0.00s)
+    no Redis at 127.0.0.1:6379: ... (start one with `docker run --rm -p 6379:6379 redis:7-alpine`;
+    set MESSAGELOOP_TEST_REDIS_REQUIRED=1 to make absence a failure)   ← skipOrFatalRedis 约定
+
+$ go test -race -count=1 .（sdks/go 模块，终版）
+ok  github.com/messageloopio/messageloop/sdks/go  7.181s
+
+$ go test ./... -count=1（messageloop 根模块，24 包）
+ok  ...（20 个含测试的包全 ok；3 个无测试文件；本机 127.0.0.1:6379 一手探测连接拒绝，
+    pkg/redisbroker 按 AGENTS.md 约定静默 skip 语义返回 ok）
+--- FAIL: TestRepositoryConfigsValidateAndPrebind/../../config.yaml
+    config must pass Validate: server.api.addr is required
+    同父其余子测：config-example.yaml PASS、configs/test.yaml PASS、configs/docker.yaml PASS、
+    config-node1/2.yaml SKIP「untracked local config」
+    根因：仓根存在本机 gitignored 陈旧 config.yaml（.gitignore:41；2026-09-14 本地文件，
+    仍是已改名的 server.grpc_admin 键）——既有环境项，与本票改动（独立模块 sdks/go + 文档）无交集；
+    定向复跑该父测试一致复现该单项。
+
+$ go vet ./...（根模块）：零输出，rc=0
+$ go vet ./...（sdks/go 模块）：零输出，rc=0
+
+$ golangci-lint run ./...（根模块）：0 issues
+$ golangci-lint run ./...（sdks/go 模块）：15 issues，全部存量（example/*、quic.go/kcp.go 的
+    errcheck、既有测试 staticcheck、grpc.DialContext SA1019——该行改动前后同为 DialContext）；
+    本票新增/改动文件零新增问题（CI lint 作业只覆盖根模块，mise run lint）
+```
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **构造器凭据必经（对审查 B.2 的加固）**：`newGRPCTransport` 不再内置 `insecure.NewCredentials()` 默认，改为调用方经 `grpcDialOptions(options)` 显式提供——「首次拨号与重连共用同一判定」从约定升级为结构性保证：漏传 → `grpc: no transport security set` 拨号报错（fail-closed），而不是静默明文；对应回归 `TestNewGRPCTransport_RequiresCredentials`。
+2. **e2e 固定 memory broker**：TLS 场景不依赖 Redis，避免 Redis 不可达时 `RedisBroker` 的 skip 连带跳过 TLS 路径（子测注释已写明）；本票未触发 Redis 依赖约定。
+3. **负例错误出现在 `DialGRPC` 阶段**：`client.MessageLoop` 建流等待传输就绪，握手失败即返回 `create stream failed`，与审查 D.4 的 fail-fast 观测一致；测试助手同时接受拨号/连接两阶段失败并记录原始错误。
+4. **文档面按审查 A.5 全量同步**：除票面要求的 dokploy README §4.2 与 SDK 注释外，一并更新 `docs/developer/07-sdk-go.md`（概览/选项表/gRPC 章节）与 `docker/dokploy/docker-compose.yml` 回环注释——不把已过时的「insecure 硬编码」断言留在引用面。
+5. **`proxy.go` 维持不纳入**（审查 B.5 裁决）：`NewProxyServer` 是 SDK 用户自托管 proxy 的服务端构造器，其「不装 TLS 凭据、建议前置终结」注释自洽；内核→proxy 的 gRPC 客户端 TLS 早已支持。界限而非缺口。
+6. **否定项未翻案**：不改 `DialGRPC` 签名、不加环境变量开关、不做端口 443 推断（审查 B.4 口径，实现期未出现需要翻案的证据）。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认六项裁决/偏离：①API 策略 = options 扩展（签名不变、默认明文零回归、`WithTLS()` 系统根糖、`WithInsecureSkipVerify` 仅为校验开关）；②gRPC 构造器凭据必经（fail-closed，首次拨号与重连共用判定）；③测试形态 = 测试内 TLS 终结前脸（与 Traefik 边缘 TLS→h2c 同构）+ memory broker（不依赖 Redis）；④`proxy.go` 不纳入（服务端构造器，界限非缺口）；⑤文档面全量收口；⑥否定项不翻案。staging 项（真 `grpc.<域名>:443` 公共 CA 链握手）待 T1-5 割接窗口执行。
+
+staging/真机待执行项（本环境无 staging 访问权，未虚构）：
+
+- **真 staging 域名 `grpc.<域名>:443` 的 TLS 握手**（Traefik/Let's Encrypt 证书 + h2c 后端）：本票以测试内 TLS 终结前脸 + 自签 CA 复现拓扑与 SDK 凭据路径；公共 CA 链的系统根验证待 T1-5 割接后真机执行（`DialGRPC("grpc.<域名>:443", WithTLS())` + 一次发布/订阅往返）。
+- **割接后域名通道端到端联调**（可选，与 T1-5 验收探针合并执行）。
+
 
