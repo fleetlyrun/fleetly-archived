@@ -148,12 +148,18 @@ func (t *Tx) CreateBuild(ctx context.Context, rec BuildRecord) (BuildRecord, err
 	if request == "" {
 		request = "{}"
 	}
+	// app_id 可空（00027：上传构建无 app 归属——NULL 而非空串，FK 形态
+	// 对非空值保持约束）。
+	var appID any
+	if rec.AppID != "" {
+		appID = rec.AppID
+	}
 	now := nowNano()
 	const q = `INSERT INTO builds
 		(id, app_id, service, driver, status, image_ref, image_digest, request, plan_path, log_path, error_code, created_at)
 		VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, NULL, ?)`
 	if _, err := t.ExecContext(ctx, q,
-		rec.ID, rec.AppID, rec.Service, string(rec.Driver),
+		rec.ID, appID, rec.Service, string(rec.Driver),
 		rec.ImageRef, rec.ImageDigest, request, rec.PlanPath, rec.LogPath, now); err != nil {
 		return BuildRecord{}, fmt.Errorf("state: insert build %s: %w", rec.ID, err)
 	}
@@ -516,11 +522,12 @@ func (s *Store) deleteBatched(ctx context.Context, query string, args ...any) (i
 // scanBuild 从单行构造 BuildRecord（row 接口同时覆盖 *sql.Row 与 *sql.Rows）。
 func scanBuild(row interface{ Scan(dest ...any) error }) (BuildRecord, error) {
 	var r BuildRecord
+	var appID sql.NullString
 	var driver, status string
 	var created int64
 	var started, finished sql.NullInt64
 	var errorCode sql.NullString
-	err := row.Scan(&r.ID, &r.AppID, &r.Service, &driver, &status, &r.ImageRef, &r.ImageDigest,
+	err := row.Scan(&r.ID, &appID, &r.Service, &driver, &status, &r.ImageRef, &r.ImageDigest,
 		&r.Request, &r.PlanPath, &r.LogPath, &errorCode, &created, &started, &finished)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -528,6 +535,8 @@ func scanBuild(row interface{ Scan(dest ...any) error }) (BuildRecord, error) {
 		}
 		return BuildRecord{}, fmt.Errorf("state: scan build: %w", err)
 	}
+	// app_id 可空（00027：NULL = 上传构建——无 app 归属）。
+	r.AppID = appID.String
 	r.Driver = Driver(driver)
 	r.Status = BuildStatus(status)
 	if errorCode.Valid {

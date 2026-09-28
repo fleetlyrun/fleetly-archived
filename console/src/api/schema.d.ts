@@ -2260,10 +2260,11 @@ export interface components {
         };
         v1CreateTokenRequest: {
             /**
-             * scope 集（read / deploy / terminal / tasks / admin；admin 蕴含
-             *     deploy 蕴含 read ⊕ terminal ⊕ tasks——terminal 为 Web 终端独立 scope、
-             *     tasks 为程序化动态工作负载面独立 scope（DT-5），read/deploy 均不蕴含
-             *     （E7 W5-S6 / IMPL-T2-1）；重复项服务端归一去重）。
+             * scope 集（read / deploy / terminal / tasks / build / admin；admin 蕴含
+             *     deploy 蕴含 read ⊕ terminal ⊕ tasks ⊕ build——terminal 为 Web 终端独立
+             *     scope、tasks 为程序化动态工作负载面独立 scope（DT-5）、build 为上传
+             *     构建面独立 scope（DT-6），三者 read/deploy 均不蕴含（E7 W5-S6 /
+             *     IMPL-T2-1 / IMPL-T2-2）；重复项服务端归一去重）。
              */
             scopes?: string[];
             /** 备注（人读；如 "CI 部署"）。字段名 note（name 列承载，兼容既有表结构）。 */
@@ -2911,6 +2912,33 @@ export interface components {
             app?: string;
             /** 恒 "queued"（入队即返回）。 */
             status?: string;
+        };
+        /**
+         * BuildFromUploadMetadata 是上传构建的请求头（传输面元数据）。
+         * @description 信任级红线（IMPL-T2-2）：与 git 构建**同信任级**——本消息不含 target/
+         *     build-args/secrets/platform 等任何额外构建参数（无特赦亦无歧视）；解包
+         *     后的 Dockerfile 走与 git 构建逐字相同的 dockerfile.v0 前端。
+         */
+        v1BuildFromUploadMetadata: {
+            /**
+             * 镜像仓库组件名（平台 registry 路径 <host>/apps/<name>；服务端转小写，
+             *     首末位须为字母数字，可含 . _ -，≤100——tag 以 <name>-<buildid> 派生）。
+             */
+            name?: string;
+            /**
+             * Dockerfile 入口（相对上下文根的仓内路径；缺省 Dockerfile）。服务端
+             *     校验：clean 相对路径、不越出上下文根、解析后为常规文件。
+             */
+            dockerfile?: string;
+        };
+        /**
+         * BuildFromUploadResponse 返回终态构建行（succeeded；失败经错误信封点名
+         *     error_code 与 build id）。image_ref/image_digest 是 digest 钉定引用——
+         *     registry 模式 `<host>/apps/<name>@sha256:<manifest digest>`；本地模式
+         *     `fleetly-local/<name>:<tag>` + 本机不可变 ID。
+         */
+        v1BuildFromUploadResponse: {
+            build?: components["schemas"]["v1BuildView"];
         };
         /**
          * BuildView 是构建行的只读投影（词表与 state 层一致：queued/building/

@@ -124,6 +124,10 @@ build:
   # temp 根（恒在）+ git 裸仓库根；单机同宿主形态下 CLI 构建目录在此
   # 显式扩根接入（触发面已收敛为 admin scope token）。
   context_roots: []
+  # 上传构建的上下文 tar 字节上限（MiB；IMPL-T2-2，缺省 256）。upload
+  # 构建（`fleetly builds upload`/BuildFromUpload）在流式上传中累计，超限
+  # fail-closed 拒绝（E_BUILD_UPLOAD_TOO_LARGE），不落盘不建行。
+  max_upload_mb: 256
 
 # 发布引擎（T2-5a：发布状态机/对账/窗口语义）。治理参数 v0.1 为平台默认
 # （文件缺省即文档默认；release-semantics §2.8）——这些键是部署面覆盖入口，

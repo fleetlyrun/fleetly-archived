@@ -86,8 +86,16 @@ var methodScopes = map[string]string{
 	// 镜像再经部署外带——比 deploy 多出宿主文件系统逃逸面，与 env 明文
 	// 读取（GetEnv=admin）同级信任。读面（GetBuild/ListBuilds）不变。
 	"/fleetly.server.v1.BuildsService/TriggerBuild": ScopeAdmin,
-	"/fleetly.server.v1.BuildsService/GetBuild":     ScopeRead,
-	"/fleetly.server.v1.BuildsService/ListBuilds":   ScopeRead,
+	// BuildFromUpload（T 线 DT-6 / IMPL-T2-2）= 独立 build scope：上传构建
+	// 面的机具令牌门（read/deploy 不蕴含，admin 蕴含——terminal/tasks 同
+	// 族先例）。与 TriggerBuild 的信任差异：TriggerBuild 的 base_dir 直读
+	// 宿主目录（admin）；上传构建的上下文经服务端流式解包落到受管上传根
+	// （tar 安全解包 + 终态清理），不暴露宿主读取面——独立 scope 与
+	// tasks 同权级。传输面为 client-streaming（gRPC-only，无 HTTP 注解；
+	// 流式鉴权走 StreamAuthInterceptor 的同一登记）。
+	"/fleetly.server.v1.BuildsService/BuildFromUpload": ScopeBuild,
+	"/fleetly.server.v1.BuildsService/GetBuild":         ScopeRead,
+	"/fleetly.server.v1.BuildsService/ListBuilds":       ScopeRead,
 	// DriftService
 	"/fleetly.server.v1.DriftService/ShowDrift":        ScopeRead,
 	"/fleetly.server.v1.DriftService/ConvergeDrift":    ScopeDeploy,

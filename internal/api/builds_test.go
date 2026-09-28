@@ -183,7 +183,7 @@ func TestTriggerBuildWakesQueueImmediately(t *testing.T) {
 	go func() { _ = q.Run(qctx) }()
 
 	srv := newAuthServer(NewAuthenticator(st))
-	serverv1.RegisterBuildsServiceServer(srv, NewBuildsService(st, q))
+	serverv1.RegisterBuildsServiceServer(srv, NewBuildsService(st, q, build.UploadConfig{}))
 	conn := serveBufconn(t, srv)
 	client := serverv1.NewBuildsServiceClient(conn)
 	tok := tokenFor(t, st)

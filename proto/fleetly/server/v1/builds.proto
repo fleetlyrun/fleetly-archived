@@ -49,12 +49,65 @@ service BuildsService {
       body: "*"
     };
   }
+  // BuildFromUpload 受理「上下文 tar 包 + Dockerfile 入口」构建（T 线 DT-6 /
+  // IMPL-T2-2）：client-streaming——首帧 metadata（镜像仓名 + Dockerfile 入口），
+  // 后续帧为上下文 tar 分片（服务端流式解包，不落 tar 中间文件）。服务端与
+  // git 构建共用同一队列/buildkitd 管线与同一信任面（无新增构建参数面），
+  // 产物平台侧推 zot / 本机装载，**调用方永不需要 push 凭证**；等待终态后
+  // 返回 builds 行投影（含 digest 钉定引用，可直接被 CreateTask/部署引用）。
+  //
+  // 传输面（审查裁决，如实登记）：gRPC client-streaming；**无 HTTP 注解**
+  // ——grpc-gateway 对 client-streaming 只支持「单帧消息」形态，REST 面不
+  // 承载本 RPC（CLI/SDK 消费；REST 限制见 docs 实施记录）。scope = 独立
+  // `build`（read/deploy 不蕴含，admin 蕴含——机具令牌典型持有者，tasks/
+  // terminal 同族）。
+  rpc BuildFromUpload(stream BuildFromUploadRequest) returns (BuildFromUploadResponse) {
+    // 无 google.api.http 注解（gRPC-only，见上）。
+  }
   rpc GetBuild(GetBuildRequest) returns (GetBuildResponse) {
     option (google.api.http) = { get: "/v1/builds/{id}" };
   }
   rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/builds" };
   }
+}
+
+// BuildFromUploadRequest 是上传构建的流帧（oneof）：首帧 metadata，后续帧
+// chunk（tar 分片）。任何其他形态（首帧无 metadata、metadata 重复、帧既无
+// metadata 又无 chunk、超单帧上限）一律 E_BUILD_UPLOAD_INVALID 拒绝。
+message BuildFromUploadRequest {
+  oneof payload {
+    // 首帧且仅首帧携带。
+    BuildFromUploadMetadata metadata = 1;
+    // 上下文 tar 分片（单帧 ≤ 1MiB；总字节 ≤ 平台上限——超限
+    // E_BUILD_UPLOAD_TOO_LARGE）。
+    bytes chunk = 2;
+  }
+}
+
+// BuildFromUploadMetadata 是上传构建的请求头（传输面元数据）。
+//
+// 信任级红线（IMPL-T2-2）：与 git 构建**同信任级**——本消息不含 target/
+// build-args/secrets/platform 等任何额外构建参数（无特赦亦无歧视）；解包
+// 后的 Dockerfile 走与 git 构建逐字相同的 dockerfile.v0 前端。
+message BuildFromUploadMetadata {
+  // 镜像仓库组件名（平台 registry 路径 <host>/apps/<name>；服务端转小写，
+  // 首末位须为字母数字，可含 . _ -，≤100——tag 以 <name>-<buildid> 派生）。
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // Dockerfile 入口（相对上下文根的仓内路径；缺省 Dockerfile）。服务端
+  // 校验：clean 相对路径、不越出上下文根、解析后为常规文件。
+  string dockerfile = 2 [(buf.validate.field).string.max_len = 256];
+}
+
+// BuildFromUploadResponse 返回终态构建行（succeeded；失败经错误信封点名
+// error_code 与 build id）。image_ref/image_digest 是 digest 钉定引用——
+// registry 模式 `<host>/apps/<name>@sha256:<manifest digest>`；本地模式
+// `fleetly-local/<name>:<tag>` + 本机不可变 ID。
+message BuildFromUploadResponse {
+  BuildView build = 1;
 }
 
 message TriggerBuildRequest {

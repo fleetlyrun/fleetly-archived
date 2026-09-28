@@ -181,6 +181,7 @@ func TestCodeMappingsSanity(t *testing.T) {
 		{422, codes.InvalidArgument},
 		{409, codes.FailedPrecondition},
 		{410, codes.FailedPrecondition},
+		{413, codes.ResourceExhausted},
 		{503, codes.Unavailable},
 		{500, codes.Internal},
 	}

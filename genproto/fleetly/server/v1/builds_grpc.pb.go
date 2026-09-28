@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BuildsService_TriggerBuild_FullMethodName = "/fleetly.server.v1.BuildsService/TriggerBuild"
-	BuildsService_GetBuild_FullMethodName     = "/fleetly.server.v1.BuildsService/GetBuild"
-	BuildsService_ListBuilds_FullMethodName   = "/fleetly.server.v1.BuildsService/ListBuilds"
+	BuildsService_TriggerBuild_FullMethodName    = "/fleetly.server.v1.BuildsService/TriggerBuild"
+	BuildsService_BuildFromUpload_FullMethodName = "/fleetly.server.v1.BuildsService/BuildFromUpload"
+	BuildsService_GetBuild_FullMethodName        = "/fleetly.server.v1.BuildsService/GetBuild"
+	BuildsService_ListBuilds_FullMethodName      = "/fleetly.server.v1.BuildsService/ListBuilds"
 )
 
 // BuildsServiceClient is the client API for BuildsService service.
@@ -50,6 +51,19 @@ const (
 // build.context_roots 配置根）内，越界构建终态失败（E_BUILD_FAILED）。
 type BuildsServiceClient interface {
 	TriggerBuild(ctx context.Context, in *TriggerBuildRequest, opts ...grpc.CallOption) (*TriggerBuildResponse, error)
+	// BuildFromUpload 受理「上下文 tar 包 + Dockerfile 入口」构建（T 线 DT-6 /
+	// IMPL-T2-2）：client-streaming——首帧 metadata（镜像仓名 + Dockerfile 入口），
+	// 后续帧为上下文 tar 分片（服务端流式解包，不落 tar 中间文件）。服务端与
+	// git 构建共用同一队列/buildkitd 管线与同一信任面（无新增构建参数面），
+	// 产物平台侧推 zot / 本机装载，**调用方永不需要 push 凭证**；等待终态后
+	// 返回 builds 行投影（含 digest 钉定引用，可直接被 CreateTask/部署引用）。
+	//
+	// 传输面（审查裁决，如实登记）：gRPC client-streaming；**无 HTTP 注解**
+	// ——grpc-gateway 对 client-streaming 只支持「单帧消息」形态，REST 面不
+	// 承载本 RPC（CLI/SDK 消费；REST 限制见 docs 实施记录）。scope = 独立
+	// `build`（read/deploy 不蕴含，admin 蕴含——机具令牌典型持有者，tasks/
+	// terminal 同族）。
+	BuildFromUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BuildFromUploadRequest, BuildFromUploadResponse], error)
 	GetBuild(ctx context.Context, in *GetBuildRequest, opts ...grpc.CallOption) (*GetBuildResponse, error)
 	ListBuilds(ctx context.Context, in *ListBuildsRequest, opts ...grpc.CallOption) (*ListBuildsResponse, error)
 }
@@ -71,6 +85,19 @@ func (c *buildsServiceClient) TriggerBuild(ctx context.Context, in *TriggerBuild
 	}
 	return out, nil
 }
+
+func (c *buildsServiceClient) BuildFromUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[BuildFromUploadRequest, BuildFromUploadResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BuildsService_ServiceDesc.Streams[0], BuildsService_BuildFromUpload_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[BuildFromUploadRequest, BuildFromUploadResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BuildsService_BuildFromUploadClient = grpc.ClientStreamingClient[BuildFromUploadRequest, BuildFromUploadResponse]
 
 func (c *buildsServiceClient) GetBuild(ctx context.Context, in *GetBuildRequest, opts ...grpc.CallOption) (*GetBuildResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -118,6 +145,19 @@ func (c *buildsServiceClient) ListBuilds(ctx context.Context, in *ListBuildsRequ
 // build.context_roots 配置根）内，越界构建终态失败（E_BUILD_FAILED）。
 type BuildsServiceServer interface {
 	TriggerBuild(context.Context, *TriggerBuildRequest) (*TriggerBuildResponse, error)
+	// BuildFromUpload 受理「上下文 tar 包 + Dockerfile 入口」构建（T 线 DT-6 /
+	// IMPL-T2-2）：client-streaming——首帧 metadata（镜像仓名 + Dockerfile 入口），
+	// 后续帧为上下文 tar 分片（服务端流式解包，不落 tar 中间文件）。服务端与
+	// git 构建共用同一队列/buildkitd 管线与同一信任面（无新增构建参数面），
+	// 产物平台侧推 zot / 本机装载，**调用方永不需要 push 凭证**；等待终态后
+	// 返回 builds 行投影（含 digest 钉定引用，可直接被 CreateTask/部署引用）。
+	//
+	// 传输面（审查裁决，如实登记）：gRPC client-streaming；**无 HTTP 注解**
+	// ——grpc-gateway 对 client-streaming 只支持「单帧消息」形态，REST 面不
+	// 承载本 RPC（CLI/SDK 消费；REST 限制见 docs 实施记录）。scope = 独立
+	// `build`（read/deploy 不蕴含，admin 蕴含——机具令牌典型持有者，tasks/
+	// terminal 同族）。
+	BuildFromUpload(grpc.ClientStreamingServer[BuildFromUploadRequest, BuildFromUploadResponse]) error
 	GetBuild(context.Context, *GetBuildRequest) (*GetBuildResponse, error)
 	ListBuilds(context.Context, *ListBuildsRequest) (*ListBuildsResponse, error)
 	mustEmbedUnimplementedBuildsServiceServer()
@@ -132,6 +172,9 @@ type UnimplementedBuildsServiceServer struct{}
 
 func (UnimplementedBuildsServiceServer) TriggerBuild(context.Context, *TriggerBuildRequest) (*TriggerBuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerBuild not implemented")
+}
+func (UnimplementedBuildsServiceServer) BuildFromUpload(grpc.ClientStreamingServer[BuildFromUploadRequest, BuildFromUploadResponse]) error {
+	return status.Error(codes.Unimplemented, "method BuildFromUpload not implemented")
 }
 func (UnimplementedBuildsServiceServer) GetBuild(context.Context, *GetBuildRequest) (*GetBuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetBuild not implemented")
@@ -177,6 +220,13 @@ func _BuildsService_TriggerBuild_Handler(srv interface{}, ctx context.Context, d
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _BuildsService_BuildFromUpload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BuildsServiceServer).BuildFromUpload(&grpc.GenericServerStream[BuildFromUploadRequest, BuildFromUploadResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BuildsService_BuildFromUploadServer = grpc.ClientStreamingServer[BuildFromUploadRequest, BuildFromUploadResponse]
 
 func _BuildsService_GetBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetBuildRequest)
@@ -234,6 +284,12 @@ var BuildsService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BuildsService_ListBuilds_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "BuildFromUpload",
+			Handler:       _BuildsService_BuildFromUpload_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "fleetly/server/v1/builds.proto",
 }

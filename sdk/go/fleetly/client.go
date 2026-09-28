@@ -8,6 +8,8 @@ package fleetly
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"io"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"google.golang.org/grpc"
@@ -189,6 +191,58 @@ func (c *Client) Revisions() serverv1.RevisionsServiceClient { return c.revs }
 
 // Builds 取构建资源面。
 func (c *Client) Builds() serverv1.BuildsServiceClient { return c.builds }
+
+// uploadChunkBytes 是 BuildFromUpload 的 SDK 分片大小（512KiB；服务端单帧
+// 上限 1MiB）。
+const uploadChunkBytes = 512 << 10
+
+// BuildFromUpload 上传构建上下文 tar 并等待构建终态（T 线 DT-6 / IMPL-T2-2）：
+// 首帧 metadata（name = 镜像仓组件名，dockerfile = 相对入口路径，空 =
+// Dockerfile），contextTar 按分片流式发送；服务端解包到受管落点、经与 git
+// 构建同一队列/buildkitd 管线执行（产物平台侧推 zot，调用方无需 push
+// 凭证），返回 succeeded 构建行——build.image_ref / build.image_digest 是
+// digest 钉定引用（可直接被 CreateTask/部署引用）。受限/形态违约/构建失败
+// 经错误信封返回（E_BUILD_UPLOAD_* / E_BUILD_FAILED 等）。ctx 截止即返回
+// （构建继续在队列中执行——服务端不因等待中止取消构建）。
+func (c *Client) BuildFromUpload(ctx context.Context, name, dockerfile string, contextTar io.Reader) (*serverv1.BuildFromUploadResponse, error) {
+	stream, err := c.builds.BuildFromUpload(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := stream.Send(&serverv1.BuildFromUploadRequest{
+		Payload: &serverv1.BuildFromUploadRequest_Metadata{
+			Metadata: &serverv1.BuildFromUploadMetadata{Name: name, Dockerfile: dockerfile},
+		},
+	}); err != nil {
+		return nil, err
+	}
+	buf := make([]byte, uploadChunkBytes)
+	for {
+		n, rerr := contextTar.Read(buf)
+		if n > 0 {
+			if serr := stream.Send(&serverv1.BuildFromUploadRequest{
+				Payload: &serverv1.BuildFromUploadRequest_Chunk{Chunk: buf[:n]},
+			}); serr != nil {
+				// 服务端在流中 fail-closed 拒绝（超限/形态违约）时，Send
+				// 以 io.EOF 表达流终止——真实状态经 CloseAndRecv 回读
+				//（错误信封在此浮现，不被 io.EOF 吞掉）。
+				if errors.Is(serr, io.EOF) {
+					if _, rerr := stream.CloseAndRecv(); rerr != nil {
+						return nil, rerr
+					}
+				}
+				return nil, serr
+			}
+		}
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return nil, rerr
+		}
+	}
+	return stream.CloseAndRecv()
+}
 
 // Drift 取运行域漂移面。
 func (c *Client) Drift() serverv1.DriftServiceClient { return c.drift }

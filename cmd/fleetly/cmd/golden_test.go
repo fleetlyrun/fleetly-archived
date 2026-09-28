@@ -85,7 +85,19 @@ func normalizeVolatile(s string) string {
 // 真实登录态不得影响夹具语义（凭据一律经 env/flag 显式注入）。
 func startCLI(t *testing.T) *apitest.Env {
 	t.Helper()
-	env := apitest.Start(t)
+	return startCLIWith(t, apitest.Start(t))
+}
+
+// startCLIWithBuildQueue 是 startCLI 的构建执行面变体（IMPL-T2-2：上传构建
+// 的 CLI 端到端——真实队列 + 确定性假执行器；纯入队夹具语义见 startCLI）。
+func startCLIWithBuildQueue(t *testing.T) *apitest.Env {
+	t.Helper()
+	return startCLIWith(t, apitest.StartWithBuildQueue(t))
+}
+
+// startCLIWith 是 CLI 夹具的共用装配（startCLI 与构建队列变体同点接线）。
+func startCLIWith(t *testing.T, env *apitest.Env) *apitest.Env {
+	t.Helper()
 	restore := env.DialOptions()
 	saved := extraDialOptions
 	extraDialOptions = restore

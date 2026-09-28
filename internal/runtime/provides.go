@@ -231,6 +231,9 @@ func NewJanitor(app lynx.App, st *state.Store, cfg *AppConfig) *state.Janitor {
 		// 部署目录 30 天窗取注册默认（DeploymentDirRetentionDays 零值回落）。
 		StaleDeploymentBudget: 2 * (engineCfg.InitJobTimeout + engineCfg.DeployTimeout + engineCfg.ObserveWindow),
 		StaleBuildBudget:      2 * buildCfg.Timeout,
+		// IMPL-T2-2：上传会话目录孤儿兜底清扫（保留窗取注册默认 1 天——
+		// 终态清理由构建管线钩子承担）。
+		UploadsRoot: buildCfg.UploadsRoot,
 	}, app.Logger())
 }
 
@@ -366,10 +369,12 @@ func NewBackupManager(app lynx.App, cfg *AppConfig, st *state.Store, sb *secrets
 }
 
 // NewBuildQueue 构建构建队列调度器（信号量并发上限 + builds 行扫描认领 +
-// per-build 超时预算 + 启动复位中断构建）。
+// per-build 超时预算 + 启动复位中断构建）。IMPL-T2-2：上传会话根随装配
+// 注入（收敛/复位路径的 ephemeral 上下文清理锚点）。
 func NewBuildQueue(app lynx.App, cfg *AppConfig, st *state.Store, b *build.Builder) *build.Queue {
 	settings := cfg.BuildSettings()
-	return build.NewQueue(st, b, settings.Concurrency, settings.PollInterval, settings.Timeout, app.Logger())
+	return build.NewQueue(st, b, settings.Concurrency, settings.PollInterval, settings.Timeout, app.Logger()).
+		WithUploadsRoot(settings.UploadsRoot)
 }
 
 // NewPlacementResolver 构造放置解析器（放置意图解析/绑定落库/卷登记/
@@ -687,9 +692,10 @@ func NewRevisionsService(st *state.Store) *api.RevisionsService {
 }
 
 // NewBuildsService 构造构建资源面服务（T2.18；A11/S18 增补队列接线——
-// TriggerBuild 经 Queue.Enqueue 入队，同进程触发立即唤醒扫描）。
-func NewBuildsService(st *state.Store, q *build.Queue) *api.BuildsService {
-	return api.NewBuildsService(st, q)
+// TriggerBuild 经 Queue.Enqueue 入队，同进程触发立即唤醒扫描；IMPL-T2-2
+// 增补上传构建面配置——BuildFromUpload 的落点与配额）。
+func NewBuildsService(cfg *AppConfig, st *state.Store, q *build.Queue) *api.BuildsService {
+	return api.NewBuildsService(st, q, cfg.BuildSettings().UploadConfig())
 }
 
 // NewDriftService 构造漂移面服务（T2.18；复用引擎对账原语）。

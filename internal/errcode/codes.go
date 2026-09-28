@@ -6,8 +6,10 @@ package errcode
 // architecture §2.4（3 码）+ §2.3（E_STATE_VERSION_CONFLICT）；v0.3 W1 增
 // E_REGISTRATION_CLOSED（rbac-teams §2.1）；v0.3 W2-S1 增 E_TEAM_LAST_OWNER /
 // E_INVITE_INVALID / E_TEAM_SLUG_RESERVED（rbac-teams §5）。
-// 计 66 个 E_ + 5 个 W_ = 71 码（逐波注记见各分节；v0.3 W2-S3 随保留字
-// 迁移退役 E_APP_NAME_RESERVED——rbac-teams §4.3/§5 设计明示的唯一减码）。
+// 计 84 个 E_ + 5 个 W_ = 89 码（逐波注记见各分节与 errcode_test 的计数
+// 注释；v0.3 W2-S3 随保留字迁移退役 E_APP_NAME_RESERVED——设计明示的
+// 唯一减码；T 线 DT-6/IMPL-T2-2 增 E_BUILD_UPLOAD_TOO_LARGE /
+// E_BUILD_UPLOAD_INVALID——上传构建面流式超限与形态违约）。
 //
 // HTTP 默认映射：文档显式给定的照文档（E_DOMAIN_CONFLICT/E_STATE_VERSION_
 // CONFLICT/E_VOLUME_NODE_MISMATCH/E_PLACEMENT_MOVE_REQUIRES_ACK→409、
@@ -358,6 +360,18 @@ var builtins = []Code{
 	{ID: "E_TASK_QUOTA_EXCEEDED", HTTP: 429,
 		Summary:    "the token's task quota is exhausted (concurrent tasks or total CPU/memory of non-terminal tasks at the limit; fail-closed)",
 		Suggestion: "Wait for running tasks to reach a terminal state (TTL reclaim or explicit stop) before creating more, or raise the per-token quota."},
+
+	// ── 上传构建面（T 线 DT-6 / IMPL-T2-2，注册表只增）：client-streaming
+	// 上下文 tar 上传的 fail-closed 拒绝族。消费点 = internal/api/builds.go
+	// BuildFromUpload（流式累计超限 / 流协议与 tar 形态违约 / Dockerfile
+	// 入口越界）。时长超限不落新码——构建执行超时沿用 E_BUILD_FAILED
+	//（与 git 构建同面，不歧视）。
+	{ID: "E_BUILD_UPLOAD_TOO_LARGE", HTTP: 413,
+		Summary:    "the uploaded build context exceeds the platform size limit (tar bytes; enforced while streaming)",
+		Suggestion: "Shrink the build context (exclude vendor/cache directories) or raise build.max_upload_mb in the control plane config."},
+	{ID: "E_BUILD_UPLOAD_INVALID", HTTP: 400,
+		Summary:    "the uploaded build context is invalid (stream protocol violation, malformed or unsafe tar, or an invalid Dockerfile entry)",
+		Suggestion: "Send a single tar stream: the first message carries metadata (name, dockerfile), the rest are non-empty tar chunks; the Dockerfile entry must be a relative path inside the context."},
 
 	// ── 认证/用户面（v0.3 W1，RBAC 设计 §2.1/§10；注册表只增）：注册窗口
 	//    关闭的稳定拒绝码（无用户窗口恒开不落本码；users 非空后

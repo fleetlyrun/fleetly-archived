@@ -260,6 +260,8 @@ func HTTPToGRPCCode(httpStatus int) codes.Code {
 		return codes.FailedPrecondition
 	case http.StatusTooManyRequests:
 		return codes.ResourceExhausted
+	case http.StatusRequestEntityTooLarge:
+		return codes.ResourceExhausted
 	case http.StatusNotImplemented:
 		return codes.Unimplemented
 	case http.StatusServiceUnavailable:

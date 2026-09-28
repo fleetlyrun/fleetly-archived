@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/fleetlyrun/fleetly/internal/api"
+	"github.com/fleetlyrun/fleetly/internal/build"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
@@ -85,7 +86,7 @@ func TestGatewayRESTDualFace(t *testing.T) {
 	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
 	serverv1.RegisterDeploymentsServiceServer(g, api.NewDeploymentsService(st, nil))
 	serverv1.RegisterRevisionsServiceServer(g, api.NewRevisionsService(st))
-	serverv1.RegisterBuildsServiceServer(g, api.NewBuildsService(st, nil))
+	serverv1.RegisterBuildsServiceServer(g, api.NewBuildsService(st, nil, build.UploadConfig{}))
 	serverv1.RegisterDriftServiceServer(g, api.NewDriftService(st, nil))
 	serverv1.RegisterEnvServiceServer(g, api.NewEnvService(st, box))
 	serverv1.RegisterTokensServiceServer(g, api.NewTokensService(st))

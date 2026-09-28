@@ -48,6 +48,10 @@ const (
 	DefaultDeploymentDirRetentionDays = 30
 	// DefaultTaskRetentionDays 是任务终态台账行的保留天数（DT-5/IMPL-T2-1）。
 	DefaultTaskRetentionDays = 30
+	// DefaultUploadSessionRetentionDays 是上传构建会话目录的孤儿保留天数
+	//（IMPL-T2-2/DT-6：终态会话由构建管线清理；无行对应的崩溃残留按 mtime
+	// 1 天窗兜底回收）。
+	DefaultUploadSessionRetentionDays = 1
 )
 
 // JanitorConfig 是 janitor 的保留窗与预算参数集（S18-A7/A10 装配扩展：
@@ -79,6 +83,12 @@ type JanitorConfig struct {
 	// TaskRetentionDays 是任务终态台账行保留天数（DT-5；缺省 30——任务
 	// 生命周期分钟级，台账只留观察窗）。
 	TaskRetentionDays int
+	// UploadsRoot 是上传构建会话根目录（<数据根>/build-uploads；空 =
+	// 跳过上传会话清扫——进程内测试夹具形态）。
+	UploadsRoot string
+	// UploadSessionRetentionDays 是上传会话孤儿目录保留天数（IMPL-T2-2；
+	// 缺省 1——终态清理由构建管线承担，本窗只兜底崩溃残留）。
+	UploadSessionRetentionDays int
 }
 
 // Janitor 周期清理过期事件与审计记录（S18-A7/A10：外加部署目录/构建
@@ -121,6 +131,8 @@ func NewJanitor(store *Store, cfg JanitorConfig, log *slog.Logger) *Janitor {
 			StaleDeploymentBudget:      cfg.StaleDeploymentBudget,
 			StaleBuildBudget:           cfg.StaleBuildBudget,
 			TaskRetentionDays:          retentionDaysOr(cfg.TaskRetentionDays, DefaultTaskRetentionDays),
+			UploadsRoot:                cfg.UploadsRoot,
+			UploadSessionRetentionDays: retentionDaysOr(cfg.UploadSessionRetentionDays, DefaultUploadSessionRetentionDays),
 		},
 		eventRetention: retentionOrDefault(cfg.EventRetentionDays, DefaultEventRetentionDays),
 		auditRetention: retentionOrDefault(cfg.AuditRetentionDays, DefaultAuditRetentionDays),
@@ -239,6 +251,7 @@ func (j *Janitor) PruneOnce(ctx context.Context, now time.Time) (events int64, a
 	}
 	j.pruneArtifacts(now)
 	j.pruneDeploymentDirs(ctx, now)
+	j.pruneUploadSessions(ctx, now)
 	j.scanStaleNonTerminal(ctx, now)
 	return events, audits, nil
 }
@@ -339,6 +352,44 @@ func (j *Janitor) pruneDeploymentDirs(ctx context.Context, now time.Time) {
 				_ = os.RemoveAll(path)
 			}
 		}
+	}
+}
+
+// pruneUploadSessions 清理上传构建会话目录的孤儿残留（IMPL-T2-2/DT-6：
+// 正常终态清理由 Builder/Queue 钩子承担；本 duty 兜底「解包后建行前进程
+// 崩溃」等无行形态，并按行状态保护在途构建）。
+//   - 行存在且非终态（queued/building）→ 保留（构建还要消费上下文）；
+//   - 行存在且终态，或无对应行 → 目录 mtime 过保留窗即回收；
+//   - 行读取故障（非 ErrBuildNotFound）→ 跳过本轮（读错不结论——同
+//     pruneDeploymentDirs 的 M3-1 口径）。
+func (j *Janitor) pruneUploadSessions(ctx context.Context, now time.Time) {
+	if j.cfg.UploadsRoot == "" {
+		return
+	}
+	entries, err := os.ReadDir(j.cfg.UploadsRoot)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			j.log.Error("janitor: scan uploads root failed", "dir", j.cfg.UploadsRoot, "error", err)
+		}
+		return
+	}
+	cutoff := now.Add(-time.Duration(j.cfg.UploadSessionRetentionDays) * 24 * time.Hour)
+	for _, e := range entries {
+		id := e.Name()
+		rec, rerr := j.store.GetBuild(ctx, id)
+		if rerr == nil && rec.Status != BuildSucceeded && rec.Status != BuildFailed {
+			continue // 在途构建：上下文仍在被消费，保留
+		}
+		if rerr != nil && !errors.Is(rerr, ErrBuildNotFound) {
+			j.log.Warn("janitor: probe build for upload session failed, skip dir this round",
+				"dir", filepath.Join(j.cfg.UploadsRoot, id), "error", rerr.Error())
+			continue
+		}
+		info, ierr := e.Info()
+		if ierr != nil || !info.ModTime().Before(cutoff) {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(j.cfg.UploadsRoot, id))
 	}
 }
 

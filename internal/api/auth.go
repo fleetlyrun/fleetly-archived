@@ -39,11 +39,17 @@ const (
 	// tasks；admin 蕴含一切。机具令牌为典型持有者；任务写/读同门（跨令牌
 	// 隔离在 handler 内以 owner_token_id 收口，与 scope 门正交））。
 	ScopeTasks = "tasks"
+	// ScopeBuild 是上传构建面的独立 scope（T 线 DT-6 / IMPL-T2-2：默认仅
+	// admin——read/deploy 不蕴含 build，独立 token 需显式 --scopes build；
+	// admin 蕴含一切。机具令牌为典型持有者（torchwood dispatcher 的构建
+	// 通道）；与 TriggerBuild 的 admin 门差异见 scope.go 登记注释）。
+	ScopeBuild = "build"
 )
 
 // containsScope 报告 scope 集（逗号分隔存储形态）是否蕴含所需 scope
-//（admin ⊃ deploy ⊃ read ⊕ terminal ⊕ tasks——terminal/tasks 与 read/deploy
-// 平行，仅 admin 蕴含它们：E7 设计 §2.4 / DT-5 的执行点）。
+//（admin ⊃ deploy ⊃ read ⊕ terminal ⊕ tasks ⊕ build——terminal/tasks/build
+// 与 read/deploy 平行，仅 admin 蕴含它们：E7 设计 §2.4 / DT-5 / DT-6 的
+// 执行点）。
 func containsScope(scopes, need string) bool {
 	for _, s := range strings.Split(scopes, ",") {
 		switch strings.TrimSpace(s) {
@@ -63,6 +69,10 @@ func containsScope(scopes, need string) bool {
 			}
 		case ScopeTasks:
 			if need == ScopeTasks {
+				return true
+			}
+		case ScopeBuild:
+			if need == ScopeBuild {
 				return true
 			}
 		}
@@ -222,7 +232,7 @@ func (a *Authenticator) AuthenticateSessionCookie(ctx context.Context, cookieHea
 // scopeSetToList 把可达集转为固定词表序的切片（Principal.Scopes 存储形态）。
 func scopeSetToList(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
-	for _, s := range []string{ScopeRead, ScopeDeploy, ScopeTerminal, ScopeTasks, ScopeAdmin} {
+	for _, s := range []string{ScopeRead, ScopeDeploy, ScopeTerminal, ScopeTasks, ScopeBuild, ScopeAdmin} {
 		if set[s] {
 			out = append(out, s)
 		}

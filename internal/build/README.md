@@ -1,6 +1,21 @@
-# internal/build — 构建管线（T2.8/T2.9）
+# internal/build — 构建管线（T2.8/T2.9；上传构建面 IMPL-T2-2/DT-6）
 
 包内选型与硬约束见 `doc.go`；本文件只写实机复跑方法。
+
+## 上传构建面（IMPL-T2-2/DT-6）
+
+- 入口：`BuildsService.BuildFromUpload`（client-streaming，gRPC-only——无
+  HTTP 注解；REST 面 404 是契约，CLI/SDK 消费）。SDK 访问器
+  `fleetly.Client.BuildFromUpload`；CLI `fleetly builds upload --name <n>
+  [--dockerfile <path>] <context.tar | ->` 与回读 `fleetly builds get <id>`。
+- 落点/清理/配额：`build.Config.UploadsRoot`（缺省 `<数据根>/build-uploads`，
+  经 Normalize 恒并入受管根）与 `MaxUploadBytes`（runtime 键
+  `build.max_upload_mb`，缺省 256MiB）；解包安全与四层清理钩子见
+  `upload.go` 头注释。
+- 本机真机探针（默认不跑）：
+  `FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/api -run TestManualBuildFromUpload -v`
+  （SDK 上传 → 自管 buildkitd → 本机 digest → 解析腿直通 → 引擎语义引用
+  拉起 swarm 服务 running → 会话零残留 → 超限拒绝）。
 
 ## 单元测试（默认进 CI）
 

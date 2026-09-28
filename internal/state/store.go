@@ -79,6 +79,13 @@ func DeploymentsRoot(dbPath string) string {
 	return filepath.Join(filepath.Dir(dbPath), "deployments")
 }
 
+// BuildUploadsRoot 返回上传构建会话根目录（IMPL-T2-2/DT-6：<数据根>/
+// build-uploads；数据根 = 状态库同目录，与 DeploymentsRoot 同款派生——
+// api 入队点、builder 清理钩子与 janitor 兜底清扫共用同一布局）。
+func BuildUploadsRoot(dbPath string) string {
+	return filepath.Join(filepath.Dir(dbPath), "build-uploads")
+}
+
 // PersistDeploymentCompose 把部署 compose 字节持久化到
 // <root>/<deploymentID>/compose.yaml（S18-A7 入队点共享写入通道：先写
 // 文件后建行——部署行不指向缺失文件；0600 权限；OS 临时目录自此仅作解析

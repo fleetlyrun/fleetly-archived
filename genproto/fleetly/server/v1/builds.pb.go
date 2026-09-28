@@ -25,6 +25,203 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// BuildFromUploadRequest 是上传构建的流帧（oneof）：首帧 metadata，后续帧
+// chunk（tar 分片）。任何其他形态（首帧无 metadata、metadata 重复、帧既无
+// metadata 又无 chunk、超单帧上限）一律 E_BUILD_UPLOAD_INVALID 拒绝。
+type BuildFromUploadRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*BuildFromUploadRequest_Metadata
+	//	*BuildFromUploadRequest_Chunk
+	Payload       isBuildFromUploadRequest_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildFromUploadRequest) Reset() {
+	*x = BuildFromUploadRequest{}
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildFromUploadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildFromUploadRequest) ProtoMessage() {}
+
+func (x *BuildFromUploadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildFromUploadRequest.ProtoReflect.Descriptor instead.
+func (*BuildFromUploadRequest) Descriptor() ([]byte, []int) {
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *BuildFromUploadRequest) GetPayload() isBuildFromUploadRequest_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *BuildFromUploadRequest) GetMetadata() *BuildFromUploadMetadata {
+	if x != nil {
+		if x, ok := x.Payload.(*BuildFromUploadRequest_Metadata); ok {
+			return x.Metadata
+		}
+	}
+	return nil
+}
+
+func (x *BuildFromUploadRequest) GetChunk() []byte {
+	if x != nil {
+		if x, ok := x.Payload.(*BuildFromUploadRequest_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+type isBuildFromUploadRequest_Payload interface {
+	isBuildFromUploadRequest_Payload()
+}
+
+type BuildFromUploadRequest_Metadata struct {
+	// 首帧且仅首帧携带。
+	Metadata *BuildFromUploadMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof"`
+}
+
+type BuildFromUploadRequest_Chunk struct {
+	// 上下文 tar 分片（单帧 ≤ 1MiB；总字节 ≤ 平台上限——超限
+	// E_BUILD_UPLOAD_TOO_LARGE）。
+	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+func (*BuildFromUploadRequest_Metadata) isBuildFromUploadRequest_Payload() {}
+
+func (*BuildFromUploadRequest_Chunk) isBuildFromUploadRequest_Payload() {}
+
+// BuildFromUploadMetadata 是上传构建的请求头（传输面元数据）。
+//
+// 信任级红线（IMPL-T2-2）：与 git 构建**同信任级**——本消息不含 target/
+// build-args/secrets/platform 等任何额外构建参数（无特赦亦无歧视）；解包
+// 后的 Dockerfile 走与 git 构建逐字相同的 dockerfile.v0 前端。
+type BuildFromUploadMetadata struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 镜像仓库组件名（平台 registry 路径 <host>/apps/<name>；服务端转小写，
+	// 首末位须为字母数字，可含 . _ -，≤100——tag 以 <name>-<buildid> 派生）。
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Dockerfile 入口（相对上下文根的仓内路径；缺省 Dockerfile）。服务端
+	// 校验：clean 相对路径、不越出上下文根、解析后为常规文件。
+	Dockerfile    string `protobuf:"bytes,2,opt,name=dockerfile,proto3" json:"dockerfile,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildFromUploadMetadata) Reset() {
+	*x = BuildFromUploadMetadata{}
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildFromUploadMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildFromUploadMetadata) ProtoMessage() {}
+
+func (x *BuildFromUploadMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildFromUploadMetadata.ProtoReflect.Descriptor instead.
+func (*BuildFromUploadMetadata) Descriptor() ([]byte, []int) {
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *BuildFromUploadMetadata) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *BuildFromUploadMetadata) GetDockerfile() string {
+	if x != nil {
+		return x.Dockerfile
+	}
+	return ""
+}
+
+// BuildFromUploadResponse 返回终态构建行（succeeded；失败经错误信封点名
+// error_code 与 build id）。image_ref/image_digest 是 digest 钉定引用——
+// registry 模式 `<host>/apps/<name>@sha256:<manifest digest>`；本地模式
+// `fleetly-local/<name>:<tag>` + 本机不可变 ID。
+type BuildFromUploadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Build         *BuildView             `protobuf:"bytes,1,opt,name=build,proto3" json:"build,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuildFromUploadResponse) Reset() {
+	*x = BuildFromUploadResponse{}
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuildFromUploadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuildFromUploadResponse) ProtoMessage() {}
+
+func (x *BuildFromUploadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuildFromUploadResponse.ProtoReflect.Descriptor instead.
+func (*BuildFromUploadResponse) Descriptor() ([]byte, []int) {
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BuildFromUploadResponse) GetBuild() *BuildView {
+	if x != nil {
+		return x.Build
+	}
+	return nil
+}
+
 type TriggerBuildRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// compose 文件内容字节（JSON/YAML 原文；应用名取自 compose name——请求
@@ -47,7 +244,7 @@ type TriggerBuildRequest struct {
 
 func (x *TriggerBuildRequest) Reset() {
 	*x = TriggerBuildRequest{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[0]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -59,7 +256,7 @@ func (x *TriggerBuildRequest) String() string {
 func (*TriggerBuildRequest) ProtoMessage() {}
 
 func (x *TriggerBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[0]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -72,7 +269,7 @@ func (x *TriggerBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerBuildRequest.ProtoReflect.Descriptor instead.
 func (*TriggerBuildRequest) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{0}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *TriggerBuildRequest) GetCompose() []byte {
@@ -119,7 +316,7 @@ type TriggerBuildResponse struct {
 
 func (x *TriggerBuildResponse) Reset() {
 	*x = TriggerBuildResponse{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[1]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -131,7 +328,7 @@ func (x *TriggerBuildResponse) String() string {
 func (*TriggerBuildResponse) ProtoMessage() {}
 
 func (x *TriggerBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[1]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -144,7 +341,7 @@ func (x *TriggerBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerBuildResponse.ProtoReflect.Descriptor instead.
 func (*TriggerBuildResponse) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{1}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TriggerBuildResponse) GetApp() string {
@@ -186,7 +383,7 @@ type PassthroughService struct {
 
 func (x *PassthroughService) Reset() {
 	*x = PassthroughService{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[2]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +395,7 @@ func (x *PassthroughService) String() string {
 func (*PassthroughService) ProtoMessage() {}
 
 func (x *PassthroughService) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[2]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +408,7 @@ func (x *PassthroughService) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PassthroughService.ProtoReflect.Descriptor instead.
 func (*PassthroughService) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{2}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PassthroughService) GetService() string {
@@ -237,7 +434,7 @@ type GetBuildRequest struct {
 
 func (x *GetBuildRequest) Reset() {
 	*x = GetBuildRequest{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[3]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -249,7 +446,7 @@ func (x *GetBuildRequest) String() string {
 func (*GetBuildRequest) ProtoMessage() {}
 
 func (x *GetBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[3]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +459,7 @@ func (x *GetBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBuildRequest.ProtoReflect.Descriptor instead.
 func (*GetBuildRequest) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{3}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetBuildRequest) GetId() string {
@@ -281,7 +478,7 @@ type GetBuildResponse struct {
 
 func (x *GetBuildResponse) Reset() {
 	*x = GetBuildResponse{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[4]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +490,7 @@ func (x *GetBuildResponse) String() string {
 func (*GetBuildResponse) ProtoMessage() {}
 
 func (x *GetBuildResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[4]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +503,7 @@ func (x *GetBuildResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBuildResponse.ProtoReflect.Descriptor instead.
 func (*GetBuildResponse) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{4}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetBuildResponse) GetBuild() *BuildView {
@@ -327,7 +524,7 @@ type ListBuildsRequest struct {
 
 func (x *ListBuildsRequest) Reset() {
 	*x = ListBuildsRequest{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[5]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +536,7 @@ func (x *ListBuildsRequest) String() string {
 func (*ListBuildsRequest) ProtoMessage() {}
 
 func (x *ListBuildsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[5]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +549,7 @@ func (x *ListBuildsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBuildsRequest.ProtoReflect.Descriptor instead.
 func (*ListBuildsRequest) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{5}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListBuildsRequest) GetApp() string {
@@ -378,7 +575,7 @@ type ListBuildsResponse struct {
 
 func (x *ListBuildsResponse) Reset() {
 	*x = ListBuildsResponse{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[6]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -390,7 +587,7 @@ func (x *ListBuildsResponse) String() string {
 func (*ListBuildsResponse) ProtoMessage() {}
 
 func (x *ListBuildsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[6]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -403,7 +600,7 @@ func (x *ListBuildsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBuildsResponse.ProtoReflect.Descriptor instead.
 func (*ListBuildsResponse) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{6}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListBuildsResponse) GetBuilds() []*BuildView {
@@ -438,7 +635,7 @@ type BuildView struct {
 
 func (x *BuildView) Reset() {
 	*x = BuildView{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[7]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +647,7 @@ func (x *BuildView) String() string {
 func (*BuildView) ProtoMessage() {}
 
 func (x *BuildView) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[7]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +660,7 @@ func (x *BuildView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildView.ProtoReflect.Descriptor instead.
 func (*BuildView) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{7}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BuildView) GetId() string {
@@ -564,7 +761,7 @@ type ComposeWarning struct {
 
 func (x *ComposeWarning) Reset() {
 	*x = ComposeWarning{}
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[8]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +773,7 @@ func (x *ComposeWarning) String() string {
 func (*ComposeWarning) ProtoMessage() {}
 
 func (x *ComposeWarning) ProtoReflect() protoreflect.Message {
-	mi := &file_fleetly_server_v1_builds_proto_msgTypes[8]
+	mi := &file_fleetly_server_v1_builds_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +786,7 @@ func (x *ComposeWarning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComposeWarning.ProtoReflect.Descriptor instead.
 func (*ComposeWarning) Descriptor() ([]byte, []int) {
-	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{8}
+	return file_fleetly_server_v1_builds_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ComposeWarning) GetKind() string {
@@ -624,7 +821,18 @@ var File_fleetly_server_v1_builds_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_builds_proto_rawDesc = "" +
 	"\n" +
-	"\x1efleetly/server/v1/builds.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x90\x01\n" +
+	"\x1efleetly/server/v1/builds.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x85\x01\n" +
+	"\x16BuildFromUploadRequest\x12H\n" +
+	"\bmetadata\x18\x01 \x01(\v2*.fleetly.server.v1.BuildFromUploadMetadataH\x00R\bmetadata\x12\x16\n" +
+	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\t\n" +
+	"\apayload\"b\n" +
+	"\x17BuildFromUploadMetadata\x12\x1d\n" +
+	"\x04name\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18dR\x04name\x12(\n" +
+	"\n" +
+	"dockerfile\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\x80\x02R\n" +
+	"dockerfile\"M\n" +
+	"\x17BuildFromUploadResponse\x122\n" +
+	"\x05build\x18\x01 \x01(\v2\x1c.fleetly.server.v1.BuildViewR\x05build\"\x90\x01\n" +
 	"\x13TriggerBuildRequest\x12!\n" +
 	"\acompose\x18\x01 \x01(\fB\a\xbaH\x04z\x02\x10\x01R\acompose\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\x12\x19\n" +
@@ -668,10 +876,11 @@ const file_fleetly_server_v1_builds_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
 	"\aservice\x18\x03 \x01(\tR\aservice\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage2\xef\x02\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage2\xdd\x03\n" +
 	"\rBuildsService\x12v\n" +
 	"\fTriggerBuild\x12&.fleetly.server.v1.TriggerBuildRequest\x1a'.fleetly.server.v1.TriggerBuildResponse\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
 	"/v1/builds\x12l\n" +
+	"\x0fBuildFromUpload\x12).fleetly.server.v1.BuildFromUploadRequest\x1a*.fleetly.server.v1.BuildFromUploadResponse\"\x00(\x01\x12l\n" +
 	"\bGetBuild\x12\".fleetly.server.v1.GetBuildRequest\x1a#.fleetly.server.v1.GetBuildResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/builds/{id}\x12x\n" +
 	"\n" +
 	"ListBuilds\x12$.fleetly.server.v1.ListBuildsRequest\x1a%.fleetly.server.v1.ListBuildsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/apps/{app}/buildsB\x98\x01\x92ARRP\n" +
@@ -691,38 +900,45 @@ func file_fleetly_server_v1_builds_proto_rawDescGZIP() []byte {
 	return file_fleetly_server_v1_builds_proto_rawDescData
 }
 
-var file_fleetly_server_v1_builds_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_fleetly_server_v1_builds_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_fleetly_server_v1_builds_proto_goTypes = []any{
-	(*TriggerBuildRequest)(nil),   // 0: fleetly.server.v1.TriggerBuildRequest
-	(*TriggerBuildResponse)(nil),  // 1: fleetly.server.v1.TriggerBuildResponse
-	(*PassthroughService)(nil),    // 2: fleetly.server.v1.PassthroughService
-	(*GetBuildRequest)(nil),       // 3: fleetly.server.v1.GetBuildRequest
-	(*GetBuildResponse)(nil),      // 4: fleetly.server.v1.GetBuildResponse
-	(*ListBuildsRequest)(nil),     // 5: fleetly.server.v1.ListBuildsRequest
-	(*ListBuildsResponse)(nil),    // 6: fleetly.server.v1.ListBuildsResponse
-	(*BuildView)(nil),             // 7: fleetly.server.v1.BuildView
-	(*ComposeWarning)(nil),        // 8: fleetly.server.v1.ComposeWarning
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*BuildFromUploadRequest)(nil),  // 0: fleetly.server.v1.BuildFromUploadRequest
+	(*BuildFromUploadMetadata)(nil), // 1: fleetly.server.v1.BuildFromUploadMetadata
+	(*BuildFromUploadResponse)(nil), // 2: fleetly.server.v1.BuildFromUploadResponse
+	(*TriggerBuildRequest)(nil),     // 3: fleetly.server.v1.TriggerBuildRequest
+	(*TriggerBuildResponse)(nil),    // 4: fleetly.server.v1.TriggerBuildResponse
+	(*PassthroughService)(nil),      // 5: fleetly.server.v1.PassthroughService
+	(*GetBuildRequest)(nil),         // 6: fleetly.server.v1.GetBuildRequest
+	(*GetBuildResponse)(nil),        // 7: fleetly.server.v1.GetBuildResponse
+	(*ListBuildsRequest)(nil),       // 8: fleetly.server.v1.ListBuildsRequest
+	(*ListBuildsResponse)(nil),      // 9: fleetly.server.v1.ListBuildsResponse
+	(*BuildView)(nil),               // 10: fleetly.server.v1.BuildView
+	(*ComposeWarning)(nil),          // 11: fleetly.server.v1.ComposeWarning
+	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
 }
 var file_fleetly_server_v1_builds_proto_depIdxs = []int32{
-	7,  // 0: fleetly.server.v1.TriggerBuildResponse.builds:type_name -> fleetly.server.v1.BuildView
-	8,  // 1: fleetly.server.v1.TriggerBuildResponse.warnings:type_name -> fleetly.server.v1.ComposeWarning
-	2,  // 2: fleetly.server.v1.TriggerBuildResponse.passthrough:type_name -> fleetly.server.v1.PassthroughService
-	7,  // 3: fleetly.server.v1.GetBuildResponse.build:type_name -> fleetly.server.v1.BuildView
-	7,  // 4: fleetly.server.v1.ListBuildsResponse.builds:type_name -> fleetly.server.v1.BuildView
-	9,  // 5: fleetly.server.v1.BuildView.started_at:type_name -> google.protobuf.Timestamp
-	9,  // 6: fleetly.server.v1.BuildView.finished_at:type_name -> google.protobuf.Timestamp
-	0,  // 7: fleetly.server.v1.BuildsService.TriggerBuild:input_type -> fleetly.server.v1.TriggerBuildRequest
-	3,  // 8: fleetly.server.v1.BuildsService.GetBuild:input_type -> fleetly.server.v1.GetBuildRequest
-	5,  // 9: fleetly.server.v1.BuildsService.ListBuilds:input_type -> fleetly.server.v1.ListBuildsRequest
-	1,  // 10: fleetly.server.v1.BuildsService.TriggerBuild:output_type -> fleetly.server.v1.TriggerBuildResponse
-	4,  // 11: fleetly.server.v1.BuildsService.GetBuild:output_type -> fleetly.server.v1.GetBuildResponse
-	6,  // 12: fleetly.server.v1.BuildsService.ListBuilds:output_type -> fleetly.server.v1.ListBuildsResponse
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	1,  // 0: fleetly.server.v1.BuildFromUploadRequest.metadata:type_name -> fleetly.server.v1.BuildFromUploadMetadata
+	10, // 1: fleetly.server.v1.BuildFromUploadResponse.build:type_name -> fleetly.server.v1.BuildView
+	10, // 2: fleetly.server.v1.TriggerBuildResponse.builds:type_name -> fleetly.server.v1.BuildView
+	11, // 3: fleetly.server.v1.TriggerBuildResponse.warnings:type_name -> fleetly.server.v1.ComposeWarning
+	5,  // 4: fleetly.server.v1.TriggerBuildResponse.passthrough:type_name -> fleetly.server.v1.PassthroughService
+	10, // 5: fleetly.server.v1.GetBuildResponse.build:type_name -> fleetly.server.v1.BuildView
+	10, // 6: fleetly.server.v1.ListBuildsResponse.builds:type_name -> fleetly.server.v1.BuildView
+	12, // 7: fleetly.server.v1.BuildView.started_at:type_name -> google.protobuf.Timestamp
+	12, // 8: fleetly.server.v1.BuildView.finished_at:type_name -> google.protobuf.Timestamp
+	3,  // 9: fleetly.server.v1.BuildsService.TriggerBuild:input_type -> fleetly.server.v1.TriggerBuildRequest
+	0,  // 10: fleetly.server.v1.BuildsService.BuildFromUpload:input_type -> fleetly.server.v1.BuildFromUploadRequest
+	6,  // 11: fleetly.server.v1.BuildsService.GetBuild:input_type -> fleetly.server.v1.GetBuildRequest
+	8,  // 12: fleetly.server.v1.BuildsService.ListBuilds:input_type -> fleetly.server.v1.ListBuildsRequest
+	4,  // 13: fleetly.server.v1.BuildsService.TriggerBuild:output_type -> fleetly.server.v1.TriggerBuildResponse
+	2,  // 14: fleetly.server.v1.BuildsService.BuildFromUpload:output_type -> fleetly.server.v1.BuildFromUploadResponse
+	7,  // 15: fleetly.server.v1.BuildsService.GetBuild:output_type -> fleetly.server.v1.GetBuildResponse
+	9,  // 16: fleetly.server.v1.BuildsService.ListBuilds:output_type -> fleetly.server.v1.ListBuildsResponse
+	13, // [13:17] is the sub-list for method output_type
+	9,  // [9:13] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_fleetly_server_v1_builds_proto_init() }
@@ -730,13 +946,17 @@ func file_fleetly_server_v1_builds_proto_init() {
 	if File_fleetly_server_v1_builds_proto != nil {
 		return
 	}
+	file_fleetly_server_v1_builds_proto_msgTypes[0].OneofWrappers = []any{
+		(*BuildFromUploadRequest_Metadata)(nil),
+		(*BuildFromUploadRequest_Chunk)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fleetly_server_v1_builds_proto_rawDesc), len(file_fleetly_server_v1_builds_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

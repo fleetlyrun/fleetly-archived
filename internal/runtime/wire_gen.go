@@ -184,7 +184,7 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	appsService := NewAppsService(store, box, appConfig, ingressManager)
 	deploymentsService := NewDeploymentsService(store, gitTriggers)
 	revisionsService := NewRevisionsService(store)
-	buildsService := NewBuildsService(store, queue)
+	buildsService := NewBuildsService(appConfig, store, queue)
 	driftService := NewDriftService(store, engine)
 	domainsService := NewDomainsService(store, ingressManager)
 	envService := NewEnvService(store, box, logsManager)

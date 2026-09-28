@@ -151,6 +151,12 @@ var docCodes = map[string]string{ // code → 文档出处
 	"E_TASK_UNSUPPORTED":    "T-line DT-5/IMPL-T2-1 (task scope/internal variant/ttl/resource bounds violated; tasks join existing networks only, 400)",
 	"E_TASK_QUOTA_EXCEEDED": "T-line DT-5/IMPL-T2-1 (per-token concurrent/resource quota exhausted; fail-closed at CreateTask, 429)",
 
+	// T 线 DT-6 / IMPL-T2-2 上传构建面（注册表只增）：client-streaming 上下文
+	// tar 的 fail-closed 拒绝族——流式累计超限走 413；流协议/tar 形态/
+	// Dockerfile 入口违约走 400（internal/api/builds.go BuildFromUpload）。
+	"E_BUILD_UPLOAD_TOO_LARGE": "T-line DT-6/IMPL-T2-2 (uploaded context exceeds the tar byte limit; enforced while streaming, 413)",
+	"E_BUILD_UPLOAD_INVALID":   "T-line DT-6/IMPL-T2-2 (stream protocol violation, malformed/unsafe tar, or invalid Dockerfile entry, 400)",
+
 	// B 线 W5 ACME DNS-01 通配证书面（b-line-w5 设计 §3，D-V3W5-3/D-V3W5-4，
 	// W5-S3 接线，注册表只增）：acme.* 设置联动校验门两码（消费点 =
 	// internal/state/acmesettings.go ValidateAcmeSettings——422 语义违约 /
@@ -242,7 +248,9 @@ func TestDocCodeSetMatchesRegistry(t *testing.T) {
 // E_INIT_JOB_TIMED_OUT（部署期 init job 失败/超时归因）→ 79 E + 5 W；
 // IMPL-T1-4（OT-3）增 E_CONFIG_NOT_FOUND（明文配置资源缺失哨兵）→ 80 E + 5 W；
 // T 线 DT-5/IMPL-T2-1 增 E_TASK_UNSUPPORTED / E_TASK_QUOTA_EXCEEDED（动态
-// 工作负载面契约违约与配额 fail-closed）→ 82 E + 5 W。
+// 工作负载面契约违约与配额 fail-closed）→ 82 E + 5 W；T 线 DT-6/IMPL-T2-2
+// 增 E_BUILD_UPLOAD_TOO_LARGE / E_BUILD_UPLOAD_INVALID（上传构建面流式
+// 超限与形态违约）→ 84 E + 5 W。
 func TestRegisteredCountByKind(t *testing.T) {
 	errCount, warnCount := 0, 0
 	for _, c := range Default().All() {
@@ -252,8 +260,8 @@ func TestRegisteredCountByKind(t *testing.T) {
 			warnCount++
 		}
 	}
-	if errCount != 82 || warnCount != 5 {
-		t.Fatalf("E_ = %d (want 82), W_ = %d (want 5)", errCount, warnCount)
+	if errCount != 84 || warnCount != 5 {
+		t.Fatalf("E_ = %d (want 84), W_ = %d (want 5)", errCount, warnCount)
 	}
 }
 

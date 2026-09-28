@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
+	"github.com/fleetlyrun/fleetly/internal/build"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -92,7 +93,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	)
 	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, "127.0.0.1:8424", nil))
 	serverv1.RegisterDeploymentsServiceServer(srv, NewDeploymentsService(st, nil))
-	serverv1.RegisterBuildsServiceServer(srv, NewBuildsService(st, nil))
+	serverv1.RegisterBuildsServiceServer(srv, NewBuildsService(st, nil, build.UploadConfig{}))
 	serverv1.RegisterEnvServiceServer(srv, NewEnvService(st, box))
 	serverv1.RegisterTokensServiceServer(srv, NewTokensService(st))
 	serverv1.RegisterGitKeysServiceServer(srv, NewGitKeysService(st))

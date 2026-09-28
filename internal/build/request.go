@@ -39,6 +39,10 @@ type Request struct {
 	ContextDir string `json:"context_dir"`
 	// Dockerfile 是相对 ContextDir 的 dockerfile 路径（仅 dockerfile 驱动）。
 	Dockerfile string `json:"dockerfile,omitempty"`
+	// EphemeralDir 是上传构建的临时会话目录（IMPL-T2-2/DT-6：上下文随
+	// 构建终态清理；空 = git/compose 构建，不受清理钩子管辖）。清理前由
+	// 钩子强制校验位于 build.Config.UploadsRoot 内（CleanupUploadDir）。
+	EphemeralDir string `json:"ephemeral_dir,omitempty"`
 	// Target 是可选构建目标 stage（v0.1 不开，字段预留 compose 受控子集）。
 	Target string `json:"target,omitempty"`
 	// SpecHash 是归一化 compose 的 spec_hash（缓存键与可追溯成分）。

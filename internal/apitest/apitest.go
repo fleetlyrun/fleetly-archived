@@ -28,6 +28,7 @@ import (
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/api"
+	"github.com/fleetlyrun/fleetly/internal/build"
 	"github.com/fleetlyrun/fleetly/internal/compose"
 	"github.com/fleetlyrun/fleetly/internal/engine"
 	"github.com/fleetlyrun/fleetly/internal/logs"
@@ -126,10 +127,29 @@ func (fakeTasksOrchestrator) EnsureTaskNetwork(_ context.Context, _ string, _ bo
 	return "fleetly-taskgroup-apitest", out, nil
 }
 
+// fakeBuildExecutor 是构建队列的确定性假执行器（apitest 无底座，IMPL-T2-2
+// 上传构建的 CLI 端到端形态）：构建立即收敛 succeeded，产物引用/摘要按
+// 请求与构建 ID 派生（可断言、零网络）。
+type fakeBuildExecutor struct{ store *state.Store }
+
+func (e fakeBuildExecutor) Execute(ctx context.Context, rec state.BuildRecord) (state.BuildRecord, error) {
+	req, err := build.DecodeRequest(rec.Request)
+	if err != nil {
+		return rec, err
+	}
+	name := strings.ToLower(req.AppName)
+	ref := "fleetly-local/" + name + ":" + name + "-" + strings.ToLower(rec.ID)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if err := e.store.FinishBuildSucceeded(ctx, rec.ID, ref, digest, "", ""); err != nil {
+		return rec, err
+	}
+	return e.store.GetBuild(ctx, rec.ID)
+}
+
 // Start 起一个完整服务面（除 ingress.Manager——nil 端口形态，入口面如实
 // 报告不可用）并返回连接与 admin token；生命周期挂 t.Cleanup。
 func Start(t *testing.T) *Env {
-	return start(t, "", nil)
+	return start(t, startOptions{})
 }
 
 // StartWithJoin 起完整服务面并为 SystemService 注入 join 向导面（E1-8
@@ -137,7 +157,22 @@ func Start(t *testing.T) *Env {
 // guide/rotate 路径，不触真实底座）。fake 端口行为：manager addr 固定
 // 198.51.100.10；rotate 返回确定性新 token。
 func StartWithJoin(t *testing.T) *Env {
-	return start(t, "example.test", fakeJoinPort{})
+	return start(t, startOptions{joinBaseDomain: "example.test", joinPort: fakeJoinPort{}})
+}
+
+// StartWithBuildQueue 起完整服务面并装配构建执行面（IMPL-T2-2 上传构建的
+// CLI 端到端测试形态）：真实 build.Queue + 确定性假执行器（构建立即收敛
+// succeeded，产物引用/摘要按请求派生）+ 上传会话根（临时目录）。默认
+// Start 不装配队列（纯入队夹具语义——SeedBuild 的 queued 行不被消费）。
+func StartWithBuildQueue(t *testing.T) *Env {
+	return start(t, startOptions{buildQueue: true})
+}
+
+// startOptions 是 start 的装配开关（导出 Start* 各自的最简形态）。
+type startOptions struct {
+	joinBaseDomain string
+	joinPort       api.JoinTokenPort
+	buildQueue     bool
 }
 
 // fakeJoinPort 是 join 向导面的确定性测试替身（api.JoinTokenPort 结构
@@ -159,8 +194,8 @@ type fakeGitHostKey struct{}
 
 func (fakeGitHostKey) Fingerprint() string { return "SHA256:FixturedGitHostKeyFingerprint==" }
 
-// start 是 Start/StartWithJoin 的共用装配核。
-func start(t *testing.T, joinBaseDomain string, joinPort api.JoinTokenPort) *Env {
+// start 是 Start/StartWithJoin/StartWithBuildQueue 的共用装配核。
+func start(t *testing.T, opts startOptions) *Env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := state.Open(context.Background(), filepath.Join(dir, "test.db"))
@@ -197,14 +232,28 @@ func start(t *testing.T, joinBaseDomain string, joinPort api.JoinTokenPort) *Env
 	systemSvc := api.NewSystemService("dev", st,
 		func() []api.SystemComponent { return nil }, nil, nil).WithGitHostKey(fakeGitHostKey{}).
 		WithSecretsBox(box)
-	if joinPort != nil {
-		systemSvc = systemSvc.WithJoinGuide(joinBaseDomain, joinPort)
+	if opts.joinPort != nil {
+		systemSvc = systemSvc.WithJoinGuide(opts.joinBaseDomain, opts.joinPort)
 	}
 	serverv1.RegisterSystemServiceServer(srv, systemSvc)
 	serverv1.RegisterAppsServiceServer(srv, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
 	serverv1.RegisterDeploymentsServiceServer(srv, api.NewDeploymentsService(st, nil))
 	serverv1.RegisterRevisionsServiceServer(srv, api.NewRevisionsService(st))
-	serverv1.RegisterBuildsServiceServer(srv, api.NewBuildsService(st, nil))
+	// 构建面：默认纯入队形态（queue nil）；StartWithBuildQueue 装配真实
+	// 队列 + 确定性假执行器 + 上传会话根（IMPL-T2-2 的 CLI 端到端形态）。
+	uploads := build.UploadConfig{}
+	var buildQueue *build.Queue
+	if opts.buildQueue {
+		uploads = build.UploadConfig{
+			Root:          filepath.Join(dir, "build-uploads"),
+			MaxBytes:      build.DefaultMaxUploadBytes,
+			MaxChunkBytes: build.MaxUploadChunkBytes,
+		}
+		buildQueue = build.NewQueue(st, fakeBuildExecutor{store: st}, 1, 20*time.Millisecond, time.Minute, logger).
+			WithUploadsRoot(uploads.Root)
+		go func() { _ = buildQueue.Run(runCtx) }()
+	}
+	serverv1.RegisterBuildsServiceServer(srv, api.NewBuildsService(st, buildQueue, uploads))
 	serverv1.RegisterDriftServiceServer(srv, api.NewDriftService(st, eng))
 	serverv1.RegisterDomainsServiceServer(srv, api.NewDomainsService(st, nil))
 	serverv1.RegisterEnvServiceServer(srv, api.NewEnvService(st, box))

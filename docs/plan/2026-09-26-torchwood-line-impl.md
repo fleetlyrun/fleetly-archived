@@ -1426,3 +1426,176 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 - **CreateTask 的 registry 解析腿跨节点**（T1-2②/T2-0② 的承接）：digest 钉定 + 凭证下发在 staging 多节点上以任务面复跑一次（与部署面共享实现，风险低）。
 - **T2-3 对齐**：torchwood dispatcher 的 `EnsureTaskNetwork.members` 语义与任务 DNS 名消费方式（`TaskView.service`/`dns_name`）在 T2-3 落地时按实际调用形态复核（本票已按「成员 app 服务 + 每网一次」形态实现）。
 
+### IMPL-T2-2 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 五处裁量项裁决见 C 节；全部现状锚点成立。
+
+#### A. 现状机制核实（逐项取证）
+
+1. **buildkitd 现行构建管线（git 源 → 上下文 → solve → 装载/推 zot → digest 回填）**：
+   - 入队：`BuildsService.TriggerBuild`（api/builds.go）解析 compose（`compose.Load`）→ `DriverFor` 裁决驱动（有 dockerfile → dockerfile；否则 railpack）→ `resolveBuildContext`（H14 包含性）→ `build.Request` JSON + `Queue.Enqueue`（builds queued 行 + 唤醒；审计 build.create 带调用方归因）。
+   - 执行：`Queue.drainOnce`（queue.go）semaphore 取槽 → `ClaimBuild`（queued→building CAS，审计 build.start）→ `Builder.Execute`（builder.go）：`ensureDaemonReady`（自管 buildkitd 幂等收敛 + 就绪探测）→ `DecodeRequest` → `validateContextDir`（受管根复核）→ `run`：
+     - dockerfile 驱动 = `dockerfileSolveOptions`（context/dockerfile 两名挂同一 LocalMounts + docker 导出 + 本地层缓存）→ `solveFrontend`；
+     - registry 模式（`RegistryHost` 非空）= `applyRegistryMode`：凭据自 `registry.auth_file` 现读（`LoadRegistryCredentials`），导出替换为 image exporter `name=<host>/apps/<app>:b<buildid>, push=true`（`applyRegistryPush`），digest 取 solve 响应 `containerimage.digest`（空 = 推送未回填按 `E_REGISTRY_PUSH_FAILED` 拒绝）；
+     - 本地模式 = docker 导出经管道 `LoadImage` 装载本机 daemon，digest = `InspectImage` 本机 ID（v0.1 语义）。
+   - 回填：`FinishBuildSucceeded(recordedRef, digest, planPath, logPath)`；registry 模式 recordedRef = `RegistryDigestRef` = `<host>/apps/<app>@sha256:<digest>`（引擎 pinDigest 对已含 `@` 的引用直通）。失败归一 `E_BUILD_FAILED`/`E_REGISTRY_PUSH_FAILED`（日志尾部进 context）。
+   - **单平台口径**：`Request.Platform` 全链恒空（宿主默认 linux/amd64）——上传构建同面。
+2. **平台侧推 zot、调用方零 push 凭证**：推送经 buildkit session authprovider 注入的 Basic Auth（凭据不出本进程日志）；调用方只拿 digest 引用。✓
+3. **机具令牌 scope 机制（ScopeTasks 先例）**：常量 `api/auth.go Scope*` → `containsScope`（admin 蕴含；terminal/tasks 平行独立）→ `scopeSetToList`（会话凭据词表序）→ `methodScopes`（scope.go；未登记 fail-closed 按 admin）→ `tokens.proto CreateTokenRequest.scopes` 白名单 → `reachableScopesForUser`（会话可达集不含 tasks——机具令牌典型持有者，显式授予的用户 PAT 照门放行）。新 scope `build` 五处同步照此。
+4. **配额与并发控制点**：构建并发 = `Queue` semaphore（config `build.concurrency`，缺省 2 天花板 8），排队可见性 = builds queued 行；**无 per-token 构建配额**。T2-1 的 `task_quotas` 同事务 fail-closed 是任务面专属（builds 表无 owner 列），不能直接平移——本票不新造配额表（裁决 4）。
+5. **临时落盘与清理钩子**：构建上下文来源 = 宿主目录（compose base_dir / git 根），现有路径不复制；产物归档 `build.artifacts_dir`（janitor `pruneArtifacts` 按 mtime）；部署 compose `<数据根>/deployments`（janitor 按终态+窗）；H14 受管根 = system temp + git root + `build.context_roots`（执行侧 `validateContextDir` 复核）。上传面需新增受管落点与清扫 duty（裁决 5）。
+6. **上传传输面**：grpc-gateway v2.30 生成器对 client-streaming 方法只生成**单帧消息**的 REST handler（`protoc-gen-grpc-gateway/internal/gengateway/template.go` 的 `client-streaming-request-func`：解一个 protoReq → Send → CloseSend → CloseAndRecv）——REST 拿不到多帧流；**无 HTTP 注解的方法不注册路由**（REST 404）。仓库既有流式 = server-streaming（Follow/Watch，REST chunked-JSON）与原生 WS（terminal）——无 client-streaming 先例。gRPC 服务端未配 `MaxRecvMsgSize`（缺省单帧 4MiB，全仓 grep 零命中）⇒ 大对象单帧 unary 需全局抬限，分帧 client-streaming 是正解。流式鉴权 `StreamAuthInterceptor` 已挂（methodScopes 照用）；**protovalidate 只有 unary 拦截器**（runtime/grpc.go）⇒ 流式形状校验必须在 handler 内自担。
+
+#### B. 必查项结论
+
+- **上传上下文落盘位置与清理钩子**：见裁决 5（`<数据根>/build-uploads/<build id>/`；builder 终态 defer + queue 收敛路径 + janitor mtime 兜底三层清理；受根约束的 RemoveAll 防直写 request 的任意删除）。
+- **构建并发上限的现行控制点**：`Queue` semaphore 是唯一执行入口；上传构建必须走同一队列（无第二执行通道），守卫③按「同一上限、无旁路」回归。
+
+#### C. 五个设计点的裁决（给证据）
+
+1. **上传传输形态 = 单条 client-streaming RPC `BuildsService.BuildFromUpload`**（首帧 metadata + 后续 tar 分片；**无 HTTP 注解** ⇒ REST 无路由，限制如实登记 proto 注释与 gateway gRPC-only 清单）。分片上限 1MiB/帧（避开缺省 4MiB 单帧限，不全局抬 `MaxRecvMsgSize`），总量上限 fail-closed。否定项：① unary `bytes`（单帧 4MiB 全局抬限 + REST base64 膨胀 + 无流式语义）；② 带 HTTP 注解的 client-streaming（gateway 只发单帧 = 等价 unary 且不吃流式分片，伪支持更危险）；③ 两段式 Upload+Build（孤儿上传需要第二条 TTL/清理/配额面）。
+2. **Dockerfile 入口**：`metadata.dockerfile`（缺省 `Dockerfile`）→ 解包后仓内相对路径校验（clean / 无 `..` / 位于上下文根内 / 常规文件 / 符号链解析后仍在根内）→ 落既有 `Request.Dockerfile` → 同 dockerfile.v0 前端 `filename`。**零新增构建参数面**（不暴露 target/build-args/secrets/platform——与 git 构建逐字同面；信任级红线）。
+3. **产物 digest 钉定返回**：`BuildFromUploadResponse.build`（既有无损 BuildView）= builds 行标识 + `image_ref` + `image_digest`。registry 模式产物落 `<host>/apps/<name>@sha256:<manifest digest>`（调用方以 `metadata.name` 给镜像仓组件名，产物进既有 `apps/` 命名空间）⇒ T1-2 前哨 / `registryAuthForImage` 凭据分发 / CreateTask·部署引用链**零分叉**；本地模式回落 `fleetly-local/<name>:<tag>` + 本机 digest（v0.1 语义不变）。
+4. **配额模型**：①大小 = 上传 tar 字节上限（`build.Config.MaxUploadBytes`，缺省 256MiB，runtime 键 `build.max_upload_mb`；流式累计即拒 → 新码 `E_BUILD_UPLOAD_TOO_LARGE` 413）；②时长 = 既有构建执行超时预算（`build.timeout_seconds`，队列 `WithTimeout`）——与 git 构建同面不歧视（守卫①的超时腿按此回归）；③并发 = 既有平台队列 semaphore（`build.concurrency`）——上传走同一队列（守卫③）；**不加 per-token 构建配额**（DT-6 无此要求 + builds 无属主列；新配额表属新机制，登记 backlog 明示，不做）。错误码只增：`E_BUILD_UPLOAD_TOO_LARGE`(413) / `E_BUILD_UPLOAD_INVALID`(400)。
+5. **临时上下文零残留**：落点 `<数据根>/build-uploads/<build id>/`（0700；`ContextRoots` 增根，runtime `BuildSettings` 并入）；解包 = 流式 `archive/tar`（不落 tar 中间文件）两遍法（先常规文件/目录，后符号链/硬链；绝对路径/`..`/设备/FIFO 拒；总字节与条目数双上限）。清理四层钩子：①API handler defer（入队前失败路径）；②`Builder.Execute` defer（终态，含超时/失败）；③`Queue` 收敛路径（panic/stranded/认领后读失败/启动复位，经 request 的 `ephemeral_dir`，**RemoveAll 前强制受上传根包含性校验**——直写 builds.request 的任意删除不可达）；④janitor mtime 兜底（缺省 1 天；覆盖「解包后建行前进程崩溃」无行残留窗口）。守卫④按成功/失败/拒绝三态零残留回归。
+
+### IMPL-T2-2 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。四条守卫逐条落回归；本机 Docker 29 真机端到端探针（SDK 上传 → buildkitd → digest → 部署引用）原始输出见下；全量测试/race/vet/生成物幂等证据见下。**
+
+变更文件清单（每文件一句）：
+
+- `proto/fleetly/server/v1/builds.proto`：BuildsService 增 client-streaming RPC `BuildFromUpload`（**无 HTTP 注解**，gRPC-only——传输面裁决见审查记录）+ `BuildFromUploadRequest`（oneof：首帧 metadata / tar 分片）、`BuildFromUploadMetadata`（name/dockerfile；**零新增构建参数面**——信任级红线在注释明示）、`BuildFromUploadResponse`（BuildView）。
+- `proto/fleetly/server/v1/tokens.proto`：`CreateTokenRequest.scopes` 白名单加 `build`（加法；注释同步独立 scope 口径）。
+- `genproto/fleetly/server/v1/builds.{pb.go,grpc.pb.go,swagger.json}` / `tokens.{pb.go,swagger.json}`：buf generate 生成物（`.pb.gw.go` 零变化——无 HTTP 注解 = REST 无路由）。
+- `internal/state/migrations/00027_build_uploads.sql`（新）：builds 表重建——`app_id` 放开可空（NULL = 上传构建；非空值 FK 保留），其余列/CHECK/三索引逐字保留；Down 演练。
+- `internal/state/testdata/migrations.golden`：00027 行显式再生成（`UPDATE_GOLDEN=1`）。
+- `internal/state/builds.go`：`CreateBuild` 插入侧空 app_id → NULL、`scanBuild` NULL → 空串（上传构建行读写通道）。
+- `internal/state/store.go`：`BuildUploadsRoot(dbPath)`（`<数据根>/build-uploads`，DeploymentsRoot 同款派生）。
+- `internal/state/janitor.go`：JanitorConfig 增 `UploadsRoot`/`UploadSessionRetentionDays`（缺省 1 天）+ `pruneUploadSessions` duty（在途行保留、终态/孤儿按 mtime 回收、读故障不结论）。
+- `internal/state/build_uploads_test.go`（新）：app-less 落库/回读/FK 回归 + janitor 上传会话四态清扫回归。
+- `internal/build/upload.go`（新）：上传会话/流式 tar 解包/入口校验/受根清理的宿主侧安全层（两遍解包、限流读取器、条目/尾量上限、`ErrUploadTooLarge`/`ErrUploadInvalid` 哨兵、`CleanupUploadDir` 直接子目录实体约束）。
+- `internal/build/upload_test.go`（新）：解包安全矩阵（穿越/反斜杠/NUL/设备/链父攻击）、精确等于上限不误报、截断流、入口六态、清理守卫、配置归一。
+- `internal/build/config.go`：Config 增 `UploadsRoot`/`MaxUploadBytes`（Normalize：绝对化 + 恒并入 ContextRoots；缺省 256MiB）+ `UploadConfig()` 投影。
+- `internal/build/request.go`：Request 增 `EphemeralDir`（富余字段，空 = 非上传构建）。
+- `internal/build/builder.go`：请求解码提前（清理 defer 最早生效）+ `EphemeralDir` 终态 defer 清理（受根约束 no-op 形态）。
+- `internal/build/queue.go`：`WithUploadsRoot` + 收敛路径清理（启动复位 building 行、认领后读失败重读清理、stranded 清理前置）。
+- `internal/build/queue_upload_test.go`（新）：启动复位清理中断会话/queued 保留 + 清理守卫边界（越界/根自身/文件 no-op）。
+- `internal/api/builds.go`：BuildsService 增 `uploads` 配置 + `BuildFromUpload` handler（流协议校验、解包入队、终态等待、错误码信封映射、失败码保真、等待中止点名 build id）+ `uploadTarReader`/`normalizeUploadName`/`waitUploadBuild` 辅助。
+- `internal/api/auth.go`：`ScopeBuild` 常量 + containsScope 分支（admin 蕴含；与 read/deploy/terminal/tasks 平行）+ scopeSetToList 词表序。
+- `internal/api/scope.go`：`BuildsService/BuildFromUpload` 登记 `ScopeBuild`（与 TriggerBuild 的 admin 门差异注释在登记处）。
+- `internal/api/builds_upload_test.go`（新）：守卫①（大小/时长）②（digest 引用 + digest→ref 读通道）③（队列 semaphore 无旁路）④（三态零残留）+ scope 门 + 流协议违约族 + 未装配降级。
+- `internal/api/builds_upload_manual_test.go`（新，`-tags manual`）：本机真机端到端探针（SDK 上传 → 真实 buildkitd → digest → 解析腿直通 → digest/引擎语义引用拉起 swarm 服务 running → 零残留 → 超限拒绝）。
+- `internal/api/builds_test.go` / `harness_test.go` / `internal/runtime/gateway_rest_test.go`：NewBuildsService 签名随迁（uploads 配置）。
+- `internal/errcode/codes.go` + `errcode_test.go` + `testdata/codes.golden`：`E_BUILD_UPLOAD_TOO_LARGE`（413）/`E_BUILD_UPLOAD_INVALID`（400）只增登记（84 E + 5 W；golden 显式再生成）。
+- `internal/apperr/apperr.go` + `apperr_test.go`：HTTP 413 → gRPC `ResourceExhausted` 映射补全（原缺映射落 Internal；只增一行 case + 抽样表项）。
+- `internal/runtime/config.go`：BuildConfig 增 `max_upload_mb`（缺省回落 256MiB）；`BuildSettings` 增 `UploadsRoot`（数据根派生）+ `MaxUploadBytes`（受管根恒并入）。
+- `internal/runtime/provides.go`：NewBuildQueue 注入 uploads 根；NewBuildsService 签名扩展（AppConfig 取上传面配置）；NewJanitor 接 UploadsRoot。
+- `internal/runtime/wire_gen.go`：wire 再生成。
+- `internal/runtime/gateway.go`：gRPC-only 清单首次登记 `BuildFromUpload`（client-streaming + REST body 上限两面理由）。
+- `internal/runtime/config_multinode_test.go`：BuildSettings 上传根/上限回归。
+- `internal/apitest/apitest.go`：`StartWithBuildQueue`（真实队列 + 确定性假执行器 + 上传根；默认 `Start` 纯入队语义不变）+ `fakeBuildExecutor`；NewBuildsService 装配随迁。
+- `cmd/fleetly/cmd/build.go`：`builds` 动词扩 `upload`（tar 文件 / `-` stdin，client-streaming，--name/--dockerfile/--timeout/--json）与 `get`（按构建 ID 回读——上传构建无 app 归属，`builds list` 不覆盖）；编译期断言与父命令 usage 同步。
+- `cmd/fleetly/cmd/build_upload_test.go`（新）+ `golden_test.go`：CLI 端到端（上传→succeeded→ref/digest→get 回读→用法 64）与 startCLI 装配抽公共核。
+- `sdk/go/fleetly/client.go`：`BuildFromUpload` 访问器（512KiB 分片 + 服务端流中拒绝时经 CloseAndRecv 取真实信封）。
+- `console/src/api/schema.d.ts`：`pnpm gen:api` 从新 swagger 再生成（新增消息类型；零 UI 改动）。
+- `docs/plan/2026-09-26-torchwood-line-impl.md`：本两小节（审查 + 实施记录）。
+
+测试清单与票面四条守卫 + 设计点逐条对应表：
+
+| 条款 | 回归测试（新增，除注明外） |
+|---|---|
+| ① 超限（大小/时长）fail-closed 拒绝 | 大小：`TestBuildFromUploadRejectsOversizeContext`（流式累计超限 → `E_BUILD_UPLOAD_TOO_LARGE`、不建行、零残留）`TestUploadExtractTarLimit`（精确等于上限不误报/超一字节即拒）`TestBuildFromUploadLeavesNoContextResidue`（拒绝态）；时长：`TestBuildFromUploadTimeoutFailsClosed`（队列超时 → 终态 failed `E_BUILD_FAILED` 信封点名 build_id + 零残留） |
+| ② 产物 digest 钉定返回且可被 CreateTask/部署引用（端到端） | 单测：`TestBuildFromUploadReturnsDigestPinnedReference`（响应 BuildView 的 ref/digest + `FindBuildsByDigest` digest→ref 读通道 + request 契约）；真机：`TestManualBuildFromUpload`（本机 Docker 29——SDK 流式上传 → 真实 buildkitd solve → 产物引用经 `ImageDigest` 解析腿直通 → 以引擎语义引用创建真实 swarm 服务并达 running；原始输出见下，多节点/registry 模式（zot）列 staging 待执行） |
+| ③ 并发构建上限生效 | `TestBuildFromUploadRespectsQueueConcurrencyCap`（并发 1：第二条在槽占用期不执行、在途峰值恒 1、两条终态 succeeded——上传与 git 构建共用同一 semaphore 无旁路） |
+| ④ 上下文临时文件零残留 | `TestBuildFromUploadLeavesNoContextResidue`（成功/失败/拒绝三态根零条目；守卫④显式回归）`TestCleanupUploadDirGuard`/`TestCleanupUploadDirRejectsNonSessionForms`（越界/根自身/文件/符号链 no-op）`TestQueueResetCleansUploadedContext`（启动复位清理中断会话；queued 行保留）`TestJanitorPrunesOrphanUploadSessions`（孤儿/终态按窗回收、在途保留）；真机腿在 `TestManualBuildFromUpload` |
+| 传输面与流协议 | `TestBuildFromUploadRejectsInvalidContext`（空流/首帧无 metadata/重复 metadata/空帧/超单帧上限/伪 tar/入口缺失 → `E_BUILD_UPLOAD_INVALID`）；无 HTTP 注解 = REST 无路由（生成物零 `.pb.gw.go` 变化 + gateway 清单登记） |
+| scope 门（机具令牌新 scope build） | `TestBuildFromUploadScopeGate`（登记 `ScopeBuild`；read/deploy 不蕴含、admin 蕴含；read 凭据 403）+ `TestBuildFromUploadUnavailableWithoutAssembly`（未装配如实 503） |
+| 解包宿主安全 | `TestUploadExtractTarRejectsUnsafeNames`（绝对/`..`/反斜杠/NUL/不 clean）`TestUploadExtractTarRejectsSymlinkParentTraversal`（先链后写——根外零写入）`TestUploadExtractTarRejectsDeviceEntries` `TestUploadExtractTarTruncated` `TestUploadExtractTarHappyPath`（文件/目录/嵌套；符号链/硬链宿主支持时验证） |
+| Dockerfile 入口 | `TestValidateUploadDockerfile`（缺省/嵌套/缺失/目录/越界/反斜杠/符号链外指）+ `TestBuildFromUploadNestedDockerfileEntry`（`./deploy/Dockerfile` 归一落库） |
+| 配置/装配与零回归 | `TestConfigUploadsRootNormalized`（根并入 ContextRoots + 上限缺省）`TestBuildSettingsUploadsRootAndLimit`（runtime 键与派生）`TestBuildAppLessRoundtrip`（builds.app_id 可空 + FK 不回退）迁移 golden 再生成；既有 TriggerBuild/构建队列/CLI 测试零回归 |
+| CLI/SDK | `TestBuildsUploadCLIFlow`（upload --json → 小写化 ref/digest → get 回读双形态）`TestBuildsUploadCLIUsage`（--name 必填 64；未知 ID 1） |
+| 错误码只增纪律 | errcode `TestRegisteredCountByKind`（84 E + 5 W）/`TestDocCodeSetMatchesRegistry`/`TestGoldenSnapshot`（均显式再生成）；apperr 413 映射抽样 |
+
+一手验证证据（原始输出摘要）：
+
+```
+$ go test ./... -count=1
+ok  github.com/fleetlyrun/fleetly/cmd/fleetly/cmd   42.152s
+ok  github.com/fleetlyrun/fleetly/internal/api      35.852s
+ok  github.com/fleetlyrun/fleetly/internal/build     3.934s
+ok  github.com/fleetlyrun/fleetly/internal/runtime  35.879s
+ok  github.com/fleetlyrun/fleetly/internal/state    67.210s
+ok  github.com/fleetlyrun/fleetly/internal/errcode   0.171s
+ok  github.com/fleetlyrun/fleetly/internal/apperr    0.131s
+ok  github.com/fleetlyrun/fleetly/internal/apitest   3.484s
+（其余包 ok；全库 32 包全绿）
+
+$ go vet ./...
+（零输出，rc=0）
+
+$ go test -race -count=1 ./internal/build ./internal/state ./internal/api ./internal/runtime ./internal/apperr ./internal/errcode ./internal/apitest ./cmd/fleetly/cmd ./sdk/go/...
+（见下「race 证据」段落）
+
+$ sh deploy/check-image-pins.sh
+check-image-pins: OK — 32 image reference(s) digest-pinned, 0 exempt（本票零新增镜像引用）
+
+$ mise exec -- buf generate / mise run generate:wire / pnpm gen:api（各二次）
+生成物 sha256 前后一致（builds/tokens pb、swagger、wire_gen、schema.d.ts 幂等）
+
+$ FLEETLY_MANUAL_SWARM=1 go test -tags manual ./internal/api -run TestManualBuildFromUpload -v
+=== RUN   TestManualBuildFromUpload
+    upload build: id=01M3JX6JJVBDQWRTQCFVP65YYQ status=succeeded driver=dockerfile
+      ref=fleetly-local/manual-upload:manual-upload-01m3jx6jjvbdqwrtqcfvp65yyq
+      digest=sha256:cdd6ae38fdb5d5f0dc95e4cb573fe3c986682740adf71cdbda561e50239947e7 took=1.5s
+    digest pass-through: fleetly-local/manual-upload:manual-upload-01m3jx6jjvbdqwrtqcfvp65yyq@sha256:cdd6ae… -> sha256:cdd6ae…
+    deploy reference (engine semantics, local mode): fleetly-local/manual-upload:manual-upload-01m3jx6jjvbdqwrtqcfvp65yyq
+    digest-pinned service task running: id=mwfrkbicq9bxxv1jwwoxvf5oy
+      image=fleetly-local/manual-upload:manual-upload-01m3jx6jjvbdqwrtqcfvp65yyq state=running
+    upload session root empty after terminal: …\build-uploads
+    oversize upload rejected: rpc error: code = ResourceExhausted
+      desc = build upload exceeds the platform size limit (limit 268435456 bytes)
+--- PASS: TestManualBuildFromUpload (7.97s)
+```
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **`builds get <id>` CLI 动词（加法）**：票面只要求 upload 动词；上传构建无 app 归属、`builds list <app>` 不覆盖，行标识需要 CLI 回读面——最小加法（同一次调用返回的 build id 可直接 `get` 复核；等待中止后的构建也可回查）。
+2. **失败与等待中止语义**：终态 failed → 错误信封（沿用 builds 行 `error_code` 注册码，未知/缺失回落 `E_BUILD_FAILED`；`build_id`/`log_path` 进 context）；等待期 ctx 结束 → 传输码信封点名 build id 且**不取消构建**（构建继续在队列执行，会话清理由终态钩子收口）——同步等待不引入「取消即中断」的隐式语义。
+3. **Builder 执行次序调整**：请求解码提前到 `ensureDaemonReady` 之前——上传会话清理 defer 需在最早失败路径（含直写库的损坏 request）生效；副作用是损坏请求不再等待 buildkitd 就绪（更早失败，零回归面）。
+4. **本地模式「部署引用」实测修正（真机发现）**：Docker 29 containerd image store 下，`<tag>@sha256:<config digest>` 形态的 swarm 服务被 agent 按 registry 引用去拉取而 `Rejected`；引擎既有语义（`ImageDigest` 对无清单摘要的本地构建产物返回空串 → `pinDigest` 原样用 tag）本就以 tag 部署——手动探针按引擎语义复现并达 running（不改产品代码；registry 模式的 `ref@digest` 直通腿另证）。此观测只影响本地开发形态，不影响 registry 模式（生产）的 digest 钉定引用链。
+5. **客户端流中拒绝的错误可达性**：服务端在流中 fail-closed 时客户端 `Send` 以 `io.EOF` 表达流终止——SDK 在 `io.EOF` 时补一次 `CloseAndRecv` 取真实信封（否则超限等错误被吞成裸 EOF）；CLI/真机探针据此断言 `E_BUILD_UPLOAD_TOO_LARGE`。
+6. **ScopeBuild 登记语义**：`BuildFromUpload` 取独立 `build`（与 tasks/terminal 同族：read/deploy 不蕴含、admin 蕴含；用户会话可达集不含，显式授予的用户 PAT 照门放行）；读面（GetBuild/ListBuilds）维持 read——仅持 `build` 的机具令牌不回读台账（响应已自足；需要回读时令牌加 read，登记为边界而非缺口）。
+7. **HTTP 413 → gRPC ResourceExhausted 映射补全**：原 `HTTPToGRPCCode` 无 413 分支（会落 Internal），只增一行 case + 抽样表项；`E_BUILD_UPLOAD_TOO_LARGE` 的 gRPC 码面从此与 429 配额码同族（ResourceExhausted），REST 面（若经代理）语义不变。
+8. **apitest 增 `StartWithBuildQueue`**：默认 `Start` 保持「纯入队」夹具语义（SeedBuild 的 queued 行不被消费，既有 golden 零漂移）；构建执行面变体只供上传 CLI 端到端测试使用（确定性假执行器，产物引用按请求派生）。
+9. **上传根 0700/目录 0750 + gosec 注解**：解包落点收紧到平台自身可读；`os.OpenFile`/`io.Copy` 的 G304/G110 注解随行说明「派生路径逐段校验 + 限流读取器双上限」的安全契约（注解不是豁免论证）。
+10. **`TarType=TypeReg` 兼容 v7 旧式条目**：`tar.TypeRegA` 上游弃用但旧 tar 读取侧仍需接受——`//nolint:staticcheck` 随行注明（字节值兼容面）。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认五项设计裁决与十项偏离登记：①传输 = gRPC-only client-streaming（REST 无路由如实登记）；②Dockerfile 入口零新增构建参数面（信任级红线）；③BuildView 返回（registry/本地两态引用链）；④配额 = 256MiB 大小 + 既有时长/并发（无 per-token 配额，backlog）；⑤四层零残留清理；及全部登记偏离（`builds get` 加法、等待中止不取消构建、Builder 解码次序、本地模式 tag 语义观测、SDK CloseAndRecv、build scope 触发门、413 映射补全、apitest 变体、权限收紧/注解、TypeRegA 兼容）。staging 项（zot registry 模式端到端、多节点并发、大上下文时延）按记录执行。
+
+race 证据（`go test -race -count=1`，变更包全量）：
+
+```
+ok  github.com/fleetlyrun/fleetly/internal/build       52.602s
+ok  github.com/fleetlyrun/fleetly/internal/state      392.387s
+ok  github.com/fleetlyrun/fleetly/internal/api        335.519s
+ok  github.com/fleetlyrun/fleetly/internal/runtime     42.841s
+ok  github.com/fleetlyrun/fleetly/internal/apperr       1.074s
+ok  github.com/fleetlyrun/fleetly/internal/errcode      1.121s
+ok  github.com/fleetlyrun/fleetly/internal/apitest     12.391s
+ok  github.com/fleetlyrun/fleetly/cmd/fleetly/cmd     115.419s
+ok  github.com/fleetlyrun/fleetly/sdk/go/fleetly        4.353s
+```
+
+lint（`golangci-lint run`，变更包）：本票变更文件零新增问题（上传面初版三处
+gosec/staticcheck/unused 已随行修复——目录权限收紧 0750、限流/派生路径注解、
+弃用常量注解、残留辅助函数删除）；`internal/state`/`internal/runtime`/`cmd`
+其余条目为存量欠账（未触文件）。
+
+staging/真机待执行项（本环境无 staging 访问权，未虚构）：
+
+- **registry 模式（zot）端到端**：base_domain 装配下 `BuildFromUpload` 产物推 zot → 返回 `<host>/apps/<name>@sha256:<manifest digest>` → 以该引用 CreateTask/部署（T1-2 前哨 + `registryAuthForImage` 凭据分发）多节点复跑；本机无 zot，本地模式已实证（探针原始输出见上），registry 模式腿为纯配置差异（`applyRegistryMode` 既有路径）+ staging 复验。
+- **多节点并发构建上限**：多 fleetlyd 进程共享 SQLite/队列的生产形态（semaphore 是进程内的既有口径，本票未改变）；staging 按既有构建面回归。
+- **大上下文时延**：256MiB 级上传在真实公网/网关下的时延与内存（本机 bufconn/回环已验限流路径零残留；T2-3 dispatcher 实际上下文为 KB 级）。
+
+

@@ -396,9 +396,15 @@ type BuildConfig struct {
 	// ContextRoots 是构建上下文受管根的额外配置根（build.context_roots；
 	// H14 宿主目录信任边界：context_dir 必须位于受管根内，越界构建终态
 	// 失败）。缺省集合 = 系统 temp 根（build.Config.Normalize 恒并入）+
-	// git 裸仓库根（GitSettings 装配并入）；单机同宿主形态下 CLI 构建目录
-	// 在此显式扩根接入（信任由 TriggerBuild 的 admin scope 把门）。
+	// git 裸仓库根（GitSettings 装配并入）+ 上传会话根（BuildSettings
+	// 装配并入）；单机同宿主形态下 CLI 构建目录在此显式扩根接入（信任由
+	// TriggerBuild 的 admin scope 把门）。
 	ContextRoots []string `mapstructure:"context_roots"`
+	// MaxUploadMB 是上传构建的上下文 tar 字节上限（MiB；build.
+	// max_upload_mb，IMPL-T2-2/DT-6）。≤0 回落 build.DefaultMaxUploadBytes
+	//（256MiB）——超限在流式上传中 fail-closed 拒绝（E_BUILD_UPLOAD_TOO_
+	// LARGE），不落盘不建行。
+	MaxUploadMB int `mapstructure:"max_upload_mb"`
 }
 
 // GRPCConfig 是 gRPC 面的配置节（config 键 grpc.*）。
@@ -736,6 +742,11 @@ func (c *AppConfig) BuildSettings() build.Config {
 		// 路径的前缀形态；当前 git 入口不直接产构建上下文，并入是前瞻
 		// 接线）；build.Config.Normalize 再恒并入系统 temp 根。
 		ContextRoots: append(append([]string{}, c.Build.ContextRoots...), c.GitRoot()),
+		// 上传构建面（IMPL-T2-2/DT-6）：会话根 <数据根>/build-uploads
+		// （由 Normalize 并入 ContextRoots）；上限经 build.max_upload_mb
+		// （≤0 回落缺省）。
+		UploadsRoot:    state.BuildUploadsRoot(c.DBPath()),
+		MaxUploadBytes: int64(c.Build.MaxUploadMB) << 20,
 	}
 	return cfg.Normalize()
 }

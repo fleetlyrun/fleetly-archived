@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/fleetlyrun/fleetly/internal/build"
 )
 
 // E1-1 安装项与配置的多节点键位测试（E1 多节点设计 §2.2/§2.3/§2.4/§2.5）：
@@ -124,8 +126,35 @@ func TestBuildSettingsRegistryMode(t *testing.T) {
 	}
 }
 
-func TestIngressSettingsRegistryFields(t *testing.T) {
-	setCfg := AppConfig{
+// TestBuildSettingsUploadsRootAndLimit IMPL-T2-2：上传会话根从数据根派生
+// 并恒并入受管根（builder 执行侧复核的锚点）；build.max_upload_mb 显式
+// 配置生效、缺省回落 256MiB。
+func TestBuildSettingsUploadsRootAndLimit(t *testing.T) {
+	cfg := AppConfig{State: StateConfig{DBPath: filepath.Join("data", "fleetly.db")}}
+	b := cfg.BuildSettings()
+	if filepath.Base(b.UploadsRoot) != "build-uploads" || !filepath.IsAbs(b.UploadsRoot) {
+		t.Fatalf("UploadsRoot = %q, want an absolute <data root>/build-uploads path", b.UploadsRoot)
+	}
+	if b.MaxUploadBytes != build.DefaultMaxUploadBytes {
+		t.Fatalf("MaxUploadBytes = %d, want default %d", b.MaxUploadBytes, build.DefaultMaxUploadBytes)
+	}
+	found := false
+	for _, root := range b.ContextRoots {
+		if root == b.UploadsRoot {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("UploadsRoot %q not merged into ContextRoots %v", b.UploadsRoot, b.ContextRoots)
+	}
+
+	cfg.Build.MaxUploadMB = 64
+	if got := cfg.BuildSettings().MaxUploadBytes; got != 64<<20 {
+		t.Fatalf("MaxUploadBytes with max_upload_mb=64 = %d, want %d", got, int64(64)<<20)
+	}
+}
+
+func TestIngressSettingsRegistryFields(t *testing.T) {	setCfg := AppConfig{
 		BaseDomain: "example.com",
 		State:      StateConfig{DBPath: "/var/lib/fleetly/fleetly.db"},
 	}

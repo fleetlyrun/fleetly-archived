@@ -48,10 +48,16 @@ import (
 //   - AuditService（v0.3 W3-S1，rbac-teams §6 D-W0-6：审计读面，平台
 //     管理员判定在 handler）
 //
-// gRPC-only 清单：**v0.1 为空**——所有服务均挂 gateway（写操作挂 gateway
-// 供 Console 使用；Follow/Watch 的 JSON 帧形态适宜 REST）。若后续出现
-// 二进制/高频帧不适宜 REST 的 RPC（logs.proto 与此同步登记），在下方
-// 注册清单摘除对应 HandlerFromEndpoint 并在 proto 注释同步登记。
+// gRPC-only 清单（v0.1 为空；IMPL-T2-2 首次登记）：不挂 gateway 的 RPC 在
+// 此显式登记——写操作挂 gateway 供 Console 使用，Follow/Watch 的 JSON 帧
+// 形态适宜 REST；二进制/多帧流不适宜 REST 的 RPC 在下方注册清单摘除
+// HandlerFromEndpoint 并在 proto 注释同步登记。
+//   - `BuildsService.BuildFromUpload`（IMPL-T2-2/DT-6）：client-streaming
+//     （上下文 tar 分片）——grpc-gateway 对 client-streaming 只生成「单帧
+//     消息」形态，且 REST 入向 body 另有 32MiB 上限（H7），无法承载流式
+//     上下文；**不挂 gateway**（无 HTTP 注解，REST 面 404 是契约；CLI/SDK
+//     消费）。其余 BuildsService 方法（TriggerBuild/GetBuild/ListBuilds）
+//     照常挂载。
 //
 // ── 原生端点例外清单（T2.19 起；torchwood 同纪律：gateway 上非 proto
 // 派生的 HTTP 端点在此显式登记，禁止在别处悄悄挂载）────────────────────

@@ -207,12 +207,22 @@ func (b *Builder) Execute(ctx context.Context, rec state.BuildRecord) (state.Bui
 	// 不继承取消与 deadline，正合「终态必达」语义；run/solve 本身仍用原
 	// ctx（关停即取消，正确）。
 	finCtx := context.WithoutCancel(ctx)
-	if err := b.ensureDaemonReady(ctx); err != nil {
-		return state.BuildRecord{}, b.fail(finCtx, rec.ID, err)
-	}
 	req, err := DecodeRequest(rec.Request)
 	if err != nil {
 		// 请求损坏是入队方错误：终态 failed（E_BUILD_FAILED，无日志可附）。
+		return state.BuildRecord{}, b.fail(finCtx, rec.ID, err)
+	}
+	// IMPL-T2-2：上传构建的上下文会话目录随终态清理（成功/失败/超时统一
+	// 走 defer——清理钩子的 main 层；重启/收敛路径的兜底见 Queue 与
+	// janitor）。CleanupUploadDir 只删上传根的直接子目录（越界形态 no-op）。
+	if req.EphemeralDir != "" {
+		defer func() {
+			if err := CleanupUploadDir(req.EphemeralDir, b.cfg.UploadsRoot); err != nil {
+				b.log.Warn("cleanup ephemeral build context", "build", rec.ID, "dir", req.EphemeralDir, "error", err.Error())
+			}
+		}()
+	}
+	if err := b.ensureDaemonReady(ctx); err != nil {
 		return state.BuildRecord{}, b.fail(finCtx, rec.ID, err)
 	}
 	// H14 执行侧校验（纵深防御）：ContextDir 必须位于受管根内——

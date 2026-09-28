@@ -118,6 +118,30 @@
     }
   },
   "definitions": {
+    "v1BuildFromUploadMetadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "镜像仓库组件名（平台 registry 路径 \u003chost\u003e/apps/\u003cname\u003e；服务端转小写，\n首末位须为字母数字，可含 . _ -，≤100——tag 以 \u003cname\u003e-\u003cbuildid\u003e 派生）。"
+        },
+        "dockerfile": {
+          "type": "string",
+          "title": "Dockerfile 入口（相对上下文根的仓内路径；缺省 Dockerfile）。服务端\n校验：clean 相对路径、不越出上下文根、解析后为常规文件。"
+        }
+      },
+      "description": "信任级红线（IMPL-T2-2）：与 git 构建**同信任级**——本消息不含 target/\nbuild-args/secrets/platform 等任何额外构建参数（无特赦亦无歧视）；解包\n后的 Dockerfile 走与 git 构建逐字相同的 dockerfile.v0 前端。",
+      "title": "BuildFromUploadMetadata 是上传构建的请求头（传输面元数据）。"
+    },
+    "v1BuildFromUploadResponse": {
+      "type": "object",
+      "properties": {
+        "build": {
+          "$ref": "#/definitions/v1BuildView"
+        }
+      },
+      "title": "BuildFromUploadResponse 返回终态构建行（succeeded；失败经错误信封点名\nerror_code 与 build id）。image_ref/image_digest 是 digest 钉定引用——\nregistry 模式 `\u003chost\u003e/apps/\u003cname\u003e@sha256:\u003cmanifest digest\u003e`；本地模式\n`fleetly-local/\u003cname\u003e:\u003ctag\u003e` + 本机不可变 ID。"
+    },
     "v1BuildView": {
       "type": "object",
       "properties": {

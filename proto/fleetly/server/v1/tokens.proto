@@ -48,13 +48,14 @@ service TokensService {
 }
 
 message CreateTokenRequest {
-  // scope 集（read / deploy / terminal / tasks / admin；admin 蕴含
-  // deploy 蕴含 read ⊕ terminal ⊕ tasks——terminal 为 Web 终端独立 scope、
-  // tasks 为程序化动态工作负载面独立 scope（DT-5），read/deploy 均不蕴含
-  //（E7 W5-S6 / IMPL-T2-1）；重复项服务端归一去重）。
+  // scope 集（read / deploy / terminal / tasks / build / admin；admin 蕴含
+  // deploy 蕴含 read ⊕ terminal ⊕ tasks ⊕ build——terminal 为 Web 终端独立
+  // scope、tasks 为程序化动态工作负载面独立 scope（DT-5）、build 为上传
+  // 构建面独立 scope（DT-6），三者 read/deploy 均不蕴含（E7 W5-S6 /
+  // IMPL-T2-1 / IMPL-T2-2）；重复项服务端归一去重）。
   repeated string scopes = 1 [(buf.validate.field).repeated = {
     min_items: 1,
-    items: { string: { in: ["read", "deploy", "terminal", "tasks", "admin"] } }
+    items: { string: { in: ["read", "deploy", "terminal", "tasks", "build", "admin"] } }
   }];
   // 备注（人读；如 "CI 部署"）。字段名 note（name 列承载，兼容既有表结构）。
   string note = 2 [(buf.validate.field).string.max_len = 200];

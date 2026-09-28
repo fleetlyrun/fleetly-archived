@@ -109,6 +109,14 @@ type Config struct {
 	// 经 buildkit session 注入推送凭据；文件缺失/损坏 → 构建终态失败
 	//（E_REGISTRY_PUSH_FAILED）。
 	RegistryAuthFile string
+	// UploadsRoot 是上传构建的会话根目录（<数据根>/build-uploads；
+	// IMPL-T2-2/DT-6：上传上下文落盘、终态清理与受根约束 RemoveAll 的
+	// 锚点）。空 = 上传面未装配（BuildFromUpload 如实报不可用）；非空经
+	// Normalize 转绝对路径并恒并入 ContextRoots（H14 受管根）。
+	UploadsRoot string
+	// MaxUploadBytes 是单次上传 tar 字节上限（build.max_upload_mb 派生；
+	// ≤0 回落 DefaultMaxUploadBytes）。
+	MaxUploadBytes int64
 }
 
 // Normalize 回落全部缺省（config 缺省值单一事实源）。
@@ -146,7 +154,15 @@ func (c Config) Normalize() Config {
 	if c.Timeout <= 0 {
 		c.Timeout = DefaultTimeout
 	}
-	c.ContextRoots = normalizeContextRoots(c.ContextRoots)
+	if c.MaxUploadBytes <= 0 {
+		c.MaxUploadBytes = DefaultMaxUploadBytes
+	}
+	if c.UploadsRoot != "" {
+		if abs, err := filepath.Abs(c.UploadsRoot); err == nil {
+			c.UploadsRoot = abs
+		}
+	}
+	c.ContextRoots = normalizeContextRoots(append(c.ContextRoots, c.UploadsRoot))
 	return c
 }
 

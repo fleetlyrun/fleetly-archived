@@ -14,6 +14,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -209,31 +211,31 @@ func (c *buildCmd) emit(env *commands.Environment, appName string, results []*se
 
 // ── fleetly builds ──────────────────────────────────────────────────────────
 
-// buildsCmd 是外层动词 `builds`：分发 list。
+// buildsCmd 是外层动词 `builds`：分发 list/upload/get。
 type buildsCmd struct {
 	sub *commands.App
 }
 
 func newBuildsCmd() *buildsCmd {
 	sub := commands.New()
-	sub.Register(&buildsListCmd{})
+	sub.Register(&buildsListCmd{}, &buildsUploadCmd{}, &buildsGetCmd{})
 	sub.VerbTitle = "builds subcommands:"
 	return &buildsCmd{sub: sub}
 }
 
 func (c *buildsCmd) Name() string { return "builds" }
 func (c *buildsCmd) Synopsis() string {
-	return "build history (state: queued/building/succeeded/failed)"
+	return "build history and upload builds (state: queued/building/succeeded/failed)"
 }
 func (c *buildsCmd) Usage() string {
-	return "builds list [--addr <host:port>] [--token <tok>] [--json] <app>"
+	return "builds <list|upload|get> [flags] ..."
 }
 
 func (c *buildsCmd) SetFlags(_ *flag.FlagSet) {}
 
 func (c *buildsCmd) Run(ctx context.Context, env *commands.Environment, args []string) error {
 	if len(args) == 0 {
-		return &commands.UsageError{Usage: c.Usage(), Err: fmt.Errorf("missing subcommand (list)")}
+		return &commands.UsageError{Usage: c.Usage(), Err: fmt.Errorf("missing subcommand (list, upload, get)")}
 	}
 	return subDispatchUsage(c, c.sub, ctx, env, args)
 }
@@ -295,6 +297,129 @@ func (c *buildsListCmd) Run(ctx context.Context, env *commands.Environment, args
 	})
 }
 
+// buildsUploadCmd 实现 `fleetly builds upload`（T 线 DT-6 / IMPL-T2-2）：
+// 上下文 tar（文件或 `-` stdin）经 client-streaming 上传构建，等待终态并
+// 输出 digest 钉定引用。与 git 构建同信任级：CLI 只渲染 tar 与入口路径。
+type buildsUploadCmd struct {
+	name       string
+	dockerfile string
+	timeout    time.Duration
+	jsonOut    bool
+	conn       connFlags
+}
+
+func (c *buildsUploadCmd) Name() string { return "upload" }
+func (c *buildsUploadCmd) Synopsis() string {
+	return "build an image from an uploaded context tar (returns a digest-pinned reference)"
+}
+func (c *buildsUploadCmd) Usage() string {
+	return "builds upload --name <image-name> [--dockerfile <path>] [--addr <host:port>] [--token <tok>] [--timeout <duration>] [--json] <context.tar | ->"
+}
+
+func (c *buildsUploadCmd) SetFlags(fs *flag.FlagSet) {
+	c.conn.register(fs)
+	fs.StringVar(&c.name, "name", "", "image repository name (lowercased; the platform registry path becomes apps/<name>)")
+	fs.StringVar(&c.dockerfile, "dockerfile", "", "Dockerfile entry inside the context (default: Dockerfile)")
+	fs.DurationVar(&c.timeout, "timeout", defaultBuildTimeout, "wait limit for the build to finish")
+	fs.BoolVar(&c.jsonOut, "json", false, "output machine-readable JSON")
+}
+
+func (c *buildsUploadCmd) Run(ctx context.Context, env *commands.Environment, args []string) error {
+	if err := requireArgs(c.Usage(), args, 1); err != nil {
+		return err
+	}
+	if strings.TrimSpace(c.name) == "" {
+		return &commands.UsageError{Usage: c.Usage(), Err: fmt.Errorf("--name is required (image repository component)")}
+	}
+	var reader io.Reader
+	if args[0] == "-" {
+		reader = stdin
+	} else {
+		f, err := os.Open(args[0]) //nolint:gosec // G304：用户显式给出的上下文 tar 路径（CLI 本地读取）
+		if err != nil {
+			return fmt.Errorf("open context tar: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+		reader = f
+	}
+	wait := c.timeout
+	if wait <= 0 {
+		wait = defaultBuildTimeout
+	}
+	err := c.conn.withClient(func(cl *fleetlyClient) error {
+		wctx, cancel := context.WithTimeout(ctx, wait)
+		defer cancel()
+		resp, err := cl.BuildFromUpload(wctx, c.name, c.dockerfile, reader)
+		if err != nil {
+			return err
+		}
+		rec := resp.GetBuild()
+		if c.jsonOut {
+			return writeJSON(env.Stdout, toBuildJSON(rec))
+		}
+		_, err = fmt.Fprintf(env.Stdout, "build %s %s  %s@%s\n",
+			rec.GetId(), rec.GetStatus(), rec.GetImageRef(), rec.GetImageDigest())
+		return err
+	})
+	if isCleanCancel(ctx, err) {
+		// Ctrl-C/SIGTERM：等待中止，服务端构建继续（builds 台账保留行，
+		// `fleetly builds get <id>` 可回读）——exit 0（与 build 同口径）。
+		return nil
+	}
+	return err
+}
+
+// buildsGetCmd 实现 `fleetly builds get <id>`：按构建 ID 回读单行投影
+//（上传构建无 app 归属，`builds list` 不覆盖——行标识的唯一 CLI 回读面）。
+type buildsGetCmd struct {
+	jsonOut bool
+	conn    connFlags
+}
+
+func (c *buildsGetCmd) Name() string { return "get" }
+func (c *buildsGetCmd) Synopsis() string {
+	return "show one build row by id (covers app-less upload builds)"
+}
+func (c *buildsGetCmd) Usage() string {
+	return "builds get [--addr <host:port>] [--token <tok>] [--json] <build-id>"
+}
+
+func (c *buildsGetCmd) SetFlags(fs *flag.FlagSet) {
+	c.conn.register(fs)
+	fs.BoolVar(&c.jsonOut, "json", false, "output machine-readable JSON")
+}
+
+func (c *buildsGetCmd) Run(ctx context.Context, env *commands.Environment, args []string) error {
+	if err := requireArgs(c.Usage(), args, 1); err != nil {
+		return err
+	}
+	return c.conn.withClient(func(cl *fleetlyClient) error {
+		resp, err := cl.Builds().GetBuild(ctx, &serverv1.GetBuildRequest{Id: args[0]})
+		if err != nil {
+			return err
+		}
+		rec := resp.GetBuild()
+		if c.jsonOut {
+			return writeJSON(env.Stdout, toBuildJSON(rec))
+		}
+		line := fmt.Sprintf("%s  %-9s %-10s", rec.GetId(), rec.GetStatus(), rec.GetDriver())
+		if rec.GetImageRef() != "" {
+			line += "  " + rec.GetImageRef()
+		}
+		if rec.GetImageDigest() != "" {
+			line += "  " + rec.GetImageDigest()
+		}
+		if rec.GetErrorCode() != "" {
+			line += "  error=" + rec.GetErrorCode()
+		}
+		if rec.GetLogPath() != "" {
+			line += "  log=" + rec.GetLogPath()
+		}
+		_, err = fmt.Fprintln(env.Stdout, line)
+		return err
+	})
+}
+
 // 编译期断言：构建命令实现 commands.Command/Flagged 契约。
 var (
 	_ commands.Command = &buildCmd{}
@@ -303,4 +428,8 @@ var (
 	_ commands.Flagged = &buildsCmd{}
 	_ commands.Command = &buildsListCmd{}
 	_ commands.Flagged = &buildsListCmd{}
+	_ commands.Command = &buildsUploadCmd{}
+	_ commands.Flagged = &buildsUploadCmd{}
+	_ commands.Command = &buildsGetCmd{}
+	_ commands.Flagged = &buildsGetCmd{}
 )

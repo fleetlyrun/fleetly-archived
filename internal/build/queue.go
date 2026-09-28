@@ -35,6 +35,10 @@ type Queue struct {
 	pollInterval time.Duration
 	timeout      time.Duration
 	log          *slog.Logger
+	// uploadsRoot 是上传构建会话根（IMPL-T2-2：收敛/复位路径清理
+	// request.ephemeral_dir 的受根锚点；空 = 不清理——纯 compose 构建
+	// 夹具形态零差异）。经 WithUploadsRoot 注入。
+	uploadsRoot string
 }
 
 // NewQueue 构建队列。concurrency ≤0 回落缺省 2、pollInterval/timeout ≤0
@@ -65,6 +69,10 @@ func NewQueue(store *state.Store, exec Executor, concurrency int, pollInterval, 
 
 // Concurrency 返回并发上限（诊断用）。
 func (q *Queue) Concurrency() int { return cap(q.sem) }
+
+// WithUploadsRoot 注入上传构建会话根（IMPL-T2-2：收敛/复位路径的
+// ephemeral_dir 清理锚点；链式装配，空串 = 关闭清理）。
+func (q *Queue) WithUploadsRoot(root string) *Queue { q.uploadsRoot = root; return q }
 
 // Enqueue 入队一条构建（builds queued 行 + 唤醒信号加速同进程拾取）。
 // audit（可选，至多一枚）透传给 state 层 build.create 审计的调用方归因
@@ -114,7 +122,21 @@ func (q *Queue) Run(ctx context.Context) error {
 // queued；等待它的部署在引擎侧空转到发布超时）。queued 行不动：重启后
 // 队列自然重扫认领。复位失败只告警不阻塞调度（queued 流量不受影响，遗留
 // 行待下次重启再试）。
+//
+// IMPL-T2-2：复位前先清理 building 行对应的上传会话目录（进程崩溃窗口的
+// 残留；此时队列尚未进入扫描循环，无并发执行者）。
 func (q *Queue) resetInterrupted(ctx context.Context) {
+	if q.uploadsRoot != "" {
+		if rows, err := q.store.ListNonTerminalBuilds(ctx); err != nil {
+			q.log.Warn("scan non-terminal builds for upload cleanup", "error", err.Error())
+		} else {
+			for _, rec := range rows {
+				if rec.Status == state.BuildBuilding {
+					q.cleanupEphemeral(rec)
+				}
+			}
+		}
+	}
 	n, err := q.store.ResetInterruptedBuilds(ctx, errCodeBuildFailed, buildInterruptedReason)
 	if err != nil {
 		q.log.Error("reset interrupted builds", "error", err)
@@ -122,6 +144,22 @@ func (q *Queue) resetInterrupted(ctx context.Context) {
 	}
 	if n > 0 {
 		q.log.Warn("reset interrupted builds to failed", "count", n, "reason", buildInterruptedReason)
+	}
+}
+
+// cleanupEphemeral 尝试清理构建行的上传会话目录（best-effort：request
+// 解码失败/非上传构建/越界形态静默跳过；删除失败只告警——janitor 的
+// mtime 兜底仍会收尾）。
+func (q *Queue) cleanupEphemeral(rec state.BuildRecord) {
+	if q.uploadsRoot == "" {
+		return
+	}
+	req, err := DecodeRequest(rec.Request)
+	if err != nil || req.EphemeralDir == "" {
+		return
+	}
+	if err := CleanupUploadDir(req.EphemeralDir, q.uploadsRoot); err != nil {
+		q.log.Warn("cleanup ephemeral build context", "build", rec.ID, "dir", req.EphemeralDir, "error", err.Error())
 	}
 }
 
@@ -215,14 +253,19 @@ const claimedUnreadableReason = "row read failed after build claim (transient er
 // ctx 层瞬时故障，兜底写必达。
 func (q *Queue) convergeClaimedUnreadable(ctx context.Context, buildID string) {
 	finCtx := context.WithoutCancel(ctx)
-	if err := q.store.FailStrandedBuild(finCtx, buildID, errCodeBuildFailed, claimedUnreadableReason); err != nil {
-		if errors.Is(err, state.ErrBuildStateTransition) {
-			return // 行已离开 building（并发收敛竞争落败）
-		}
+	err := q.store.FailStrandedBuild(finCtx, buildID, errCodeBuildFailed, claimedUnreadableReason)
+	if err != nil && !errors.Is(err, state.ErrBuildStateTransition) {
 		q.log.Error("converge claimed-unreadable build", "build", buildID, "error", err.Error())
 		return
 	}
-	q.log.Warn("converged claimed-unreadable build to failed", "build", buildID, "reason", claimedUnreadableReason)
+	// IMPL-T2-2：读失败可能只是瞬态——重试一次读取用于清理上传会话
+	// （行确已离开 building 的竞争形态同样尽力清理，幂等）。
+	if rec, gerr := q.store.GetBuild(finCtx, buildID); gerr == nil {
+		q.cleanupEphemeral(rec)
+	}
+	if err == nil {
+		q.log.Warn("converged claimed-unreadable build to failed", "build", buildID, "reason", claimedUnreadableReason)
+	}
 }
 
 // convergeStranded 兜底终态：执行器返回错误后行仍停留 building（超时取消
@@ -236,6 +279,9 @@ func (q *Queue) convergeStranded(execCtx context.Context, buildID string) {
 		q.log.Error("read stranded build", "build", buildID, "error", err)
 		return
 	}
+	// IMPL-T2-2：上传会话清理先于终态判定——执行器已收敛终态的路径
+	// （Builder defer 已清理）重复调用无害；异常路径在此收口。
+	q.cleanupEphemeral(row)
 	if row.Status != state.BuildBuilding {
 		return // 执行器已收敛终态（正常失败路径）
 	}
