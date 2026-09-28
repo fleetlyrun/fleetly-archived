@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -37,11 +38,13 @@ service CronService {
       post: "/v1/apps/{app}/services/{service}/trigger"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // ListCronRuns 读运行台账（scheduled_at 倒序；service 空 = 该 app 全部
   // schedule 的行；保留窗每 schedule 最近 20 条，janitor 清理）。
   rpc ListCronRuns(ListCronRunsRequest) returns (ListCronRunsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/cron-runs" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
 }
 

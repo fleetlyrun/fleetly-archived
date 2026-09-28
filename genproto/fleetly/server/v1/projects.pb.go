@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1555,7 +1556,7 @@ var File_fleetly_server_v1_projects_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_projects_proto_rawDesc = "" +
 	"\n" +
-	" fleetly/server/v1/projects.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xa4\x02\n" +
+	" fleetly/server/v1/projects.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xa4\x02\n" +
 	"\vProjectView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\ateam_id\x18\x02 \x01(\tR\x06teamId\x12\x1b\n" +
@@ -1660,21 +1661,21 @@ const file_fleetly_server_v1_projects_proto_rawDesc = "" +
 	"\battached\x18\x06 \x01(\bR\battached\x12\x18\n" +
 	"\achanged\x18\a \x01(\bR\achanged\x12#\n" +
 	"\rdeployment_id\x18\b \x01(\tR\fdeploymentId\x12\x16\n" +
-	"\x06status\x18\t \x01(\tR\x06status2\xed\r\n" +
-	"\x0fProjectsService\x12{\n" +
-	"\rCreateProject\x12'.fleetly.server.v1.CreateProjectRequest\x1a(.fleetly.server.v1.CreateProjectResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12u\n" +
-	"\fListProjects\x12&.fleetly.server.v1.ListProjectsRequest\x1a'.fleetly.server.v1.ListProjectsResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12t\n" +
+	"\x06status\x18\t \x01(\tR\x06status2\xd3\x0e\n" +
+	"\x0fProjectsService\x12\x83\x01\n" +
+	"\rCreateProject\x12'.fleetly.server.v1.CreateProjectRequest\x1a(.fleetly.server.v1.CreateProjectResponse\"\x1f\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/projects\x12}\n" +
+	"\fListProjects\x12&.fleetly.server.v1.ListProjectsRequest\x1a'.fleetly.server.v1.ListProjectsResponse\"\x1c\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/projects\x12|\n" +
 	"\n" +
-	"GetProject\x12$.fleetly.server.v1.GetProjectRequest\x1a%.fleetly.server.v1.GetProjectResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/projects/{id}\x12\x80\x01\n" +
-	"\rUpdateProject\x12'.fleetly.server.v1.UpdateProjectRequest\x1a(.fleetly.server.v1.UpdateProjectResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*2\x11/v1/projects/{id}\x12}\n" +
-	"\rDeleteProject\x12'.fleetly.server.v1.DeleteProjectRequest\x1a(.fleetly.server.v1.DeleteProjectResponse\"\x19\x82\xd3\xe4\x93\x02\x13*\x11/v1/projects/{id}\x12\x9c\x01\n" +
-	"\x12ListProjectMembers\x12,.fleetly.server.v1.ListProjectMembersRequest\x1a-.fleetly.server.v1.ListProjectMembersResponse\")\x82\xd3\xe4\x93\x02#\x12!/v1/projects/{project_id}/members\x12\xae\x01\n" +
-	"\x14SetProjectMemberRole\x12..fleetly.server.v1.SetProjectMemberRoleRequest\x1a/.fleetly.server.v1.SetProjectMemberRoleResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/projects/{project_id}/members:set-role\x12\xa9\x01\n" +
-	"\x13RemoveProjectMember\x12-.fleetly.server.v1.RemoveProjectMemberRequest\x1a..fleetly.server.v1.RemoveProjectMemberResponse\"3\x82\xd3\xe4\x93\x02-*+/v1/projects/{project_id}/members/{user_id}\x12\x82\x01\n" +
-	"\aMoveApp\x12!.fleetly.server.v1.MoveAppRequest\x1a\".fleetly.server.v1.MoveAppResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/projects/{to_project_id}:move-app\x12\x96\x01\n" +
-	"\fMoveDatabase\x12&.fleetly.server.v1.MoveDatabaseRequest\x1a'.fleetly.server.v1.MoveDatabaseResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/projects/{to_project_id}:move-database\x12\xa8\x01\n" +
-	"\x17AttachAppProjectNetwork\x121.fleetly.server.v1.AttachAppProjectNetworkRequest\x1a2.fleetly.server.v1.AttachAppProjectNetworkResponse\"&\x82\xd3\xe4\x93\x02 \"\x1e/v1/apps/{app}/project-network\x12\xa8\x01\n" +
-	"\x17DetachAppProjectNetwork\x121.fleetly.server.v1.DetachAppProjectNetworkRequest\x1a2.fleetly.server.v1.DetachAppProjectNetworkResponse\"&\x82\xd3\xe4\x93\x02 *\x1e/v1/apps/{app}/project-networkB\x98\x01\x92ARRP\n" +
+	"GetProject\x12$.fleetly.server.v1.GetProjectRequest\x1a%.fleetly.server.v1.GetProjectResponse\"!\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/projects/{id}\x12\x88\x01\n" +
+	"\rUpdateProject\x12'.fleetly.server.v1.UpdateProjectRequest\x1a(.fleetly.server.v1.UpdateProjectResponse\"$\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x16:\x01*2\x11/v1/projects/{id}\x12\x85\x01\n" +
+	"\rDeleteProject\x12'.fleetly.server.v1.DeleteProjectRequest\x1a(.fleetly.server.v1.DeleteProjectResponse\"!\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x13*\x11/v1/projects/{id}\x12\xa4\x01\n" +
+	"\x12ListProjectMembers\x12,.fleetly.server.v1.ListProjectMembersRequest\x1a-.fleetly.server.v1.ListProjectMembersResponse\"1\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02#\x12!/v1/projects/{project_id}/members\x12\xb6\x01\n" +
+	"\x14SetProjectMemberRole\x12..fleetly.server.v1.SetProjectMemberRoleRequest\x1a/.fleetly.server.v1.SetProjectMemberRoleResponse\"=\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/projects/{project_id}/members:set-role\x12\xb1\x01\n" +
+	"\x13RemoveProjectMember\x12-.fleetly.server.v1.RemoveProjectMemberRequest\x1a..fleetly.server.v1.RemoveProjectMemberResponse\";\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02-*+/v1/projects/{project_id}/members/{user_id}\x12\x8b\x01\n" +
+	"\aMoveApp\x12!.fleetly.server.v1.MoveAppRequest\x1a\".fleetly.server.v1.MoveAppResponse\"9\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/projects/{to_project_id}:move-app\x12\x9f\x01\n" +
+	"\fMoveDatabase\x12&.fleetly.server.v1.MoveDatabaseRequest\x1a'.fleetly.server.v1.MoveDatabaseResponse\">\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/projects/{to_project_id}:move-database\x12\xb1\x01\n" +
+	"\x17AttachAppProjectNetwork\x121.fleetly.server.v1.AttachAppProjectNetworkRequest\x1a2.fleetly.server.v1.AttachAppProjectNetworkResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 \"\x1e/v1/apps/{app}/project-network\x12\xb1\x01\n" +
+	"\x17DetachAppProjectNetwork\x121.fleetly.server.v1.DetachAppProjectNetworkRequest\x1a2.fleetly.server.v1.DetachAppProjectNetworkResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 *\x1e/v1/apps/{app}/project-networkB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

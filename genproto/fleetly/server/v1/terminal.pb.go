@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -275,7 +276,7 @@ var File_fleetly_server_v1_terminal_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_terminal_proto_rawDesc = "" +
 	"\n" +
-	" fleetly/server/v1/terminal.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"a\n" +
+	" fleetly/server/v1/terminal.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"a\n" +
 	"\x1bCreateTerminalTicketRequest\x12\x1c\n" +
 	"\x03app\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80\x02R\x03app\x12$\n" +
@@ -294,10 +295,10 @@ const file_fleetly_server_v1_terminal_proto_rawDesc = "" +
 	"\vrelay_image\x18\x03 \x01(\tR\n" +
 	"relayImage\x12'\n" +
 	"\x0fnodes_connected\x18\x04 \x01(\x05R\x0enodesConnected\x12'\n" +
-	"\x0factive_sessions\x18\x05 \x01(\x05R\x0eactiveSessions2\xb6\x02\n" +
-	"\vExecService\x12\x98\x01\n" +
-	"\x14CreateTerminalTicket\x12..fleetly.server.v1.CreateTerminalTicketRequest\x1a/.fleetly.server.v1.CreateTerminalTicketResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/v1/terminal/tickets\x12\x8b\x01\n" +
-	"\x11GetTerminalStatus\x12+.fleetly.server.v1.GetTerminalStatusRequest\x1a,.fleetly.server.v1.GetTerminalStatusResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/terminal/statusB\x98\x01\x92ARRP\n" +
+	"\x0factive_sessions\x18\x05 \x01(\x05R\x0eactiveSessions2\xce\x02\n" +
+	"\vExecService\x12\xa4\x01\n" +
+	"\x14CreateTerminalTicket\x12..fleetly.server.v1.CreateTerminalTicketRequest\x1a/.fleetly.server.v1.CreateTerminalTicketResponse\"+\x82\xb5\x18\bterminal\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/v1/terminal/tickets\x12\x97\x01\n" +
+	"\x11GetTerminalStatus\x12+.fleetly.server.v1.GetTerminalStatusRequest\x1a,.fleetly.server.v1.GetTerminalStatusResponse\"'\x82\xb5\x18\bterminal\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/terminal/statusB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

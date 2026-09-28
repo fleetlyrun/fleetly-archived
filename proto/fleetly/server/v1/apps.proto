@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -33,12 +34,15 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service AppsService {
   rpc ListApps(ListAppsRequest) returns (ListAppsResponse) {
     option (google.api.http) = { get: "/v1/apps" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetApp(GetAppRequest) returns (GetAppResponse) {
     option (google.api.http) = { get: "/v1/apps/{name}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc DeleteApp(DeleteAppRequest) returns (DeleteAppResponse) {
     option (google.api.http) = { delete: "/v1/apps/{name}" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // SetAppWebhookSecret 设置 per-app webhook 签名密钥（T2.19；admin）。
   // 值经平台 envelope 加密落库（明文不落），show 面只回 configured 位。
@@ -48,11 +52,13 @@ service AppsService {
       put: "/v1/apps/{name}/webhook-secret"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ShowAppWebhook 回读 webhook/git 触发配置（无敏感投影：secret 只回
   // configured 位；admin scope——source URL 与分支拓扑属运维面）。
   rpc ShowAppWebhook(ShowAppWebhookRequest) returns (ShowAppWebhookResponse) {
     option (google.api.http) = { get: "/v1/apps/{name}/webhook" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；
   // admin）。source_branch 同时是 git push 的触发分支（app 配置分支，
@@ -63,11 +69,13 @@ service AppsService {
       put: "/v1/apps/{name}/source"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // GetScalingPolicy 读取服务的自动扩缩策略（W5-S1，D-V3W5-2；read 门——
   // 策略是应用运行面的事实视图）。未设置返回 404（未配置即无策略）。
   rpc GetScalingPolicy(GetScalingPolicyRequest) returns (GetScalingPolicyResponse) {
     option (google.api.http) = { get: "/v1/apps/{name}/scaling/{service}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SetScalingPolicy 写入（整行替换 upsert）服务的自动扩缩策略（deploy 门
   // ——资源面写语义，与 Deploy/SetEnv 同级；用户 principal 另受项目角色门
@@ -80,11 +88,13 @@ service AppsService {
       put: "/v1/apps/{name}/scaling/{service}"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // RemoveScalingPolicy 删除服务的自动扩缩策略（deploy 门）。同键运行期
   // 副本覆盖一并清除——期望副本回落 compose 快照（外部改动照常走漂移判据）。
   rpc RemoveScalingPolicy(RemoveScalingPolicyRequest) returns (RemoveScalingPolicyResponse) {
     option (google.api.http) = { delete: "/v1/apps/{name}/scaling/{service}" };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
 }
 

@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -847,7 +848,7 @@ var File_fleetly_server_v1_alerting_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_alerting_proto_rawDesc = "" +
 	"\n" +
-	" fleetly/server/v1/alerting.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1ffleetly/server/v1/metrics.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x8c\x03\n" +
+	" fleetly/server/v1/alerting.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1ffleetly/server/v1/metrics.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x8c\x03\n" +
 	"\rAlertRuleView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -913,15 +914,15 @@ const file_fleetly_server_v1_alerting_proto_rawDesc = "" +
 	"\x04expr\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80\x10R\x04expr\"Q\n" +
 	"\x15TestAlertRuleResponse\x128\n" +
-	"\x06series\x18\x01 \x03(\v2 .fleetly.server.v1.MetricsSeriesR\x06series2\xce\a\n" +
-	"\x0fAlertingService\x12\x87\x01\n" +
-	"\x0fCreateAlertRule\x12).fleetly.server.v1.CreateAlertRuleRequest\x1a*.fleetly.server.v1.CreateAlertRuleResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/alerting/rules\x12\x81\x01\n" +
-	"\x0eListAlertRules\x12(.fleetly.server.v1.ListAlertRulesRequest\x1a).fleetly.server.v1.ListAlertRulesResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/alerting/rules\x12\x8c\x01\n" +
-	"\x0fUpdateAlertRule\x12).fleetly.server.v1.UpdateAlertRuleRequest\x1a*.fleetly.server.v1.UpdateAlertRuleResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\x1a\x17/v1/alerting/rules/{id}\x12\x89\x01\n" +
-	"\x0fDeleteAlertRule\x12).fleetly.server.v1.DeleteAlertRuleRequest\x1a*.fleetly.server.v1.DeleteAlertRuleResponse\"\x1f\x82\xd3\xe4\x93\x02\x19*\x17/v1/alerting/rules/{id}\x12\x80\x01\n" +
-	"\rSetAlertsMode\x12'.fleetly.server.v1.SetAlertsModeRequest\x1a(.fleetly.server.v1.SetAlertsModeResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\x1a\x11/v1/alerting/mode\x12\x85\x01\n" +
-	"\x0fGetAlertsStatus\x12).fleetly.server.v1.GetAlertsStatusRequest\x1a*.fleetly.server.v1.GetAlertsStatusResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/alerting/status\x12\x86\x01\n" +
-	"\rTestAlertRule\x12'.fleetly.server.v1.TestAlertRuleRequest\x1a(.fleetly.server.v1.TestAlertRuleResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/v1/alerting/rules:testB\x98\x01\x92ARRP\n" +
+	"\x06series\x18\x01 \x03(\v2 .fleetly.server.v1.MetricsSeriesR\x06series2\x8c\b\n" +
+	"\x0fAlertingService\x12\x90\x01\n" +
+	"\x0fCreateAlertRule\x12).fleetly.server.v1.CreateAlertRuleRequest\x1a*.fleetly.server.v1.CreateAlertRuleResponse\"&\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/alerting/rules\x12\x89\x01\n" +
+	"\x0eListAlertRules\x12(.fleetly.server.v1.ListAlertRulesRequest\x1a).fleetly.server.v1.ListAlertRulesResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/alerting/rules\x12\x95\x01\n" +
+	"\x0fUpdateAlertRule\x12).fleetly.server.v1.UpdateAlertRuleRequest\x1a*.fleetly.server.v1.UpdateAlertRuleResponse\"+\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1c:\x01*\x1a\x17/v1/alerting/rules/{id}\x12\x92\x01\n" +
+	"\x0fDeleteAlertRule\x12).fleetly.server.v1.DeleteAlertRuleRequest\x1a*.fleetly.server.v1.DeleteAlertRuleResponse\"(\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x19*\x17/v1/alerting/rules/{id}\x12\x8a\x01\n" +
+	"\rSetAlertsMode\x12'.fleetly.server.v1.SetAlertsModeRequest\x1a(.fleetly.server.v1.SetAlertsModeResponse\"&\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x16:\x01*\x1a\x11/v1/alerting/mode\x12\x8d\x01\n" +
+	"\x0fGetAlertsStatus\x12).fleetly.server.v1.GetAlertsStatusRequest\x1a*.fleetly.server.v1.GetAlertsStatusResponse\"#\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/alerting/status\x12\x8f\x01\n" +
+	"\rTestAlertRule\x12'.fleetly.server.v1.TestAlertRuleRequest\x1a(.fleetly.server.v1.TestAlertRuleResponse\"+\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/v1/alerting/rules:testB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -790,7 +791,7 @@ var File_fleetly_server_v1_domains_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_domains_proto_rawDesc = "" +
 	"\n" +
-	"\x1ffleetly/server/v1/domains.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"2\n" +
+	"\x1ffleetly/server/v1/domains.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"2\n" +
 	"\x15ListAppDomainsRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\"\xa9\x02\n" +
 	"\n" +
@@ -845,13 +846,13 @@ const file_fleetly_server_v1_domains_proto_rawDesc = "" +
 	"\x0ecert_not_after\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\fcertNotAfter\x12\x14\n" +
 	"\x05error\x18\t \x01(\tR\x05error\"V\n" +
 	"\x18VerifyAppDomainsResponse\x12:\n" +
-	"\x06checks\x18\x01 \x03(\v2\".fleetly.server.v1.DomainCheckViewR\x06checks2\xe9\x05\n" +
-	"\x0eDomainsService\x12\x85\x01\n" +
-	"\x0eListAppDomains\x12(.fleetly.server.v1.ListAppDomainsRequest\x1a).fleetly.server.v1.ListAppDomainsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/apps/{app}/domains\x12\x95\x01\n" +
-	"\x10VerifyAppDomains\x12*.fleetly.server.v1.VerifyAppDomainsRequest\x1a+.fleetly.server.v1.VerifyAppDomainsResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/apps/{app}/domains/verify\x12\x8b\x01\n" +
-	"\x0fCreateAppDomain\x12).fleetly.server.v1.CreateAppDomainRequest\x1a*.fleetly.server.v1.CreateAppDomainResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/apps/{app}/domains\x12\x94\x01\n" +
-	"\x0fUpdateAppDomain\x12).fleetly.server.v1.UpdateAppDomainRequest\x1a*.fleetly.server.v1.UpdateAppDomainResponse\"*\x82\xd3\xe4\x93\x02$:\x01*\x1a\x1f/v1/apps/{app}/domains/{domain}\x12\x91\x01\n" +
-	"\x0fRemoveAppDomain\x12).fleetly.server.v1.RemoveAppDomainRequest\x1a*.fleetly.server.v1.RemoveAppDomainResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/apps/{app}/domains/{domain}B\x98\x01\x92ARRP\n" +
+	"\x06checks\x18\x01 \x03(\v2\".fleetly.server.v1.DomainCheckViewR\x06checks2\x97\x06\n" +
+	"\x0eDomainsService\x12\x8d\x01\n" +
+	"\x0eListAppDomains\x12(.fleetly.server.v1.ListAppDomainsRequest\x1a).fleetly.server.v1.ListAppDomainsResponse\"&\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/apps/{app}/domains\x12\x9d\x01\n" +
+	"\x10VerifyAppDomains\x12*.fleetly.server.v1.VerifyAppDomainsRequest\x1a+.fleetly.server.v1.VerifyAppDomainsResponse\"0\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/apps/{app}/domains/verify\x12\x95\x01\n" +
+	"\x0fCreateAppDomain\x12).fleetly.server.v1.CreateAppDomainRequest\x1a*.fleetly.server.v1.CreateAppDomainResponse\"+\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/apps/{app}/domains\x12\x9e\x01\n" +
+	"\x0fUpdateAppDomain\x12).fleetly.server.v1.UpdateAppDomainRequest\x1a*.fleetly.server.v1.UpdateAppDomainResponse\"4\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02$:\x01*\x1a\x1f/v1/apps/{app}/domains/{domain}\x12\x9b\x01\n" +
+	"\x0fRemoveAppDomain\x12).fleetly.server.v1.RemoveAppDomainRequest\x1a*.fleetly.server.v1.RemoveAppDomainResponse\"1\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02!*\x1f/v1/apps/{app}/domains/{domain}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

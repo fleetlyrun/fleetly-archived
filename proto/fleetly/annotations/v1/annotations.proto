@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package fleetly.annotations.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1;annotationsv1";
+
+// scope 是 RPC 方法级鉴权 scope 的唯一登记注解（IMPL-ARCH-J：登记面搬家——
+// 原 internal/api/scope.go 手工 methodScopes 表逐条迁移为本 option，proto
+// 成为登记的唯一人类编辑点；运行时 map 由 internal/api/scope.go 包初始化期
+// 从 protoregistry 遍历 fleetly.* 服务方法读本注解生成，形态与迁移前一致）。
+//
+// 值域 = scope 词表闭集（read/deploy/admin/terminal/tasks/build——词与蕴含
+// 语义的单点是 internal/api/auth.go scopeWords；未知词在启动期 init 校验
+// panic fail-fast，并由 scope_completeness_test.go 的词表方向双向钉死）。
+//
+// 两条不变式（搬家不改语义）：
+//   1. 未注解方法不进登记表——auth 拦截器 fail-closed 默认按 admin 拒绝，
+//      兜底行为逐字保持（auth.go 拦截器链零改动）；
+//   2. 鉴权豁免（无凭据可达面）不进 proto——豁免语义住 auth.go
+//      authExemptMethods（Ping/Register/Login/GetRegistrationState 四条
+//      不携带本注解），本 option 只登记 scope，不表达豁免。
+//
+// 字段号占位：50000——protobuf 规范为个别组织保留的 50000–99999 区间起始
+// 位，本仓独占；依赖闭包内 MethodOptions 既有自定义 option 号互不冲突
+// （google.api.http=72295759、grpc-gateway openapiv2_operation=1042、
+// buf.validate field/oneof=1159/1160，均不在本区间）。
+extend google.protobuf.MethodOptions {
+  string scope = 50000;
+}

@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -821,7 +822,7 @@ var File_fleetly_server_v1_builds_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_builds_proto_rawDesc = "" +
 	"\n" +
-	"\x1efleetly/server/v1/builds.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x85\x01\n" +
+	"\x1efleetly/server/v1/builds.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x85\x01\n" +
 	"\x16BuildFromUploadRequest\x12H\n" +
 	"\bmetadata\x18\x01 \x01(\v2*.fleetly.server.v1.BuildFromUploadMetadataH\x00R\bmetadata\x12\x16\n" +
 	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\t\n" +
@@ -876,14 +877,14 @@ const file_fleetly_server_v1_builds_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
 	"\aservice\x18\x03 \x01(\tR\aservice\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage2\xdd\x03\n" +
-	"\rBuildsService\x12v\n" +
-	"\fTriggerBuild\x12&.fleetly.server.v1.TriggerBuildRequest\x1a'.fleetly.server.v1.TriggerBuildResponse\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
-	"/v1/builds\x12l\n" +
-	"\x0fBuildFromUpload\x12).fleetly.server.v1.BuildFromUploadRequest\x1a*.fleetly.server.v1.BuildFromUploadResponse\"\x00(\x01\x12l\n" +
-	"\bGetBuild\x12\".fleetly.server.v1.GetBuildRequest\x1a#.fleetly.server.v1.GetBuildResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/builds/{id}\x12x\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage2\x80\x04\n" +
+	"\rBuildsService\x12\x7f\n" +
+	"\fTriggerBuild\x12&.fleetly.server.v1.TriggerBuildRequest\x1a'.fleetly.server.v1.TriggerBuildResponse\"\x1e\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
+	"/v1/builds\x12u\n" +
+	"\x0fBuildFromUpload\x12).fleetly.server.v1.BuildFromUploadRequest\x1a*.fleetly.server.v1.BuildFromUploadResponse\"\t\x82\xb5\x18\x05build(\x01\x12t\n" +
+	"\bGetBuild\x12\".fleetly.server.v1.GetBuildRequest\x1a#.fleetly.server.v1.GetBuildResponse\"\x1f\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/builds/{id}\x12\x80\x01\n" +
 	"\n" +
-	"ListBuilds\x12$.fleetly.server.v1.ListBuildsRequest\x1a%.fleetly.server.v1.ListBuildsResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/apps/{app}/buildsB\x98\x01\x92ARRP\n" +
+	"ListBuilds\x12$.fleetly.server.v1.ListBuildsRequest\x1a%.fleetly.server.v1.ListBuildsResponse\"%\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/apps/{app}/buildsB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

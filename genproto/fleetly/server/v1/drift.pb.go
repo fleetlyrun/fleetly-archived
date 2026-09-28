@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -490,7 +491,7 @@ var File_fleetly_server_v1_drift_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_drift_proto_rawDesc = "" +
 	"\n" +
-	"\x1dfleetly/server/v1/drift.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"-\n" +
+	"\x1dfleetly/server/v1/drift.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"-\n" +
 	"\x10ShowDriftRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\"Y\n" +
 	"\rFieldDiffView\x12\x14\n" +
@@ -519,11 +520,11 @@ const file_fleetly_server_v1_drift_proto_rawDesc = "" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\"F\n" +
 	"\x18SetDriftConvergeResponse\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x18\n" +
-	"\aenabled\x18\x02 \x01(\bR\aenabled2\xae\x03\n" +
-	"\fDriftService\x12t\n" +
-	"\tShowDrift\x12#.fleetly.server.v1.ShowDriftRequest\x1a$.fleetly.server.v1.ShowDriftResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/apps/{app}/drift\x12\x8c\x01\n" +
-	"\rConvergeDrift\x12'.fleetly.server.v1.ConvergeDriftRequest\x1a(.fleetly.server.v1.ConvergeDriftResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/apps/{app}/drift/converge\x12\x98\x01\n" +
-	"\x10SetDriftConverge\x12*.fleetly.server.v1.SetDriftConvergeRequest\x1a+.fleetly.server.v1.SetDriftConvergeResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\x1a /v1/apps/{app}/drift/convergenceB\x98\x01\x92ARRP\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled2\xca\x03\n" +
+	"\fDriftService\x12|\n" +
+	"\tShowDrift\x12#.fleetly.server.v1.ShowDriftRequest\x1a$.fleetly.server.v1.ShowDriftResponse\"$\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/apps/{app}/drift\x12\x96\x01\n" +
+	"\rConvergeDrift\x12'.fleetly.server.v1.ConvergeDriftRequest\x1a(.fleetly.server.v1.ConvergeDriftResponse\"2\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/apps/{app}/drift/converge\x12\xa2\x01\n" +
+	"\x10SetDriftConverge\x12*.fleetly.server.v1.SetDriftConvergeRequest\x1a+.fleetly.server.v1.SetDriftConvergeResponse\"5\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02%:\x01*\x1a /v1/apps/{app}/drift/convergenceB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -773,7 +774,7 @@ var File_fleetly_server_v1_placement_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_placement_proto_rawDesc = "" +
 	"\n" +
-	"!fleetly/server/v1/placement.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xcb\x02\n" +
+	"!fleetly/server/v1/placement.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xcb\x02\n" +
 	"\rPlacementView\x12(\n" +
 	"\x10platform_node_id\x18\x01 \x01(\tR\x0eplatformNodeId\x12\x1b\n" +
 	"\tlabel_ref\x18\x02 \x01(\tR\blabelRef\x12\x14\n" +
@@ -828,12 +829,12 @@ const file_fleetly_server_v1_placement_proto_rawDesc = "" +
 	"\x15ShowPlacementResponse\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12>\n" +
 	"\tplacement\x18\x02 \x01(\v2 .fleetly.server.v1.PlacementViewR\tplacement\x127\n" +
-	"\avolumes\x18\x03 \x03(\v2\x1d.fleetly.server.v1.VolumeViewR\avolumes2\xd4\x04\n" +
-	"\x10PlacementService\x12\x84\x01\n" +
-	"\rShowPlacement\x12'.fleetly.server.v1.ShowPlacementRequest\x1a(.fleetly.server.v1.ShowPlacementResponse\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/placement\x12\x8d\x01\n" +
-	"\x0fUpdatePlacement\x12).fleetly.server.v1.UpdatePlacementRequest\x1a*.fleetly.server.v1.UpdatePlacementResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/v1/apps/{app}/placement\x12q\n" +
-	"\vListVolumes\x12%.fleetly.server.v1.ListVolumesRequest\x1a&.fleetly.server.v1.ListVolumesResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/volumes\x12\xb5\x01\n" +
-	"\x19GetPlacementMigrationPlan\x123.fleetly.server.v1.GetPlacementMigrationPlanRequest\x1a4.fleetly.server.v1.GetPlacementMigrationPlanResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/apps/{app}/placement/migrate-planB\x98\x01\x92ARRP\n" +
+	"\avolumes\x18\x03 \x03(\v2\x1d.fleetly.server.v1.VolumeViewR\avolumes2\xf5\x04\n" +
+	"\x10PlacementService\x12\x8c\x01\n" +
+	"\rShowPlacement\x12'.fleetly.server.v1.ShowPlacementRequest\x1a(.fleetly.server.v1.ShowPlacementResponse\"(\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/placement\x12\x96\x01\n" +
+	"\x0fUpdatePlacement\x12).fleetly.server.v1.UpdatePlacementRequest\x1a*.fleetly.server.v1.UpdatePlacementResponse\",\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/v1/apps/{app}/placement\x12y\n" +
+	"\vListVolumes\x12%.fleetly.server.v1.ListVolumesRequest\x1a&.fleetly.server.v1.ListVolumesResponse\"\x1b\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\r\x12\v/v1/volumes\x12\xbd\x01\n" +
+	"\x19GetPlacementMigrationPlan\x123.fleetly.server.v1.GetPlacementMigrationPlanRequest\x1a4.fleetly.server.v1.GetPlacementMigrationPlanResponse\"5\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02'\x12%/v1/apps/{app}/placement/migrate-planB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

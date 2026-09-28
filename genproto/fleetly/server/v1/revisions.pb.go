@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -317,7 +318,7 @@ var File_fleetly_server_v1_revisions_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_revisions_proto_rawDesc = "" +
 	"\n" +
-	"!fleetly/server/v1/revisions.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"1\n" +
+	"!fleetly/server/v1/revisions.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"1\n" +
 	"\x14ListRevisionsRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\"\xc2\x01\n" +
 	"\fRevisionView\x12\x0e\n" +
@@ -338,10 +339,10 @@ const file_fleetly_server_v1_revisions_proto_rawDesc = "" +
 	"\vrevision_id\x18\x01 \x01(\tR\n" +
 	"revisionId\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x03R\x03seq\x12\x18\n" +
-	"\acompose\x18\x03 \x01(\tR\acompose2\xb9\x02\n" +
-	"\x10RevisionsService\x12\x84\x01\n" +
-	"\rListRevisions\x12'.fleetly.server.v1.ListRevisionsRequest\x1a(.fleetly.server.v1.ListRevisionsResponse\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/revisions\x12\x9d\x01\n" +
-	"\x0fGetRevisionSpec\x12).fleetly.server.v1.GetRevisionSpecRequest\x1a*.fleetly.server.v1.GetRevisionSpecResponse\"3\x82\xd3\xe4\x93\x02-\x12+/v1/apps/{app}/revisions/{revision_id}/specB\x98\x01\x92ARRP\n" +
+	"\acompose\x18\x03 \x01(\tR\acompose2\xc9\x02\n" +
+	"\x10RevisionsService\x12\x8c\x01\n" +
+	"\rListRevisions\x12'.fleetly.server.v1.ListRevisionsRequest\x1a(.fleetly.server.v1.ListRevisionsResponse\"(\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/revisions\x12\xa5\x01\n" +
+	"\x0fGetRevisionSpec\x12).fleetly.server.v1.GetRevisionSpecRequest\x1a*.fleetly.server.v1.GetRevisionSpecResponse\";\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02-\x12+/v1/apps/{app}/revisions/{revision_id}/specB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

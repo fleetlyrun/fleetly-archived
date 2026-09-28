@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -37,9 +38,11 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service LogsService {
   rpc FollowLogs(FollowLogsRequest) returns (stream FollowLogsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/logs/stream" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListHistoryLogs(ListHistoryLogsRequest) returns (ListHistoryLogsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/logs" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SearchLogs 统一检索（E6 观测专项设计 §3.1，W5-S1）：日志库
   //（VictoriaLogs）LogsQL 检索面。keyword 构造为转义后的字面量短语
@@ -49,16 +52,19 @@ service LogsService {
   //「检索不跨界」的诚实边界）。
   rpc SearchLogs(SearchLogsRequest) returns (SearchLogsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/logs/search" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetLogsBackend 日志后端视图（W5-S1：mode / 是否显式设置 / 部署态 /
   // ingest streak / 丢弃计数——CLI `logs backend show` 与 Console 卡共面）。
   rpc GetLogsBackend(GetLogsBackendRequest) returns (GetLogsBackendResponse) {
     option (google.api.http) = { get: "/v1/logs-backend" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SetLogsBackend 切换日志后端（victorialogs | jsonl）：保存即生效——
   // duty 收敛部署/移除（卷保留），采集路由下拍切换。
   rpc SetLogsBackend(SetLogsBackendRequest) returns (SetLogsBackendResponse) {
     option (google.api.http) = { put: "/v1/logs-backend" body: "*" };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
 }
 

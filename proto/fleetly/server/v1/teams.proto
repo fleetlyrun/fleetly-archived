@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -44,13 +45,16 @@ service TeamsService {
       post: "/v1/teams"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // ListTeams 我所在团队；平台管理员 = 全部（§3.2 只读全域）。
   rpc ListTeams(ListTeamsRequest) returns (ListTeamsResponse) {
     option (google.api.http) = { get: "/v1/teams" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetTeam(GetTeamRequest) returns (GetTeamResponse) {
     option (google.api.http) = { get: "/v1/teams/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // UpdateTeam 仅改显示名（slug 不可变——请求无 slug 字段）。
   rpc UpdateTeam(UpdateTeamRequest) returns (UpdateTeamResponse) {
@@ -58,14 +62,17 @@ service TeamsService {
       patch: "/v1/teams/{id}"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // DeleteTeam owner 专属两段式（confirm = slug）+ 项目须空（资源先迁走
   // 或删光，不做隐式级联，§3.1）。
   rpc DeleteTeam(DeleteTeamRequest) returns (DeleteTeamResponse) {
     option (google.api.http) = { delete: "/v1/teams/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListTeamMembers(ListTeamMembersRequest) returns (ListTeamMembersResponse) {
     option (google.api.http) = { get: "/v1/teams/{team_id}/members" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SetTeamMemberRole owner 专属：调整成员角色（最后一名 owner 降级 →
   // E_TEAM_LAST_OWNER）。
@@ -74,11 +81,13 @@ service TeamsService {
       post: "/v1/teams/{team_id}/members:set-role"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // RemoveTeamMember owner 专属：移出成员（联动清该团队全部项目覆写行，
   // D-W0-2；最后一名 owner → E_TEAM_LAST_OWNER）。
   rpc RemoveTeamMember(RemoveTeamMemberRequest) returns (RemoveTeamMemberResponse) {
     option (google.api.http) = { delete: "/v1/teams/{team_id}/members/{user_id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // CreateInvite owner/admin 可邀（§3.1）：所邀角色不得高于邀请者自身；
   // 邀 owner 角色 = owner 专属。明文 token 仅本次响应一次性返回（无 SMTP：
@@ -88,9 +97,11 @@ service TeamsService {
       post: "/v1/teams/{team_id}/invites"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListTeamInvites(ListTeamInvitesRequest) returns (ListTeamInvitesResponse) {
     option (google.api.http) = { get: "/v1/teams/{team_id}/invites" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // RevokeInvite 吊销未消费邀请（已消费/已吊销按幂等成功）。
   rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse) {
@@ -98,6 +109,7 @@ service TeamsService {
       post: "/v1/teams/{team_id}/invites/{invite_id}:revoke"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
 }
 

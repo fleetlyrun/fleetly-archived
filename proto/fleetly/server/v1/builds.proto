@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -48,6 +49,7 @@ service BuildsService {
       post: "/v1/builds"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // BuildFromUpload 受理「上下文 tar 包 + Dockerfile 入口」构建（T 线 DT-6 /
   // IMPL-T2-2）：client-streaming——首帧 metadata（镜像仓名 + Dockerfile 入口），
@@ -63,12 +65,15 @@ service BuildsService {
   // terminal 同族）。
   rpc BuildFromUpload(stream BuildFromUploadRequest) returns (BuildFromUploadResponse) {
     // 无 google.api.http 注解（gRPC-only，见上）。
+    option (fleetly.annotations.v1.scope) = "build";
   }
   rpc GetBuild(GetBuildRequest) returns (GetBuildResponse) {
     option (google.api.http) = { get: "/v1/builds/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/builds" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
 }
 

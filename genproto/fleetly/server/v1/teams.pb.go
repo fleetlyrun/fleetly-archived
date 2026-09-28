@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1318,7 +1319,7 @@ var File_fleetly_server_v1_teams_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_teams_proto_rawDesc = "" +
 	"\n" +
-	"\x1dfleetly/server/v1/teams.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x9c\x01\n" +
+	"\x1dfleetly/server/v1/teams.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x9c\x01\n" +
 	"\bTeamView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04slug\x18\x02 \x01(\tR\x04slug\x12\x12\n" +
@@ -1398,22 +1399,22 @@ const file_fleetly_server_v1_teams_proto_rawDesc = "" +
 	"\x13RevokeInviteRequest\x12 \n" +
 	"\ateam_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06teamId\x12$\n" +
 	"\tinvite_id\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\binviteId\"\x16\n" +
-	"\x14RevokeInviteResponse2\xc3\v\n" +
-	"\fTeamsService\x12o\n" +
+	"\x14RevokeInviteResponse2\x9b\f\n" +
+	"\fTeamsService\x12w\n" +
 	"\n" +
-	"CreateTeam\x12$.fleetly.server.v1.CreateTeamRequest\x1a%.fleetly.server.v1.CreateTeamResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/teams\x12i\n" +
-	"\tListTeams\x12#.fleetly.server.v1.ListTeamsRequest\x1a$.fleetly.server.v1.ListTeamsResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/teams\x12h\n" +
-	"\aGetTeam\x12!.fleetly.server.v1.GetTeamRequest\x1a\".fleetly.server.v1.GetTeamResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/teams/{id}\x12t\n" +
+	"CreateTeam\x12$.fleetly.server.v1.CreateTeamRequest\x1a%.fleetly.server.v1.CreateTeamResponse\"\x1c\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/teams\x12q\n" +
+	"\tListTeams\x12#.fleetly.server.v1.ListTeamsRequest\x1a$.fleetly.server.v1.ListTeamsResponse\"\x19\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\v\x12\t/v1/teams\x12p\n" +
+	"\aGetTeam\x12!.fleetly.server.v1.GetTeamRequest\x1a\".fleetly.server.v1.GetTeamResponse\"\x1e\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/teams/{id}\x12|\n" +
 	"\n" +
-	"UpdateTeam\x12$.fleetly.server.v1.UpdateTeamRequest\x1a%.fleetly.server.v1.UpdateTeamResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*2\x0e/v1/teams/{id}\x12q\n" +
+	"UpdateTeam\x12$.fleetly.server.v1.UpdateTeamRequest\x1a%.fleetly.server.v1.UpdateTeamResponse\"!\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x13:\x01*2\x0e/v1/teams/{id}\x12y\n" +
 	"\n" +
-	"DeleteTeam\x12$.fleetly.server.v1.DeleteTeamRequest\x1a%.fleetly.server.v1.DeleteTeamResponse\"\x16\x82\xd3\xe4\x93\x02\x10*\x0e/v1/teams/{id}\x12\x8d\x01\n" +
-	"\x0fListTeamMembers\x12).fleetly.server.v1.ListTeamMembersRequest\x1a*.fleetly.server.v1.ListTeamMembersResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/teams/{team_id}/members\x12\x9f\x01\n" +
-	"\x11SetTeamMemberRole\x12+.fleetly.server.v1.SetTeamMemberRoleRequest\x1a,.fleetly.server.v1.SetTeamMemberRoleResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/teams/{team_id}/members:set-role\x12\x9a\x01\n" +
-	"\x10RemoveTeamMember\x12*.fleetly.server.v1.RemoveTeamMemberRequest\x1a+.fleetly.server.v1.RemoveTeamMemberResponse\"-\x82\xd3\xe4\x93\x02'*%/v1/teams/{team_id}/members/{user_id}\x12\x87\x01\n" +
-	"\fCreateInvite\x12&.fleetly.server.v1.CreateInviteRequest\x1a'.fleetly.server.v1.CreateInviteResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/teams/{team_id}/invites\x12\x8d\x01\n" +
-	"\x0fListTeamInvites\x12).fleetly.server.v1.ListTeamInvitesRequest\x1a*.fleetly.server.v1.ListTeamInvitesResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/teams/{team_id}/invites\x12\x9a\x01\n" +
-	"\fRevokeInvite\x12&.fleetly.server.v1.RevokeInviteRequest\x1a'.fleetly.server.v1.RevokeInviteResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/teams/{team_id}/invites/{invite_id}:revokeB\x98\x01\x92ARRP\n" +
+	"DeleteTeam\x12$.fleetly.server.v1.DeleteTeamRequest\x1a%.fleetly.server.v1.DeleteTeamResponse\"\x1e\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x10*\x0e/v1/teams/{id}\x12\x95\x01\n" +
+	"\x0fListTeamMembers\x12).fleetly.server.v1.ListTeamMembersRequest\x1a*.fleetly.server.v1.ListTeamMembersResponse\"+\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/teams/{team_id}/members\x12\xa7\x01\n" +
+	"\x11SetTeamMemberRole\x12+.fleetly.server.v1.SetTeamMemberRoleRequest\x1a,.fleetly.server.v1.SetTeamMemberRoleResponse\"7\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02):\x01*\"$/v1/teams/{team_id}/members:set-role\x12\xa2\x01\n" +
+	"\x10RemoveTeamMember\x12*.fleetly.server.v1.RemoveTeamMemberRequest\x1a+.fleetly.server.v1.RemoveTeamMemberResponse\"5\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02'*%/v1/teams/{team_id}/members/{user_id}\x12\x8f\x01\n" +
+	"\fCreateInvite\x12&.fleetly.server.v1.CreateInviteRequest\x1a'.fleetly.server.v1.CreateInviteResponse\".\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/teams/{team_id}/invites\x12\x95\x01\n" +
+	"\x0fListTeamInvites\x12).fleetly.server.v1.ListTeamInvitesRequest\x1a*.fleetly.server.v1.ListTeamInvitesResponse\"+\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/teams/{team_id}/invites\x12\xa2\x01\n" +
+	"\fRevokeInvite\x12&.fleetly.server.v1.RevokeInviteRequest\x1a'.fleetly.server.v1.RevokeInviteResponse\"A\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x023:\x01*\"./v1/teams/{team_id}/invites/{invite_id}:revokeB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

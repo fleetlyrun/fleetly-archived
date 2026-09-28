@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -306,7 +307,7 @@ var File_fleetly_server_v1_audit_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_audit_proto_rawDesc = "" +
 	"\n" +
-	"\x1dfleetly/server/v1/audit.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xc8\x02\n" +
+	"\x1dfleetly/server/v1/audit.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xc8\x02\n" +
 	"\x10ListAuditRequest\x12\x1e\n" +
 	"\x05actor\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x18\xc8\x01R\x05actor\x12\x1f\n" +
 	"\x06action\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18dR\x06action\x12*\n" +
@@ -331,9 +332,9 @@ const file_fleetly_server_v1_audit_proto_rawDesc = "" +
 	"\fdiff_summary\x18\t \x01(\tR\vdiffSummary\"_\n" +
 	"\x11ListAuditResponse\x124\n" +
 	"\x06audits\x18\x01 \x03(\v2\x1c.fleetly.server.v1.AuditViewR\x06audits\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x05R\x05total2y\n" +
-	"\fAuditService\x12i\n" +
-	"\tListAudit\x12#.fleetly.server.v1.ListAuditRequest\x1a$.fleetly.server.v1.ListAuditResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/auditB\x98\x01\x92ARRP\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total2\x82\x01\n" +
+	"\fAuditService\x12r\n" +
+	"\tListAudit\x12#.fleetly.server.v1.ListAuditRequest\x1a$.fleetly.server.v1.ListAuditResponse\"\x1a\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\v\x12\t/v1/auditB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

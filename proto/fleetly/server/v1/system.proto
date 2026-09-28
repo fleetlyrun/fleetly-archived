@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -37,18 +38,22 @@ service SystemService {
   }
   rpc GetSystemStatus(GetSystemStatusRequest) returns (GetSystemStatusResponse) {
     option (google.api.http) = { get: "/v1/system/status" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
     option (google.api.http) = { get: "/v1/system/nodes" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetIngressStatus(GetIngressStatusRequest) returns (GetIngressStatusResponse) {
     option (google.api.http) = { get: "/v1/system/ingress" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // ListBackups 状态备份台账（T2.22，只读）：热备快照的诚实账（kind/路径/
   // sha256/verify_status）。verify_status=failed 的行是红色告警面的一部分
   // ——台账如实保留失败行，消费方据此判断备份可用性。
   rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse) {
     option (google.api.http) = { get: "/v1/system/backups" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // TriggerBackup 手动触发一次状态备份（T2.22；deploy scope——写面语义，
   // 与升级编排 pre_upgrade 快照共用同一同步入口；响应即落账后的台账行，
@@ -58,6 +63,7 @@ service SystemService {
       post: "/v1/system/backups"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // GetJoinGuide join 向导（E1-8，multi-node §2.3/D-MN-13；admin scope
   // ——响应含 join token 材料）。base_domain 为空 → E_MULTI_NODE_REQUIRES_
@@ -67,6 +73,7 @@ service SystemService {
   // reserved」口径（平台不静默改用户防火墙）。
   rpc GetJoinGuide(GetJoinGuideRequest) returns (GetJoinGuideResponse) {
     option (google.api.http) = { get: "/v1/system/nodes/join-guide" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // RotateJoinToken 轮换 swarm join token（E1-8，D-MN-1：锚定完成后自动
   // rotate 把泄露窗口收敛到分钟级；批量场景 manual 后手动执行）。role
@@ -77,12 +84,14 @@ service SystemService {
       post: "/v1/system/nodes/join-token:rotate"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // GetS3Settings 对象存储设置只读面（E3 对象存储 §5.1/E3-2；admin scope
   // ——端点/桶/凭证指纹属平台敏感配置）。secret 只回 fingerprint（sha256
   // 前 8），绝不回明文；s3.mode=unset 时其余字段为空。
   rpc GetS3Settings(GetS3SettingsRequest) returns (GetS3SettingsResponse) {
     option (google.api.http) = { get: "/v1/system/s3" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateS3Settings 全量保存对象存储设置（PUT 语义：请求即新状态，空字段
   // 即清空——避免「改 mode 残留旧凭证」的静默状态；secret_access_key 为
@@ -95,6 +104,7 @@ service SystemService {
       put: "/v1/system/s3"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // TestS3Connection S3 连接探针（E3 对象存储 §2.1 诚实契约：put→get→
   // delete 一枚探针对象并逐字节比对——通过 = 能认证/能写/能读回，不是 TCP
@@ -105,6 +115,7 @@ service SystemService {
       post: "/v1/system/s3:test"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // GetAcmeSettings ACME DNS-01 设置只读面（B 线 W5 设计 §3，D-V3W5-3/4；
   // admin scope——DNS 服务商凭据指纹属平台敏感配置，与 S3 设置同门）。
@@ -113,6 +124,7 @@ service SystemService {
   // 域名集形态，派生公式与签发面同源（服务端单点）。
   rpc GetAcmeSettings(GetAcmeSettingsRequest) returns (GetAcmeSettingsResponse) {
     option (google.api.http) = { get: "/v1/system/acme" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateAcmeSettings 保存 ACME DNS-01 设置（provider + 凭证 + wildcard
   // 开关）。api_token 为明文只写字段（TLS 传输面承载机密性，持久层
@@ -128,6 +140,7 @@ service SystemService {
       put: "/v1/system/acme"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // TestDnsProvider DNS 服务商探针（诚实契约：在 _acme-challenge-test.
   // <base_domain> 建 TXT → 删 TXT 两步真实往返——通过 = 能认证/能写/能删，
@@ -140,6 +153,7 @@ service SystemService {
       post: "/v1/system/acme/dns:test"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // GetRegistrySettings 平台 registry 凭证设置只读面（IMPL-T1-2/DT-2；
   // admin scope——registry host/用户名/密码指纹属平台敏感配置，与 S3/ACME
@@ -147,6 +161,7 @@ service SystemService {
   // 时 host 为空。
   rpc GetRegistrySettings(GetRegistrySettingsRequest) returns (GetRegistrySettingsResponse) {
     option (google.api.http) = { get: "/v1/system/registry" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateRegistrySettings 保存平台 registry 凭证设置（host + 用户名 +
   // 密码）。语义：host 空 = 清除全部设置；password 留空 = 保留已存密码
@@ -158,6 +173,7 @@ service SystemService {
       put: "/v1/system/registry"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

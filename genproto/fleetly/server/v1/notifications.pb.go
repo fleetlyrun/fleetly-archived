@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1590,7 +1591,7 @@ var File_fleetly_server_v1_notifications_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_notifications_proto_rawDesc = "" +
 	"\n" +
-	"%fleetly/server/v1/notifications.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xdd\x02\n" +
+	"%fleetly/server/v1/notifications.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xdd\x02\n" +
 	"\x13WebhookEndpointView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -1720,19 +1721,19 @@ const file_fleetly_server_v1_notifications_proto_rawDesc = "" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1f\n" +
 	"\vstatus_code\x18\x02 \x01(\x05R\n" +
 	"statusCode\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error2\xce\r\n" +
-	"\x14NotificationsService\x12\x9c\x01\n" +
-	"\x14ListWebhookEndpoints\x12..fleetly.server.v1.ListWebhookEndpointsRequest\x1a/.fleetly.server.v1.ListWebhookEndpointsResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/notifications/endpoints\x12\x9b\x01\n" +
-	"\x12GetWebhookEndpoint\x12,.fleetly.server.v1.GetWebhookEndpointRequest\x1a-.fleetly.server.v1.GetWebhookEndpointResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/notifications/endpoints/{id}\x12\xa2\x01\n" +
-	"\x15CreateWebhookEndpoint\x12/.fleetly.server.v1.CreateWebhookEndpointRequest\x1a0.fleetly.server.v1.CreateWebhookEndpointResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/notifications/endpoints\x12\xa7\x01\n" +
-	"\x15UpdateWebhookEndpoint\x12/.fleetly.server.v1.UpdateWebhookEndpointRequest\x1a0.fleetly.server.v1.UpdateWebhookEndpointResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\x1a /v1/notifications/endpoints/{id}\x12\xa4\x01\n" +
-	"\x15DeleteWebhookEndpoint\x12/.fleetly.server.v1.DeleteWebhookEndpointRequest\x1a0.fleetly.server.v1.DeleteWebhookEndpointResponse\"(\x82\xd3\xe4\x93\x02\"* /v1/notifications/endpoints/{id}\x12\xaf\x01\n" +
-	"\x13RotateWebhookSecret\x12-.fleetly.server.v1.RotateWebhookSecretRequest\x1a..fleetly.server.v1.RotateWebhookSecretResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./v1/notifications/endpoints/{id}/rotate-secret\x12\x8e\x01\n" +
-	"\vTestWebhook\x12%.fleetly.server.v1.TestWebhookRequest\x1a&.fleetly.server.v1.TestWebhookResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/notifications/endpoints/{id}/test\x12\xa0\x01\n" +
-	"\x15ListWebhookDeliveries\x12/.fleetly.server.v1.ListWebhookDeliveriesRequest\x1a0.fleetly.server.v1.ListWebhookDeliveriesResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/v1/notifications/deliveries\x12\x88\x01\n" +
-	"\x0fGetSmtpSettings\x12).fleetly.server.v1.GetSmtpSettingsRequest\x1a*.fleetly.server.v1.GetSmtpSettingsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/notifications/smtp\x12\x94\x01\n" +
-	"\x12UpdateSmtpSettings\x12,.fleetly.server.v1.UpdateSmtpSettingsRequest\x1a-.fleetly.server.v1.UpdateSmtpSettingsResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/v1/notifications/smtp\x12{\n" +
-	"\bTestSmtp\x12\".fleetly.server.v1.TestSmtpRequest\x1a#.fleetly.server.v1.TestSmtpResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/notifications/smtp/testB\x98\x01\x92ARRP\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error2\xaf\x0e\n" +
+	"\x14NotificationsService\x12\xa4\x01\n" +
+	"\x14ListWebhookEndpoints\x12..fleetly.server.v1.ListWebhookEndpointsRequest\x1a/.fleetly.server.v1.ListWebhookEndpointsResponse\"+\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/notifications/endpoints\x12\xa3\x01\n" +
+	"\x12GetWebhookEndpoint\x12,.fleetly.server.v1.GetWebhookEndpointRequest\x1a-.fleetly.server.v1.GetWebhookEndpointResponse\"0\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\"\x12 /v1/notifications/endpoints/{id}\x12\xab\x01\n" +
+	"\x15CreateWebhookEndpoint\x12/.fleetly.server.v1.CreateWebhookEndpointRequest\x1a0.fleetly.server.v1.CreateWebhookEndpointResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/notifications/endpoints\x12\xb0\x01\n" +
+	"\x15UpdateWebhookEndpoint\x12/.fleetly.server.v1.UpdateWebhookEndpointRequest\x1a0.fleetly.server.v1.UpdateWebhookEndpointResponse\"4\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02%:\x01*\x1a /v1/notifications/endpoints/{id}\x12\xad\x01\n" +
+	"\x15DeleteWebhookEndpoint\x12/.fleetly.server.v1.DeleteWebhookEndpointRequest\x1a0.fleetly.server.v1.DeleteWebhookEndpointResponse\"1\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\"* /v1/notifications/endpoints/{id}\x12\xb8\x01\n" +
+	"\x13RotateWebhookSecret\x12-.fleetly.server.v1.RotateWebhookSecretRequest\x1a..fleetly.server.v1.RotateWebhookSecretResponse\"B\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x023:\x01*\"./v1/notifications/endpoints/{id}/rotate-secret\x12\x97\x01\n" +
+	"\vTestWebhook\x12%.fleetly.server.v1.TestWebhookRequest\x1a&.fleetly.server.v1.TestWebhookResponse\"9\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/notifications/endpoints/{id}/test\x12\xa8\x01\n" +
+	"\x15ListWebhookDeliveries\x12/.fleetly.server.v1.ListWebhookDeliveriesRequest\x1a0.fleetly.server.v1.ListWebhookDeliveriesResponse\",\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1e\x12\x1c/v1/notifications/deliveries\x12\x91\x01\n" +
+	"\x0fGetSmtpSettings\x12).fleetly.server.v1.GetSmtpSettingsRequest\x1a*.fleetly.server.v1.GetSmtpSettingsResponse\"'\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/notifications/smtp\x12\x9d\x01\n" +
+	"\x12UpdateSmtpSettings\x12,.fleetly.server.v1.UpdateSmtpSettingsRequest\x1a-.fleetly.server.v1.UpdateSmtpSettingsResponse\"*\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/v1/notifications/smtp\x12\x84\x01\n" +
+	"\bTestSmtp\x12\".fleetly.server.v1.TestSmtpRequest\x1a#.fleetly.server.v1.TestSmtpResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/notifications/smtp/testB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

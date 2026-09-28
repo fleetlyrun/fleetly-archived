@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "fleetly/server/v1/users.proto";
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -53,6 +54,7 @@ service AuthService {
       post: "/v1/auth/logout"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // LogoutAll 全部注销：删除当前用户全部会话（含本会话）。
   rpc LogoutAll(LogoutAllRequest) returns (LogoutAllResponse) {
@@ -60,11 +62,13 @@ service AuthService {
       post: "/v1/auth/logout-all"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // Me 当前身份投影：user + is_platform_admin + 所属团队与角色（团队面
   // W2 落地前的只读投影）。
   rpc Me(MeRequest) returns (MeResponse) {
     option (google.api.http) = { get: "/v1/auth/me" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // AcceptInvite 消费一次性邀请（设计 §3.1：W1 落面、合法消费 store 原语
   // ——邀请的产生面（TeamsService.CreateInvite）随 W2 落地）。
@@ -73,6 +77,7 @@ service AuthService {
       post: "/v1/auth/invite:accept"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetRegistrationState 登录页开关注册入口（设计 §5/§7）：无用户窗口恒
   // 返回 open=true（has_users=false）。

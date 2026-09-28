@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -42,11 +43,13 @@ service ExecService {
   // enabled=false）→ E_TERMINAL_DISABLED。
   rpc CreateTerminalTicket(CreateTerminalTicketRequest) returns (CreateTerminalTicketResponse) {
     option (google.api.http) = { post: "/v1/terminal/tickets" body: "*" };
+    option (fleetly.annotations.v1.scope) = "terminal";
   }
   // GetTerminalStatus 终端功能状态视图（terminal scope）：功能开关 / relay
   // 部署态 / 已连接节点数 / 活跃会话数——Console 面板的常驻状态行来源。
   rpc GetTerminalStatus(GetTerminalStatusRequest) returns (GetTerminalStatusResponse) {
     option (google.api.http) = { get: "/v1/terminal/status" };
+    option (fleetly.annotations.v1.scope) = "terminal";
   }
 }
 

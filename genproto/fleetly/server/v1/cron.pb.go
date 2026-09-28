@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -366,7 +367,7 @@ var File_fleetly_server_v1_cron_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_cron_proto_rawDesc = "" +
 	"\n" +
-	"\x1cfleetly/server/v1/cron.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"U\n" +
+	"\x1cfleetly/server/v1/cron.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"U\n" +
 	"\x15TriggerCronRunRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\x12!\n" +
 	"\aservice\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\aservice\"J\n" +
@@ -396,10 +397,10 @@ const file_fleetly_server_v1_cron_proto_rawDesc = "" +
 	"\vjob_service\x18\t \x01(\tR\n" +
 	"jobService\x12\x14\n" +
 	"\x05error\x18\n" +
-	" \x01(\tR\x05error2\xaf\x02\n" +
-	"\vCronService\x12\x9b\x01\n" +
-	"\x0eTriggerCronRun\x12(.fleetly.server.v1.TriggerCronRunRequest\x1a).fleetly.server.v1.TriggerCronRunResponse\"4\x82\xd3\xe4\x93\x02.:\x01*\")/v1/apps/{app}/services/{service}/trigger\x12\x81\x01\n" +
-	"\fListCronRuns\x12&.fleetly.server.v1.ListCronRunsRequest\x1a'.fleetly.server.v1.ListCronRunsResponse\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/cron-runsB\x98\x01\x92ARRP\n" +
+	" \x01(\tR\x05error2\xc1\x02\n" +
+	"\vCronService\x12\xa5\x01\n" +
+	"\x0eTriggerCronRun\x12(.fleetly.server.v1.TriggerCronRunRequest\x1a).fleetly.server.v1.TriggerCronRunResponse\">\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02.:\x01*\")/v1/apps/{app}/services/{service}/trigger\x12\x89\x01\n" +
+	"\fListCronRuns\x12&.fleetly.server.v1.ListCronRunsRequest\x1a'.fleetly.server.v1.ListCronRunsResponse\"(\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/cron-runsB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

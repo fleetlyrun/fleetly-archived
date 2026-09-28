@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -434,7 +435,7 @@ var File_fleetly_server_v1_secrets_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_secrets_proto_rawDesc = "" +
 	"\n" +
-	"\x1ffleetly/server/v1/secrets.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x89\x01\n" +
+	"\x1ffleetly/server/v1/secrets.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x89\x01\n" +
 	"\x10SetSecretRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\x127\n" +
 	"\x04name\x18\x02 \x01(\tB#\xbaH r\x1e2\x1c^[A-Za-z0-9][A-Za-z0-9._-]*$R\x04name\x12!\n" +
@@ -464,11 +465,11 @@ const file_fleetly_server_v1_secrets_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt2\x92\x03\n" +
-	"\x0eSecretsService\x12y\n" +
-	"\tSetSecret\x12#.fleetly.server.v1.SetSecretRequest\x1a$.fleetly.server.v1.SetSecretResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/apps/{app}/secrets\x12|\n" +
-	"\vListSecrets\x12%.fleetly.server.v1.ListSecretsRequest\x1a&.fleetly.server.v1.ListSecretsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/apps/{app}/secrets\x12\x86\x01\n" +
-	"\fRemoveSecret\x12&.fleetly.server.v1.RemoveSecretRequest\x1a'.fleetly.server.v1.RemoveSecretResponse\"%\x82\xd3\xe4\x93\x02\x1f*\x1d/v1/apps/{app}/secrets/{name}B\x98\x01\x92ARRP\n" +
+	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt2\xae\x03\n" +
+	"\x0eSecretsService\x12\x82\x01\n" +
+	"\tSetSecret\x12#.fleetly.server.v1.SetSecretRequest\x1a$.fleetly.server.v1.SetSecretResponse\"*\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/apps/{app}/secrets\x12\x84\x01\n" +
+	"\vListSecrets\x12%.fleetly.server.v1.ListSecretsRequest\x1a&.fleetly.server.v1.ListSecretsResponse\"&\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/apps/{app}/secrets\x12\x8f\x01\n" +
+	"\fRemoveSecret\x12&.fleetly.server.v1.RemoveSecretRequest\x1a'.fleetly.server.v1.RemoveSecretResponse\".\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1f*\x1d/v1/apps/{app}/secrets/{name}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

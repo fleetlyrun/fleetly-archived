@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -35,12 +36,14 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service DomainsService {
   rpc ListAppDomains(ListAppDomainsRequest) returns (ListAppDomainsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/domains" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc VerifyAppDomains(VerifyAppDomainsRequest) returns (VerifyAppDomainsResponse) {
     option (google.api.http) = {
       post: "/v1/apps/{app}/domains/verify"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // CreateAppDomain 新建域名资源（host 全局独占：冲突 409 E_DOMAIN_CONFLICT；
   // 每服务 ≤5、每 app ≤10 超限 4xx E_DOMAIN_UNSUPPORTED）。写入成功后同步
@@ -50,6 +53,7 @@ service DomainsService {
       post: "/v1/apps/{app}/domains"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // UpdateAppDomain 更新既有域名行（{domain} 是寻址键 = host，不改名——
   // 改名 = 删除 + 重建，与 env key 同口径）。空字段 = 保持现值（CLI 局部
@@ -59,11 +63,13 @@ service DomainsService {
       put: "/v1/apps/{app}/domains/{domain}"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // RemoveAppDomain 删除域名行（幂等不做：不存在 404）。删除即触发入口
   // 收敛（路由撤销；证书 SAN 集变化随下次签发收敛）。
   rpc RemoveAppDomain(RemoveAppDomainRequest) returns (RemoveAppDomainResponse) {
     option (google.api.http) = { delete: "/v1/apps/{app}/domains/{domain}" };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
 }
 

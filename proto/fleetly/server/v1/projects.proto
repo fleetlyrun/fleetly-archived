@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -46,14 +47,17 @@ service ProjectsService {
       post: "/v1/projects"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // ListProjects 我可见项目（团队归属集）；带 team_id 收窄到单队（须为
   // 该队成员或平台管理员）；平台管理员不带过滤 = 全部。
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
     option (google.api.http) = { get: "/v1/projects" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {
     option (google.api.http) = { get: "/v1/projects/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // UpdateProject 仅改 name/description（slug 不可变——请求无 slug 字段）。
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse) {
@@ -61,15 +65,18 @@ service ProjectsService {
       patch: "/v1/projects/{id}"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // DeleteProject 删除空项目：项目内有存活资源（apps 非 tombstone /
   // db_instances 非 deleted 终态）即拒绝（409——资源先迁走或删光，不做
   // 隐式级联，§3.1）。
   rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {
     option (google.api.http) = { delete: "/v1/projects/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc ListProjectMembers(ListProjectMembersRequest) returns (ListProjectMembersResponse) {
     option (google.api.http) = { get: "/v1/projects/{project_id}/members" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SetProjectMemberRole 队内覆写 upsert（团队 admin/owner，D-W0-2 B 形）：
   // 仅限团队成员；owner 不可覆写（409）；有行则改角色、无行则插入。
@@ -78,10 +85,12 @@ service ProjectsService {
       post: "/v1/projects/{project_id}/members:set-role"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // RemoveProjectMember 删除覆写行（该成员回退用团队角色）。
   rpc RemoveProjectMember(RemoveProjectMemberRequest) returns (RemoveProjectMemberResponse) {
     option (google.api.http) = { delete: "/v1/projects/{project_id}/members/{user_id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // MoveApp 资源改派（v0.3 W2-S3，rbac-teams §3.4/§5；平台管理员专属）：
   // 写归属 + 换名重部署（D-W0-4 二修——底座命名三段以归属为参数）。无卷
@@ -94,6 +103,7 @@ service ProjectsService {
       post: "/v1/projects/{to_project_id}:move-app"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // MoveDatabase 资源改派（同 MoveApp 语义；库卷公式不变——零卷迁移/
   // 零数据搬移，换名重部署引用同一物理卷）。
@@ -102,6 +112,7 @@ service ProjectsService {
       post: "/v1/projects/{to_project_id}:move-database"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // AttachAppProjectNetwork 把 app 挂入其项目网（T 线 OT-1 / IMPL-T15-1 的
   // 显式 opt-in；项目由 app 行归属解析——请求不携带项目，避免「指向别的
@@ -117,12 +128,14 @@ service ProjectsService {
   // 拒绝（重部署会以旧快照覆盖在途发布）。
   rpc AttachAppProjectNetwork(AttachAppProjectNetworkRequest) returns (AttachAppProjectNetworkResponse) {
     option (google.api.http) = { post: "/v1/apps/{app}/project-network" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // DetachAppProjectNetwork 从项目网摘除 app（摘网随下一次重部署的服务
   // 滚动收敛；项目网在失去最后一名成员且零端点后由平台回收）。权限与
   // 在途守卫同 Attach。
   rpc DetachAppProjectNetwork(DetachAppProjectNetworkRequest) returns (DetachAppProjectNetworkResponse) {
     option (google.api.http) = { delete: "/v1/apps/{app}/project-network" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

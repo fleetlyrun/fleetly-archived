@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -478,7 +479,7 @@ var File_fleetly_server_v1_tokens_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_tokens_proto_rawDesc = "" +
 	"\n" +
-	"\x1efleetly/server/v1/tokens.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xc7\x01\n" +
+	"\x1efleetly/server/v1/tokens.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xc7\x01\n" +
 	"\x12CreateTokenRequest\x12Q\n" +
 	"\x06scopes\x18\x01 \x03(\tB9\xbaH6\x92\x013\b\x01\"/r-R\x04readR\x06deployR\bterminalR\x05tasksR\x05buildR\x05adminR\x06scopes\x12\x1c\n" +
 	"\x04note\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\xc8\x01R\x04note\x12&\n" +
@@ -515,14 +516,14 @@ const file_fleetly_server_v1_tokens_proto_rawDesc = "" +
 	"\x13RevokeTokenResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"revoked_at\x18\x02 \x01(\tR\trevokedAt2\xea\x02\n" +
-	"\rTokensService\x12s\n" +
-	"\vCreateToken\x12%.fleetly.server.v1.CreateTokenRequest\x1a&.fleetly.server.v1.CreateTokenResponse\"\x15\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
-	"/v1/tokens\x12m\n" +
-	"\n" +
-	"ListTokens\x12$.fleetly.server.v1.ListTokensRequest\x1a%.fleetly.server.v1.ListTokensResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"revoked_at\x18\x02 \x01(\tR\trevokedAt2\x82\x03\n" +
+	"\rTokensService\x12{\n" +
+	"\vCreateToken\x12%.fleetly.server.v1.CreateTokenRequest\x1a&.fleetly.server.v1.CreateTokenResponse\"\x1d\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x0f:\x01*\"\n" +
 	"/v1/tokens\x12u\n" +
-	"\vRevokeToken\x12%.fleetly.server.v1.RevokeTokenRequest\x1a&.fleetly.server.v1.RevokeTokenResponse\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/v1/tokens/{id}B\x98\x01\x92ARRP\n" +
+	"\n" +
+	"ListTokens\x12$.fleetly.server.v1.ListTokensRequest\x1a%.fleetly.server.v1.ListTokensResponse\"\x1a\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"/v1/tokens\x12}\n" +
+	"\vRevokeToken\x12%.fleetly.server.v1.RevokeTokenRequest\x1a&.fleetly.server.v1.RevokeTokenResponse\"\x1f\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x11*\x0f/v1/tokens/{id}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

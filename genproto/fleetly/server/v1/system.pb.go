@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -3055,7 +3056,7 @@ var File_fleetly_server_v1_system_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_system_proto_rawDesc = "" +
 	"\n" +
-	"\x1efleetly/server/v1/system.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\r\n" +
+	"\x1efleetly/server/v1/system.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\r\n" +
 	"\vPingRequest\"T\n" +
 	"\fPingResponse\x12!\n" +
 	"\aservice\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\aservice\x12!\n" +
@@ -3286,24 +3287,24 @@ const file_fleetly_server_v1_system_proto_rawDesc = "" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x03 \x01(\tR\bpassword\"e\n" +
 	"\x1eUpdateRegistrySettingsResponse\x12C\n" +
-	"\bsettings\x18\x01 \x01(\v2'.fleetly.server.v1.RegistrySettingsViewR\bsettings2\xfa\x10\n" +
+	"\bsettings\x18\x01 \x01(\v2'.fleetly.server.v1.RegistrySettingsViewR\bsettings2\x80\x12\n" +
 	"\rSystemService\x12`\n" +
-	"\x04Ping\x12\x1e.fleetly.server.v1.PingRequest\x1a\x1f.fleetly.server.v1.PingResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/system/ping\x12\x83\x01\n" +
-	"\x0fGetSystemStatus\x12).fleetly.server.v1.GetSystemStatusRequest\x1a*.fleetly.server.v1.GetSystemStatusResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/system/status\x12p\n" +
-	"\tListNodes\x12#.fleetly.server.v1.ListNodesRequest\x1a$.fleetly.server.v1.ListNodesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/system/nodes\x12\x87\x01\n" +
-	"\x10GetIngressStatus\x12*.fleetly.server.v1.GetIngressStatusRequest\x1a+.fleetly.server.v1.GetIngressStatusResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/system/ingress\x12x\n" +
-	"\vListBackups\x12%.fleetly.server.v1.ListBackupsRequest\x1a&.fleetly.server.v1.ListBackupsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/system/backups\x12\x81\x01\n" +
-	"\rTriggerBackup\x12'.fleetly.server.v1.TriggerBackupRequest\x1a(.fleetly.server.v1.TriggerBackupResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/system/backups\x12\x84\x01\n" +
-	"\fGetJoinGuide\x12&.fleetly.server.v1.GetJoinGuideRequest\x1a'.fleetly.server.v1.GetJoinGuideResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/system/nodes/join-guide\x12\x97\x01\n" +
-	"\x0fRotateJoinToken\x12).fleetly.server.v1.RotateJoinTokenRequest\x1a*.fleetly.server.v1.RotateJoinTokenResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/system/nodes/join-token:rotate\x12y\n" +
-	"\rGetS3Settings\x12'.fleetly.server.v1.GetS3SettingsRequest\x1a(.fleetly.server.v1.GetS3SettingsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/system/s3\x12\x85\x01\n" +
-	"\x10UpdateS3Settings\x12*.fleetly.server.v1.UpdateS3SettingsRequest\x1a+.fleetly.server.v1.UpdateS3SettingsResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\x1a\r/v1/system/s3\x12\x8a\x01\n" +
-	"\x10TestS3Connection\x12*.fleetly.server.v1.TestS3ConnectionRequest\x1a+.fleetly.server.v1.TestS3ConnectionResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/system/s3:test\x12\x81\x01\n" +
-	"\x0fGetAcmeSettings\x12).fleetly.server.v1.GetAcmeSettingsRequest\x1a*.fleetly.server.v1.GetAcmeSettingsResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/system/acme\x12\x8d\x01\n" +
-	"\x12UpdateAcmeSettings\x12,.fleetly.server.v1.UpdateAcmeSettingsRequest\x1a-.fleetly.server.v1.UpdateAcmeSettingsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\x1a\x0f/v1/system/acme\x12\x8d\x01\n" +
-	"\x0fTestDnsProvider\x12).fleetly.server.v1.TestDnsProviderRequest\x1a*.fleetly.server.v1.TestDnsProviderResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/system/acme/dns:test\x12\x91\x01\n" +
-	"\x13GetRegistrySettings\x12-.fleetly.server.v1.GetRegistrySettingsRequest\x1a..fleetly.server.v1.GetRegistrySettingsResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/system/registry\x12\x9d\x01\n" +
-	"\x16UpdateRegistrySettings\x120.fleetly.server.v1.UpdateRegistrySettingsRequest\x1a1.fleetly.server.v1.UpdateRegistrySettingsResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/system/registryB\x98\x01\x92ARRP\n" +
+	"\x04Ping\x12\x1e.fleetly.server.v1.PingRequest\x1a\x1f.fleetly.server.v1.PingResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/system/ping\x12\x8b\x01\n" +
+	"\x0fGetSystemStatus\x12).fleetly.server.v1.GetSystemStatusRequest\x1a*.fleetly.server.v1.GetSystemStatusResponse\"!\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/system/status\x12x\n" +
+	"\tListNodes\x12#.fleetly.server.v1.ListNodesRequest\x1a$.fleetly.server.v1.ListNodesResponse\" \x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/system/nodes\x12\x8f\x01\n" +
+	"\x10GetIngressStatus\x12*.fleetly.server.v1.GetIngressStatusRequest\x1a+.fleetly.server.v1.GetIngressStatusResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/system/ingress\x12\x80\x01\n" +
+	"\vListBackups\x12%.fleetly.server.v1.ListBackupsRequest\x1a&.fleetly.server.v1.ListBackupsResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/system/backups\x12\x8b\x01\n" +
+	"\rTriggerBackup\x12'.fleetly.server.v1.TriggerBackupRequest\x1a(.fleetly.server.v1.TriggerBackupResponse\"'\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/system/backups\x12\x8d\x01\n" +
+	"\fGetJoinGuide\x12&.fleetly.server.v1.GetJoinGuideRequest\x1a'.fleetly.server.v1.GetJoinGuideResponse\",\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1d\x12\x1b/v1/system/nodes/join-guide\x12\xa0\x01\n" +
+	"\x0fRotateJoinToken\x12).fleetly.server.v1.RotateJoinTokenRequest\x1a*.fleetly.server.v1.RotateJoinTokenResponse\"6\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02':\x01*\"\"/v1/system/nodes/join-token:rotate\x12\x82\x01\n" +
+	"\rGetS3Settings\x12'.fleetly.server.v1.GetS3SettingsRequest\x1a(.fleetly.server.v1.GetS3SettingsResponse\"\x1e\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/system/s3\x12\x8e\x01\n" +
+	"\x10UpdateS3Settings\x12*.fleetly.server.v1.UpdateS3SettingsRequest\x1a+.fleetly.server.v1.UpdateS3SettingsResponse\"!\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x12:\x01*\x1a\r/v1/system/s3\x12\x93\x01\n" +
+	"\x10TestS3Connection\x12*.fleetly.server.v1.TestS3ConnectionRequest\x1a+.fleetly.server.v1.TestS3ConnectionResponse\"&\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/system/s3:test\x12\x8a\x01\n" +
+	"\x0fGetAcmeSettings\x12).fleetly.server.v1.GetAcmeSettingsRequest\x1a*.fleetly.server.v1.GetAcmeSettingsResponse\" \x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/system/acme\x12\x96\x01\n" +
+	"\x12UpdateAcmeSettings\x12,.fleetly.server.v1.UpdateAcmeSettingsRequest\x1a-.fleetly.server.v1.UpdateAcmeSettingsResponse\"#\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x14:\x01*\x1a\x0f/v1/system/acme\x12\x96\x01\n" +
+	"\x0fTestDnsProvider\x12).fleetly.server.v1.TestDnsProviderRequest\x1a*.fleetly.server.v1.TestDnsProviderResponse\",\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/system/acme/dns:test\x12\x9a\x01\n" +
+	"\x13GetRegistrySettings\x12-.fleetly.server.v1.GetRegistrySettingsRequest\x1a..fleetly.server.v1.GetRegistrySettingsResponse\"$\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/system/registry\x12\xa6\x01\n" +
+	"\x16UpdateRegistrySettings\x120.fleetly.server.v1.UpdateRegistrySettingsRequest\x1a1.fleetly.server.v1.UpdateRegistrySettingsResponse\"'\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/system/registryB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

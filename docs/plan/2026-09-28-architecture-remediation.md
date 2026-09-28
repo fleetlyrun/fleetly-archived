@@ -47,7 +47,7 @@
 - **缺陷**:methodScopes 漏登史(MoveApp/MoveDatabase)= fail-closed 静默降级 admin-only,不可见,无兜底;E2 MCP 将新增成打 RPC。
 - **修法**:纯测试票零生产改动。`TestMethodScopeRegistryCoversDescriptor`:descriptor walk(28 文件/158 方法,零手抄清单)四向完备——缺登记红 / methodScopes 幻影红 / 豁免幻影红 / 豁免清单≡authExemptMethods 双向相等;豁免 4 条各带理由;盘点结论=现状零出入(154+4)。
 
-## 2b. 第二批(E/F/G/H,2026-09-29,按「按顺序继续」推进)
+## 2b. 第二批(E/F/G/H,2026-09-29,按「按顺序继续」推进;候选 6b 后半 J 见 §2c)
 
 ### IMPL-ARCH-E(211adf6)对账「披露一次」骨架收敛(候选 1,评审首推)
 
@@ -73,6 +73,14 @@
 - **修法**:`pollStream(ctx, streamPoll)` 唯一骨架 + `streamSink` 三钩子(deliver/openFailed/watchdogFired);appSink(redact→ring→VL/盘)与 taskSink(VL 直推)两适配;**jsonl 不收任务日志的诚实边界留在 taskSink**,不外泄成循环参数;`evictCursors` 收编孪生;键构造不同构保留;行为保持对照十点逐字核对;唯一微差披露=task get-or-init 多一次纯读 clock()。
 - **新发现挂账**:`evictStaleStreamState` 按 cur.app 对账,task 游标 app="" 永不在 active 集,连续运行超 5min 后存活任务游标被 app 级淘汰误收(下轮从零重读,重复优于丢失,幂等;建议后续小票豁免);第四号循环 pollAccess 游标为独立标量不同构,保留,接缝已预留。
 
+## 2c. 候选 6b 收官(J,2026-09-28;前半 I 见 f6ffef9)
+
+### IMPL-ARCH-J(候选 6b 后半;前半 I 服务登记表见 f6ffef9)scope 登记面搬家:proto option 唯一源
+
+- **裁决**:用户批准搬家——原红线「scope.go fail-closed 登记制」的登记面改为 **proto option**(每 RPC `option (fleetly.annotations.v1.scope) = "<词>"`,定义在 proto/fleetly/annotations/v1/annotations.proto,MethodOptions 字段号 50000 组织保留区间);proto 成为登记的唯一人类编辑点。**搬的是「登记写在哪」,不是「怎么鉴权」**:fail-closed 兜底、豁免四条(住 auth.go authExemptMethods,不进 proto)、拦截器/RequiredScope 耦合零改动。
+- **修法**:27 个 server proto 的 154 个方法逐条迁注解(一次性迁移工具 + descriptor 全集 ⇆ 旧表零 diff 校验,值零变化后工具即删);scope.go 手工表删除,init 期从 protoregistry 生成同形态 map,注解词 ∉ scopeWords 词表即 panic fail-fast(启动期爆,不静默成永不可达端点)。
+- **守卫**:scope_completeness_test.go 四向适配——缺注解红 / 注解词词表外红 / authExemptMethods 幻影红 / 测试豁免清单 ≡ 生产豁免表双向;红态两方向演示过(摘注解点名方法;改词表外值先 init panic 再测试方向红)。rbac-teams 红线表述随票修订。
+
 ## 3. 守卫清单与验收句
 
 | 守卫 | 层 | 验收句(下一个同类问题在哪被拦) |
@@ -93,7 +101,7 @@
 
 | 候选/项 | 内容 | 状态 |
 |---|---|---|
-| 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 挂账,需 rbac-teams 红线显式裁决(fail-closed 登记制搬家) |
+| 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 已落,拆两票:I=服务登记表(f6ffef9,2026-09-28);J=scope 登记面搬家至 proto option(§2c IMPL-ARCH-J,rbac-teams 红线随票修订) |
 | 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 挂账,跨仓决策,值得 ADR |
 | E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 挂账,需跨包 helper 形态裁决 |
 | F 尾 | eventcode 头注计数叙事停在 95、实注册 105(既有注释漂移) | 挂账,随下次事件增补重算 |

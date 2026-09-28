@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -543,7 +544,7 @@ var File_fleetly_server_v1_metrics_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_metrics_proto_rawDesc = "" +
 	"\n" +
-	"\x1ffleetly/server/v1/metrics.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xfc\x01\n" +
+	"\x1ffleetly/server/v1/metrics.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xfc\x01\n" +
 	"\x14SearchMetricsRequest\x12 \n" +
 	"\x05query\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\x80 R\x05query\x129\n" +
@@ -582,11 +583,11 @@ const file_fleetly_server_v1_metrics_proto_rawDesc = "" +
 	"\x15SetMetricsModeRequest\x12$\n" +
 	"\x04mode\x18\x01 \x01(\tB\x10\xbaH\rr\vR\x05unsetR\x02onR\x04mode\"]\n" +
 	"\x16SetMetricsModeResponse\x12C\n" +
-	"\x06status\x18\x01 \x01(\v2+.fleetly.server.v1.GetMetricsStatusResponseR\x06status2\x9f\x03\n" +
-	"\x0eMetricsService\x12~\n" +
-	"\rSearchMetrics\x12'.fleetly.server.v1.SearchMetricsRequest\x1a(.fleetly.server.v1.SearchMetricsResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/metrics/search\x12\x87\x01\n" +
-	"\x10GetMetricsStatus\x12*.fleetly.server.v1.GetMetricsStatusRequest\x1a+.fleetly.server.v1.GetMetricsStatusResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/metrics/status\x12\x82\x01\n" +
-	"\x0eSetMetricsMode\x12(.fleetly.server.v1.SetMetricsModeRequest\x1a).fleetly.server.v1.SetMetricsModeResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/v1/metrics/modeB\x98\x01\x92ARRP\n" +
+	"\x06status\x18\x01 \x01(\v2+.fleetly.server.v1.GetMetricsStatusResponseR\x06status2\xba\x03\n" +
+	"\x0eMetricsService\x12\x86\x01\n" +
+	"\rSearchMetrics\x12'.fleetly.server.v1.SearchMetricsRequest\x1a(.fleetly.server.v1.SearchMetricsResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/metrics/search\x12\x8f\x01\n" +
+	"\x10GetMetricsStatus\x12*.fleetly.server.v1.GetMetricsStatusRequest\x1a+.fleetly.server.v1.GetMetricsStatusResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/metrics/status\x12\x8c\x01\n" +
+	"\x0eSetMetricsMode\x12(.fleetly.server.v1.SetMetricsModeRequest\x1a).fleetly.server.v1.SetMetricsModeResponse\"%\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/v1/metrics/modeB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

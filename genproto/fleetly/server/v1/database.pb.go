@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -2081,7 +2082,7 @@ var File_fleetly_server_v1_database_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_database_proto_rawDesc = "" +
 	"\n" +
-	" fleetly/server/v1/database.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x94\x02\n" +
+	" fleetly/server/v1/database.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\x94\x02\n" +
 	"\x15CreateDatabaseRequest\x120\n" +
 	"\x04name\x18\x01 \x01(\tB\x1c\xbaH\x19r\x172\x15^[a-z0-9][a-z0-9_-]*$R\x04name\x12#\n" +
 	"\btemplate\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\btemplate\x129\n" +
@@ -2222,22 +2223,22 @@ const file_fleetly_server_v1_database_proto_rawDesc = "" +
 	"\aconfirm\x18\x02 \x01(\tR\aconfirm\"n\n" +
 	"\x17UpgradeDatabaseResponse\x12;\n" +
 	"\bdatabase\x18\x01 \x01(\v2\x1f.fleetly.server.v1.DatabaseViewR\bdatabase\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status2\xca\x10\n" +
-	"\x0fDatabaseService\x12\x7f\n" +
-	"\x0eCreateDatabase\x12(.fleetly.server.v1.CreateDatabaseRequest\x1a).fleetly.server.v1.CreateDatabaseResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/databases\x12z\n" +
-	"\vGetDatabase\x12%.fleetly.server.v1.GetDatabaseRequest\x1a&.fleetly.server.v1.GetDatabaseResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/databases/{name}\x12y\n" +
-	"\rListDatabases\x12'.fleetly.server.v1.ListDatabasesRequest\x1a(.fleetly.server.v1.ListDatabasesResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/databases\x12\x83\x01\n" +
-	"\x0eDeleteDatabase\x12(.fleetly.server.v1.DeleteDatabaseRequest\x1a).fleetly.server.v1.DeleteDatabaseResponse\"\x1c\x82\xd3\xe4\x93\x02\x16*\x14/v1/databases/{name}\x12\x91\x01\n" +
-	"\x0fSuspendDatabase\x12).fleetly.server.v1.SuspendDatabaseRequest\x1a*.fleetly.server.v1.SuspendDatabaseResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/suspend\x12\x8d\x01\n" +
-	"\x0eResumeDatabase\x12(.fleetly.server.v1.ResumeDatabaseRequest\x1a).fleetly.server.v1.ResumeDatabaseResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/databases/{name}/resume\x12\x89\x01\n" +
-	"\rRetryDatabase\x12'.fleetly.server.v1.RetryDatabaseRequest\x1a(.fleetly.server.v1.RetryDatabaseResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/v1/databases/{name}/retry\x12\xa7\x01\n" +
-	"\x16UpdateDatabaseSettings\x120.fleetly.server.v1.UpdateDatabaseSettingsRequest\x1a1.fleetly.server.v1.UpdateDatabaseSettingsResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\x1a\x1d/v1/databases/{name}/settings\x12\xae\x01\n" +
-	"\x19RotateDatabaseCredentials\x123.fleetly.server.v1.RotateDatabaseCredentialsRequest\x1a4.fleetly.server.v1.RotateDatabaseCredentialsResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/databases/{name}/rotate\x12\xb0\x01\n" +
-	"\x19RevealDatabaseCredentials\x123.fleetly.server.v1.RevealDatabaseCredentialsRequest\x1a4.fleetly.server.v1.RevealDatabaseCredentialsResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/databases/{name}/credentials\x12\xa3\x01\n" +
-	"\x15TriggerDatabaseBackup\x12/.fleetly.server.v1.TriggerDatabaseBackupRequest\x1a0.fleetly.server.v1.TriggerDatabaseBackupResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/backups\x12\x9a\x01\n" +
-	"\x13ListDatabaseBackups\x12-.fleetly.server.v1.ListDatabaseBackupsRequest\x1a..fleetly.server.v1.ListDatabaseBackupsResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/v1/databases/{name}/backups\x12\xa3\x01\n" +
-	"\x15RestoreDatabaseBackup\x12/.fleetly.server.v1.RestoreDatabaseBackupRequest\x1a0.fleetly.server.v1.RestoreDatabaseBackupResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/restore\x12\x91\x01\n" +
-	"\x0fUpgradeDatabase\x12).fleetly.server.v1.UpgradeDatabaseRequest\x1a*.fleetly.server.v1.UpgradeDatabaseResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/upgradeB\x98\x01\x92ARRP\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status2\xc8\x11\n" +
+	"\x0fDatabaseService\x12\x88\x01\n" +
+	"\x0eCreateDatabase\x12(.fleetly.server.v1.CreateDatabaseRequest\x1a).fleetly.server.v1.CreateDatabaseResponse\"!\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/databases\x12\x82\x01\n" +
+	"\vGetDatabase\x12%.fleetly.server.v1.GetDatabaseRequest\x1a&.fleetly.server.v1.GetDatabaseResponse\"$\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/databases/{name}\x12\x81\x01\n" +
+	"\rListDatabases\x12'.fleetly.server.v1.ListDatabasesRequest\x1a(.fleetly.server.v1.ListDatabasesResponse\"\x1d\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/databases\x12\x8c\x01\n" +
+	"\x0eDeleteDatabase\x12(.fleetly.server.v1.DeleteDatabaseRequest\x1a).fleetly.server.v1.DeleteDatabaseResponse\"%\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x16*\x14/v1/databases/{name}\x12\x9a\x01\n" +
+	"\x0fSuspendDatabase\x12).fleetly.server.v1.SuspendDatabaseRequest\x1a*.fleetly.server.v1.SuspendDatabaseResponse\"0\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/suspend\x12\x96\x01\n" +
+	"\x0eResumeDatabase\x12(.fleetly.server.v1.ResumeDatabaseRequest\x1a).fleetly.server.v1.ResumeDatabaseResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/databases/{name}/resume\x12\x92\x01\n" +
+	"\rRetryDatabase\x12'.fleetly.server.v1.RetryDatabaseRequest\x1a(.fleetly.server.v1.RetryDatabaseResponse\".\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/v1/databases/{name}/retry\x12\xb0\x01\n" +
+	"\x16UpdateDatabaseSettings\x120.fleetly.server.v1.UpdateDatabaseSettingsRequest\x1a1.fleetly.server.v1.UpdateDatabaseSettingsResponse\"1\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\":\x01*\x1a\x1d/v1/databases/{name}/settings\x12\xb7\x01\n" +
+	"\x19RotateDatabaseCredentials\x123.fleetly.server.v1.RotateDatabaseCredentialsRequest\x1a4.fleetly.server.v1.RotateDatabaseCredentialsResponse\"/\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/databases/{name}/rotate\x12\xb9\x01\n" +
+	"\x19RevealDatabaseCredentials\x123.fleetly.server.v1.RevealDatabaseCredentialsRequest\x1a4.fleetly.server.v1.RevealDatabaseCredentialsResponse\"1\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\"\x12 /v1/databases/{name}/credentials\x12\xac\x01\n" +
+	"\x15TriggerDatabaseBackup\x12/.fleetly.server.v1.TriggerDatabaseBackupRequest\x1a0.fleetly.server.v1.TriggerDatabaseBackupResponse\"0\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/backups\x12\xa2\x01\n" +
+	"\x13ListDatabaseBackups\x12-.fleetly.server.v1.ListDatabaseBackupsRequest\x1a..fleetly.server.v1.ListDatabaseBackupsResponse\",\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1e\x12\x1c/v1/databases/{name}/backups\x12\xac\x01\n" +
+	"\x15RestoreDatabaseBackup\x12/.fleetly.server.v1.RestoreDatabaseBackupRequest\x1a0.fleetly.server.v1.RestoreDatabaseBackupResponse\"0\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/restore\x12\x9a\x01\n" +
+	"\x0fUpgradeDatabase\x12).fleetly.server.v1.UpgradeDatabaseRequest\x1a*.fleetly.server.v1.UpgradeDatabaseResponse\"0\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/v1/databases/{name}/upgradeB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

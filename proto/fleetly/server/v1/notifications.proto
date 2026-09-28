@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -48,30 +49,36 @@ service NotificationsService {
   // ListWebhookEndpoints 端点清单（read scope；无敏感投影）。
   rpc ListWebhookEndpoints(ListWebhookEndpointsRequest) returns (ListWebhookEndpointsResponse) {
     option (google.api.http) = { get: "/v1/notifications/endpoints" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetWebhookEndpoint 单端点视图（read scope）。
   rpc GetWebhookEndpoint(GetWebhookEndpointRequest) returns (GetWebhookEndpointResponse) {
     option (google.api.http) = { get: "/v1/notifications/endpoints/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // CreateWebhookEndpoint 创建端点（admin scope）：密钥平台生成，**明文
   // 仅本次响应可见**——丢失只能 rotate-secret 重置。
   rpc CreateWebhookEndpoint(CreateWebhookEndpointRequest) returns (CreateWebhookEndpointResponse) {
     option (google.api.http) = { post: "/v1/notifications/endpoints" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateWebhookEndpoint 部分更新（admin scope）：可选字段语义——未提供
   // 的字段不变（event_patterns 空 = 不变，非空 = 整体替换）。
   rpc UpdateWebhookEndpoint(UpdateWebhookEndpointRequest) returns (UpdateWebhookEndpointResponse) {
     option (google.api.http) = { put: "/v1/notifications/endpoints/{id}" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // DeleteWebhookEndpoint 删除端点（admin scope）：投递台账行随之清理
   //（同事务）；游标不动（订阅面变化不影响消费位）。
   rpc DeleteWebhookEndpoint(DeleteWebhookEndpointRequest) returns (DeleteWebhookEndpointResponse) {
     option (google.api.http) = { delete: "/v1/notifications/endpoints/{id}" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // RotateWebhookSecret 轮换签名密钥（admin scope）：新密钥**明文仅本次
   // 响应可见**；在途投递行按新密钥继续（接收方需同步换验签密钥）。
   rpc RotateWebhookSecret(RotateWebhookSecretRequest) returns (RotateWebhookSecretResponse) {
     option (google.api.http) = { post: "/v1/notifications/endpoints/{id}/rotate-secret" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // TestWebhook 发送 type=test 载荷（admin scope；设计 §5.2）：结构同真实
   // 事件、验签同链路——验证连通与验签配置。同步等待单次投递结果（10s
@@ -83,29 +90,34 @@ service NotificationsService {
   // 线格式重命名随下一契约版本评估；CLI `notifications test` 即本语义。
   rpc TestWebhook(TestWebhookRequest) returns (TestWebhookResponse) {
     option (google.api.http) = { post: "/v1/notifications/endpoints/{id}/test" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ListWebhookDeliveries 投递台账（read scope）：按端点/状态过滤，最新
   // 在前——重试路径与终败的诚实可见面。
   rpc ListWebhookDeliveries(ListWebhookDeliveriesRequest) returns (ListWebhookDeliveriesResponse) {
     option (google.api.http) = { get: "/v1/notifications/deliveries" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetSmtpSettings 平台级 SMTP 设置只读面（admin scope；设计 §8.3）：
   // 密码只回指纹（明文 sha256 前 8 hex），绝不回明文。全部 email 端点共
   // 用这一份设置（通道设置与端点解耦）。
   rpc GetSmtpSettings(GetSmtpSettingsRequest) returns (GetSmtpSettingsResponse) {
     option (google.api.http) = { get: "/v1/notifications/smtp" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateSmtpSettings 全量保存平台级 SMTP 设置（PUT 语义：请求即新状态，
   // 空 password/username 回落空值；设计 §8.3）。密码明文入站（TLS 传输面）
   // → envelope 加密落库；审计 notify.smtp_changed（只落审计不落事件）。
   rpc UpdateSmtpSettings(UpdateSmtpSettingsRequest) returns (UpdateSmtpSettingsResponse) {
     option (google.api.http) = { put: "/v1/notifications/smtp" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // TestSmtp SMTP 探针（admin scope；设计 §8.3）：对候选（未保存也能测）
   // 或已存配置发测试邮件到指定收件地址——真实 SMTP 往返。不落台账（连通
   // 性检查不是投递事实）。
   rpc TestSmtp(TestSmtpRequest) returns (TestSmtpResponse) {
     option (google.api.http) = { post: "/v1/notifications/smtp/test" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

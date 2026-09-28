@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -554,7 +555,7 @@ var File_fleetly_server_v1_env_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_env_proto_rawDesc = "" +
 	"\n" +
-	"\x1bfleetly/server/v1/env.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"d\n" +
+	"\x1bfleetly/server/v1/env.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"d\n" +
 	"\rSetEnvRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\x12\x19\n" +
 	"\x03key\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03key\x12\x1d\n" +
@@ -590,13 +591,13 @@ const file_fleetly_server_v1_env_proto_rawDesc = "" +
 	"\x11RemoveEnvResponse\x12\x10\n" +
 	"\x03app\x18\x01 \x01(\tR\x03app\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status2\xd9\x03\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status2\xff\x03\n" +
 	"\n" +
-	"EnvService\x12r\n" +
-	"\x06SetEnv\x12 .fleetly.server.v1.SetEnvRequest\x1a!.fleetly.server.v1.SetEnvResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/v1/apps/{app}/env/{key}\x12o\n" +
-	"\x06GetEnv\x12 .fleetly.server.v1.GetEnvRequest\x1a!.fleetly.server.v1.GetEnvResponse\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/env/{key}\x12l\n" +
-	"\aListEnv\x12!.fleetly.server.v1.ListEnvRequest\x1a\".fleetly.server.v1.ListEnvResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/apps/{app}/env\x12x\n" +
-	"\tRemoveEnv\x12#.fleetly.server.v1.RemoveEnvRequest\x1a$.fleetly.server.v1.RemoveEnvResponse\" \x82\xd3\xe4\x93\x02\x1a*\x18/v1/apps/{app}/env/{key}B\x98\x01\x92ARRP\n" +
+	"EnvService\x12|\n" +
+	"\x06SetEnv\x12 .fleetly.server.v1.SetEnvRequest\x1a!.fleetly.server.v1.SetEnvResponse\"-\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x1d:\x01*\x1a\x18/v1/apps/{app}/env/{key}\x12x\n" +
+	"\x06GetEnv\x12 .fleetly.server.v1.GetEnvRequest\x1a!.fleetly.server.v1.GetEnvResponse\")\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1a\x12\x18/v1/apps/{app}/env/{key}\x12t\n" +
+	"\aListEnv\x12!.fleetly.server.v1.ListEnvRequest\x1a\".fleetly.server.v1.ListEnvResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/apps/{app}/env\x12\x82\x01\n" +
+	"\tRemoveEnv\x12#.fleetly.server.v1.RemoveEnvRequest\x1a$.fleetly.server.v1.RemoveEnvResponse\"*\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x1a*\x18/v1/apps/{app}/env/{key}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -32,9 +33,11 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service RevisionsService {
   rpc ListRevisions(ListRevisionsRequest) returns (ListRevisionsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/revisions" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetRevisionSpec(GetRevisionSpecRequest) returns (GetRevisionSpecResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/revisions/{revision_id}/spec" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
 }
 

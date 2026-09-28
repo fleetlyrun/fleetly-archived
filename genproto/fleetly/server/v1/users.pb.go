@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1037,7 +1038,7 @@ var File_fleetly_server_v1_users_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_users_proto_rawDesc = "" +
 	"\n" +
-	"\x1dfleetly/server/v1/users.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xf7\x01\n" +
+	"\x1dfleetly/server/v1/users.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xf7\x01\n" +
 	"\bUserView\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -1090,21 +1091,20 @@ const file_fleetly_server_v1_users_proto_rawDesc = "" +
 	"\x18SetAuditRetentionRequest\x12\x1b\n" +
 	"\x04days\x18\x01 \x01(\x05B\a\xbaH\x04\x1a\x02(\x01R\x04days\"/\n" +
 	"\x19SetAuditRetentionResponse\x12\x12\n" +
-	"\x04days\x18\x01 \x01(\x05R\x04days2\xfb\n" +
+	"\x04days\x18\x01 \x01(\x05R\x04days2\xd7\v\n" +
+	"\fUsersService\x12r\n" +
+	"\tListUsers\x12#.fleetly.server.v1.ListUsersRequest\x1a$.fleetly.server.v1.ListUsersResponse\"\x1a\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\v\x12\t/v1/users\x12x\n" +
 	"\n" +
-	"\fUsersService\x12i\n" +
-	"\tListUsers\x12#.fleetly.server.v1.ListUsersRequest\x1a$.fleetly.server.v1.ListUsersResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/users\x12o\n" +
+	"CreateUser\x12$.fleetly.server.v1.CreateUserRequest\x1a%.fleetly.server.v1.CreateUserResponse\"\x1d\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/users\x12\x88\x01\n" +
+	"\vDisableUser\x12%.fleetly.server.v1.DisableUserRequest\x1a&.fleetly.server.v1.DisableUserResponse\"*\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/users/{id}/disable\x12\x84\x01\n" +
 	"\n" +
-	"CreateUser\x12$.fleetly.server.v1.CreateUserRequest\x1a%.fleetly.server.v1.CreateUserResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/users\x12\x7f\n" +
-	"\vDisableUser\x12%.fleetly.server.v1.DisableUserRequest\x1a&.fleetly.server.v1.DisableUserResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/users/{id}/disable\x12{\n" +
-	"\n" +
-	"EnableUser\x12$.fleetly.server.v1.EnableUserRequest\x1a%.fleetly.server.v1.EnableUserResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/users/{id}/enable\x12\x98\x01\n" +
-	"\x11ResetUserPassword\x12+.fleetly.server.v1.ResetUserPasswordRequest\x1a,.fleetly.server.v1.ResetUserPasswordResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/users/{id}/password:reset\x12\xa1\x01\n" +
-	"\x12GrantPlatformAdmin\x12,.fleetly.server.v1.GrantPlatformAdminRequest\x1a-.fleetly.server.v1.GrantPlatformAdminResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/v1/users/{id}/platform-admin:grant\x12\xa5\x01\n" +
-	"\x13RevokePlatformAdmin\x12-.fleetly.server.v1.RevokePlatformAdminRequest\x1a..fleetly.server.v1.RevokePlatformAdminResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/users/{id}/platform-admin:revoke\x12\x8a\x01\n" +
-	"\x0fSetRegistration\x12).fleetly.server.v1.SetRegistrationRequest\x1a*.fleetly.server.v1.SetRegistrationResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\x1a\x15/v1/auth/registration\x12\x8b\x01\n" +
-	"\x11GetAuditRetention\x12+.fleetly.server.v1.GetAuditRetentionRequest\x1a,.fleetly.server.v1.GetAuditRetentionResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/audit/retention\x12\x8e\x01\n" +
-	"\x11SetAuditRetention\x12+.fleetly.server.v1.SetAuditRetentionRequest\x1a,.fleetly.server.v1.SetAuditRetentionResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/audit/retentionB\x98\x01\x92ARRP\n" +
+	"EnableUser\x12$.fleetly.server.v1.EnableUserRequest\x1a%.fleetly.server.v1.EnableUserResponse\")\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/users/{id}/enable\x12\xa1\x01\n" +
+	"\x11ResetUserPassword\x12+.fleetly.server.v1.ResetUserPasswordRequest\x1a,.fleetly.server.v1.ResetUserPasswordResponse\"1\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/users/{id}/password:reset\x12\xaa\x01\n" +
+	"\x12GrantPlatformAdmin\x12,.fleetly.server.v1.GrantPlatformAdminRequest\x1a-.fleetly.server.v1.GrantPlatformAdminResponse\"7\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02(:\x01*\"#/v1/users/{id}/platform-admin:grant\x12\xae\x01\n" +
+	"\x13RevokePlatformAdmin\x12-.fleetly.server.v1.RevokePlatformAdminRequest\x1a..fleetly.server.v1.RevokePlatformAdminResponse\"8\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02):\x01*\"$/v1/users/{id}/platform-admin:revoke\x12\x93\x01\n" +
+	"\x0fSetRegistration\x12).fleetly.server.v1.SetRegistrationRequest\x1a*.fleetly.server.v1.SetRegistrationResponse\")\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1a:\x01*\x1a\x15/v1/auth/registration\x12\x94\x01\n" +
+	"\x11GetAuditRetention\x12+.fleetly.server.v1.GetAuditRetentionRequest\x1a,.fleetly.server.v1.GetAuditRetentionResponse\"$\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/audit/retention\x12\x97\x01\n" +
+	"\x11SetAuditRetention\x12+.fleetly.server.v1.SetAuditRetentionRequest\x1a,.fleetly.server.v1.SetAuditRetentionResponse\"'\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x18:\x01*\x1a\x13/v1/audit/retentionB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

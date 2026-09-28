@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -46,22 +47,26 @@ service DatabaseService {
       post: "/v1/databases"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // GetDatabase 库实例详情（连接信息脱敏投影——密码明文零离开存储；显式
   // reveal 面随 S4/S6 轮换与 Console 票据）。
   rpc GetDatabase(GetDatabaseRequest) returns (GetDatabaseResponse) {
     option (google.api.http) = { get: "/v1/databases/{name}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // ListDatabases 库实例列表（name 字典序；deleted tombstone 不进默认列表
   // ——与 apps 列表同口径）。
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
     option (google.api.http) = { get: "/v1/databases" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；
   // reap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
   // delete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。
   rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse) {
     option (google.api.http) = { delete: "/v1/databases/{name}" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // SuspendDatabase 暂停（scale 0 保留服务与卷；引用方连不上是诚实暴露）。
   rpc SuspendDatabase(SuspendDatabaseRequest) returns (SuspendDatabaseResponse) {
@@ -69,6 +74,7 @@ service DatabaseService {
       post: "/v1/databases/{name}/suspend"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ResumeDatabase 恢复（paused → provisioning 重收敛 → ready/degraded）。
   rpc ResumeDatabase(ResumeDatabaseRequest) returns (ResumeDatabaseResponse) {
@@ -76,6 +82,7 @@ service DatabaseService {
       post: "/v1/databases/{name}/resume"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // RetryDatabase 显式重试（failed → provisioning 重收敛；现场保留语义下
   // 失败的唯一出边）。
@@ -84,6 +91,7 @@ service DatabaseService {
       post: "/v1/databases/{name}/retry"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpdateDatabaseSettings 设置变更（限额 + 备份计划；任意非终态准入、主
   // 状态不变；限额变更 = spec 重建由收敛器在下一拍承载）。镜像/引擎参数
@@ -93,6 +101,7 @@ service DatabaseService {
       put: "/v1/databases/{name}/settings"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // RotateDatabaseCredentials 凭据轮换（E4 managed-databases §2.5，S4）：
   // 破坏性两段式（confirm = 实例名）。合法前置态 ready/degraded/paused
@@ -104,12 +113,14 @@ service DatabaseService {
       post: "/v1/databases/{name}/rotate"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // RevealDatabaseCredentials 连接信息显式展开（admin scope；§2.5「Console
   // 库详情页展示连接信息，密码默认脱敏、显式展开」的 API 面——含密码明文
   // 与完整 URL；审计 db.reveal 承载敏感访问留痕，不产生事件）。
   rpc RevealDatabaseCredentials(RevealDatabaseCredentialsRequest) returns (RevealDatabaseCredentialsResponse) {
     option (google.api.http) = { get: "/v1/databases/{name}/credentials" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // TriggerDatabaseBackup 手动备份受理（E4 S5，managed-databases §2.6）：
   // 异步受理（job 分钟级——响应即 accepted，结论经台账与 db.backup_* 事件
@@ -121,12 +132,14 @@ service DatabaseService {
       post: "/v1/databases/{name}/backups"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ListDatabaseBackups 备份台账列表（created_at 降序——恢复目标选择与
   // Console 备份列表的数据源；kind/snapshot/size/verify_status/error 全量
   // 事实面）。
   rpc ListDatabaseBackups(ListDatabaseBackupsRequest) returns (ListDatabaseBackupsResponse) {
     option (google.api.http) = { get: "/v1/databases/{name}/backups" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // RestoreDatabaseBackup 原地恢复受理（破坏性两段式 confirm + 快照归属
   // 守卫：只重放本实例台账内的快照）。停库重放：实例 scale 0 → job 挂卷
@@ -137,6 +150,7 @@ service DatabaseService {
       post: "/v1/databases/{name}/restore"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // UpgradeDatabase 受控升级受理（E4 S5，managed-databases §2.2）：①
   // pre_upgrade 备份门（verify 通过才继续——失败实例不动）②digest 换新
@@ -148,6 +162,7 @@ service DatabaseService {
       post: "/v1/databases/{name}/upgrade"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

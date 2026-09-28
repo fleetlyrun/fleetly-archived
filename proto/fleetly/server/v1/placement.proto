@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -29,6 +30,7 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service PlacementService {
   rpc ShowPlacement(ShowPlacementRequest) returns (ShowPlacementResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/placement" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // UpdatePlacement 显式换点（E1-7，multi-node §2.6；admin scope——破坏性
   // 确认路径）。目标节点存在且 ready（直读）；有卷应用 data_ack 必填
@@ -41,6 +43,7 @@ service PlacementService {
       put: "/v1/apps/{app}/placement"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ListVolumes 跨 app 卷清单（E1-7，multi-node §2.8；read scope）：active
   // 在册行、orphaned 孤儿行（删除应用保留）与残留指引（prev_platform_
@@ -48,12 +51,14 @@ service PlacementService {
   // 不建生命周期 API、不做远端删除（D18）。
   rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse) {
     option (google.api.http) = { get: "/v1/volumes" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetPlacementMigrationPlan restic 迁移 runbook（E1-7，multi-node §2.8/
   // D-MN-10；read scope）：服务端生成步骤文档（真实卷名/节点名填充），
   // restic 备份/恢复由用户在两节点执行——平台不编排远端数据移动。
   rpc GetPlacementMigrationPlan(GetPlacementMigrationPlanRequest) returns (GetPlacementMigrationPlanResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/placement/migrate-plan" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
 }
 

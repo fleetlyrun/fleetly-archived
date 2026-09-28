@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -416,7 +417,7 @@ var File_fleetly_server_v1_gitkeys_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_gitkeys_proto_rawDesc = "" +
 	"\n" +
-	"\x1ffleetly/server/v1/gitkeys.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"[\n" +
+	"\x1ffleetly/server/v1/gitkeys.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"[\n" +
 	"\x10AddGitKeyRequest\x12)\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\tB\n" +
@@ -444,11 +445,11 @@ const file_fleetly_server_v1_gitkeys_proto_rawDesc = "" +
 	"\x13RemoveGitKeyRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x02id\"&\n" +
 	"\x14RemoveGitKeyResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id2\xf1\x02\n" +
-	"\x0eGitKeysService\x12o\n" +
-	"\tAddGitKey\x12#.fleetly.server.v1.AddGitKeyRequest\x1a$.fleetly.server.v1.AddGitKeyResponse\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/git/keys\x12r\n" +
-	"\vListGitKeys\x12%.fleetly.server.v1.ListGitKeysRequest\x1a&.fleetly.server.v1.ListGitKeysResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/git/keys\x12z\n" +
-	"\fRemoveGitKey\x12&.fleetly.server.v1.RemoveGitKeyRequest\x1a'.fleetly.server.v1.RemoveGitKeyResponse\"\x19\x82\xd3\xe4\x93\x02\x13*\x11/v1/git/keys/{id}B\x98\x01\x92ARRP\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id2\x8a\x03\n" +
+	"\x0eGitKeysService\x12w\n" +
+	"\tAddGitKey\x12#.fleetly.server.v1.AddGitKeyRequest\x1a$.fleetly.server.v1.AddGitKeyResponse\"\x1f\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/v1/git/keys\x12z\n" +
+	"\vListGitKeys\x12%.fleetly.server.v1.ListGitKeysRequest\x1a&.fleetly.server.v1.ListGitKeysResponse\"\x1c\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/git/keys\x12\x82\x01\n" +
+	"\fRemoveGitKey\x12&.fleetly.server.v1.RemoveGitKeyRequest\x1a'.fleetly.server.v1.RemoveGitKeyResponse\"!\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x13*\x11/v1/git/keys/{id}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

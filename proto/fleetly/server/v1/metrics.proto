@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -35,16 +36,19 @@ service MetricsService {
   // /api/v1/query_range 的规范化投影（label 集 + {t,v} 点集）。
   rpc SearchMetrics(SearchMetricsRequest) returns (SearchMetricsResponse) {
     option (google.api.http) = { get: "/v1/metrics/search" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // GetMetricsStatus 托管 metrics 栈状态视图（read scope）：模式 / 三件
   // 部署态 / 节点上报比 / retention——「N/M nodes reporting」的诚实口径。
   rpc GetMetricsStatus(GetMetricsStatusRequest) returns (GetMetricsStatusResponse) {
     option (google.api.http) = { get: "/v1/metrics/status" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛
   // 部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。
   rpc SetMetricsMode(SetMetricsModeRequest) returns (SetMetricsModeResponse) {
     option (google.api.http) = { put: "/v1/metrics/mode" body: "*" };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
 }
 

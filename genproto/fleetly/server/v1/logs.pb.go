@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -903,7 +904,7 @@ var File_fleetly_server_v1_logs_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_logs_proto_rawDesc = "" +
 	"\n" +
-	"\x1cfleetly/server/v1/logs.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"H\n" +
+	"\x1cfleetly/server/v1/logs.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"H\n" +
 	"\x11FollowLogsRequest\x12\x19\n" +
 	"\x03app\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x03app\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\"\x86\x02\n" +
@@ -972,15 +973,15 @@ const file_fleetly_server_v1_logs_proto_rawDesc = "" +
 	"\x15SetLogsBackendRequest\x124\n" +
 	"\abackend\x18\x01 \x01(\tB\x1a\xbaH\x17r\x15R\fvictorialogsR\x05jsonlR\abackend\"P\n" +
 	"\x16SetLogsBackendResponse\x126\n" +
-	"\x04view\x18\x01 \x01(\v2\".fleetly.server.v1.LogsBackendViewR\x04view2\x9b\x05\n" +
-	"\vLogsService\x12\x7f\n" +
+	"\x04view\x18\x01 \x01(\v2\".fleetly.server.v1.LogsBackendViewR\x04view2\xc8\x05\n" +
+	"\vLogsService\x12\x87\x01\n" +
 	"\n" +
-	"FollowLogs\x12$.fleetly.server.v1.FollowLogsRequest\x1a%.fleetly.server.v1.FollowLogsResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/apps/{app}/logs/stream0\x01\x12\x85\x01\n" +
-	"\x0fListHistoryLogs\x12).fleetly.server.v1.ListHistoryLogsRequest\x1a*.fleetly.server.v1.ListHistoryLogsResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/apps/{app}/logs\x12}\n" +
+	"FollowLogs\x12$.fleetly.server.v1.FollowLogsRequest\x1a%.fleetly.server.v1.FollowLogsResponse\"*\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/apps/{app}/logs/stream0\x01\x12\x8d\x01\n" +
+	"\x0fListHistoryLogs\x12).fleetly.server.v1.ListHistoryLogsRequest\x1a*.fleetly.server.v1.ListHistoryLogsResponse\"#\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x15\x12\x13/v1/apps/{app}/logs\x12\x85\x01\n" +
 	"\n" +
-	"SearchLogs\x12$.fleetly.server.v1.SearchLogsRequest\x1a%.fleetly.server.v1.SearchLogsResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/apps/{app}/logs/search\x12\x7f\n" +
-	"\x0eGetLogsBackend\x12(.fleetly.server.v1.GetLogsBackendRequest\x1a).fleetly.server.v1.GetLogsBackendResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/logs-backend\x12\x82\x01\n" +
-	"\x0eSetLogsBackend\x12(.fleetly.server.v1.SetLogsBackendRequest\x1a).fleetly.server.v1.SetLogsBackendResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/v1/logs-backendB\x98\x01\x92ARRP\n" +
+	"SearchLogs\x12$.fleetly.server.v1.SearchLogsRequest\x1a%.fleetly.server.v1.SearchLogsResponse\"*\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/apps/{app}/logs/search\x12\x87\x01\n" +
+	"\x0eGetLogsBackend\x12(.fleetly.server.v1.GetLogsBackendRequest\x1a).fleetly.server.v1.GetLogsBackendResponse\" \x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/logs-backend\x12\x8c\x01\n" +
+	"\x0eSetLogsBackend\x12(.fleetly.server.v1.SetLogsBackendRequest\x1a).fleetly.server.v1.SetLogsBackendResponse\"%\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02\x15:\x01*\x1a\x10/v1/logs-backendB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -35,27 +36,32 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service DeploymentsService {
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse) {
     option (google.api.http) = { get: "/v1/apps/{app}/deployments" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse) {
     option (google.api.http) = { get: "/v1/deployments/{id}" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   rpc Deploy(DeployRequest) returns (DeployResponse) {
     option (google.api.http) = {
       post: "/v1/apps/{app}/deployments"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   rpc CancelDeployment(CancelDeploymentRequest) returns (CancelDeploymentResponse) {
     option (google.api.http) = {
       post: "/v1/deployments/{id}/cancel"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   rpc RollbackDeployment(RollbackDeploymentRequest) returns (RollbackDeploymentResponse) {
     option (google.api.http) = {
       post: "/v1/apps/{app}/rollbacks"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-
   // receive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务
@@ -68,6 +74,7 @@ service DeploymentsService {
       post: "/v1/apps/{app}/deployments/git"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
 }
 

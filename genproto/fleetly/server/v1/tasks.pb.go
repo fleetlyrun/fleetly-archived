@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1073,7 +1074,7 @@ var File_fleetly_server_v1_tasks_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_tasks_proto_rawDesc = "" +
 	"\n" +
-	"\x1dfleetly/server/v1/tasks.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"d\n" +
+	"\x1dfleetly/server/v1/tasks.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"d\n" +
 	"\tTaskScope\x12\x1d\n" +
 	"\x04kind\x18\x01 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18\x10R\x04kind\x12\x1c\n" +
 	"\x03ref\x18\x02 \x01(\tB\n" +
@@ -1161,16 +1162,16 @@ const file_fleetly_server_v1_tasks_proto_rawDesc = "" +
 	"\x11DeleteTaskRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x02id\"$\n" +
 	"\x12DeleteTaskResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id2\xcc\x05\n" +
-	"\fTasksService\x12\x8d\x01\n" +
-	"\x11EnsureTaskNetwork\x12+.fleetly.server.v1.EnsureTaskNetworkRequest\x1a,.fleetly.server.v1.EnsureTaskNetworkResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/tasks/networks\x12o\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id2\x82\x06\n" +
+	"\fTasksService\x12\x96\x01\n" +
+	"\x11EnsureTaskNetwork\x12+.fleetly.server.v1.EnsureTaskNetworkRequest\x1a,.fleetly.server.v1.EnsureTaskNetworkResponse\"&\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/tasks/networks\x12x\n" +
 	"\n" +
-	"CreateTask\x12$.fleetly.server.v1.CreateTaskRequest\x1a%.fleetly.server.v1.CreateTaskResponse\"\x14\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/tasks\x12h\n" +
-	"\aGetTask\x12!.fleetly.server.v1.GetTaskRequest\x1a\".fleetly.server.v1.GetTaskResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/tasks/{id}\x12i\n" +
-	"\tListTasks\x12#.fleetly.server.v1.ListTasksRequest\x1a$.fleetly.server.v1.ListTasksResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/tasks\x12s\n" +
-	"\bStopTask\x12\".fleetly.server.v1.StopTaskRequest\x1a#.fleetly.server.v1.StopTaskResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/tasks/{id}/stop\x12q\n" +
+	"CreateTask\x12$.fleetly.server.v1.CreateTaskRequest\x1a%.fleetly.server.v1.CreateTaskResponse\"\x1d\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\x0e:\x01*\"\t/v1/tasks\x12q\n" +
+	"\aGetTask\x12!.fleetly.server.v1.GetTaskRequest\x1a\".fleetly.server.v1.GetTaskResponse\"\x1f\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/tasks/{id}\x12r\n" +
+	"\tListTasks\x12#.fleetly.server.v1.ListTasksRequest\x1a$.fleetly.server.v1.ListTasksResponse\"\x1a\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\v\x12\t/v1/tasks\x12|\n" +
+	"\bStopTask\x12\".fleetly.server.v1.StopTaskRequest\x1a#.fleetly.server.v1.StopTaskResponse\"'\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/tasks/{id}/stop\x12z\n" +
 	"\n" +
-	"DeleteTask\x12$.fleetly.server.v1.DeleteTaskRequest\x1a%.fleetly.server.v1.DeleteTaskResponse\"\x16\x82\xd3\xe4\x93\x02\x10*\x0e/v1/tasks/{id}B\x98\x01\x92ARRP\n" +
+	"DeleteTask\x12$.fleetly.server.v1.DeleteTaskRequest\x1a%.fleetly.server.v1.DeleteTaskResponse\"\x1f\x82\xb5\x18\x05tasks\x82\xd3\xe4\x93\x02\x10*\x0e/v1/tasks/{id}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

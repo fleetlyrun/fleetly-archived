@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "fleetly/server/v1/metrics.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
@@ -37,32 +38,39 @@ service AlertingService {
   // CreateAlertRule 创建规则（平台级唯一名）。
   rpc CreateAlertRule(CreateAlertRuleRequest) returns (CreateAlertRuleResponse) {
     option (google.api.http) = { post: "/v1/alerting/rules" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // ListAlertRules 规则清单（name 字典序——渲染序的稳定性锚）。
   rpc ListAlertRules(ListAlertRulesRequest) returns (ListAlertRulesResponse) {
     option (google.api.http) = { get: "/v1/alerting/rules" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // UpdateAlertRule 部分更新（optional 字段语义——未提供不变）。
   rpc UpdateAlertRule(UpdateAlertRuleRequest) returns (UpdateAlertRuleResponse) {
     option (google.api.http) = { put: "/v1/alerting/rules/{id}" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。
   rpc DeleteAlertRule(DeleteAlertRuleRequest) returns (DeleteAlertRuleResponse) {
     option (google.api.http) = { delete: "/v1/alerting/rules/{id}" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   // SetAlertsMode 切换 alerts.mode（unset | on；前置门 metrics.mode=on，
   // 违反 → 409 E_ALERTS_METRICS_REQUIRED 带指引）。
   rpc SetAlertsMode(SetAlertsModeRequest) returns (SetAlertsModeResponse) {
     option (google.api.http) = { put: "/v1/alerting/mode" body: "*" };
+    option (fleetly.annotations.v1.scope) = "deploy";
   }
   // GetAlertsStatus 告警栈状态视图（mode + vmalert 部署态 + 规则数）。
   rpc GetAlertsStatus(GetAlertsStatusRequest) returns (GetAlertsStatusResponse) {
     option (google.api.http) = { get: "/v1/alerting/status" };
+    option (fleetly.annotations.v1.scope) = "read";
   }
   // TestAlertRule 单次求值试跑（经 VM /api/v1/query 直接执行 expr 返回
   // 样本——不落库不部署，纯校验面）。
   rpc TestAlertRule(TestAlertRuleRequest) returns (TestAlertRuleResponse) {
     option (google.api.http) = { post: "/v1/alerting/rules:test" body: "*" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

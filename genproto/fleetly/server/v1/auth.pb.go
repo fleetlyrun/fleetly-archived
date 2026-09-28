@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -841,7 +842,7 @@ var File_fleetly_server_v1_auth_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x1cfleetly/server/v1/auth.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1dfleetly/server/v1/users.proto\x1a\x1cgoogle/api/annotations.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xb6\x01\n" +
+	"\x1cfleetly/server/v1/auth.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1dfleetly/server/v1/users.proto\x1a\x1cgoogle/api/annotations.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\"\xb6\x01\n" +
 	"\x0fRegisterRequest\x12\"\n" +
 	"\x05email\x18\x01 \x01(\tB\f\xbaH\tr\a\x10\x03\x18\xfe\x01`\x01R\x05email\x12&\n" +
 	"\bpassword\x18\x02 \x01(\tB\n" +
@@ -888,14 +889,14 @@ const file_fleetly_server_v1_auth_proto_rawDesc = "" +
 	"\x1bGetRegistrationStateRequest\"O\n" +
 	"\x1cGetRegistrationStateResponse\x12\x12\n" +
 	"\x04open\x18\x01 \x01(\bR\x04open\x12\x1b\n" +
-	"\thas_users\x18\x02 \x01(\bR\bhasUsers2\xc0\x06\n" +
+	"\thas_users\x18\x02 \x01(\bR\bhasUsers2\xe0\x06\n" +
 	"\vAuthService\x12q\n" +
 	"\bRegister\x12\".fleetly.server.v1.RegisterRequest\x1a#.fleetly.server.v1.RegisterResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/auth/register\x12e\n" +
-	"\x05Login\x12\x1f.fleetly.server.v1.LoginRequest\x1a .fleetly.server.v1.LoginResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/v1/auth/login\x12i\n" +
-	"\x06Logout\x12 .fleetly.server.v1.LogoutRequest\x1a!.fleetly.server.v1.LogoutResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/auth/logout\x12v\n" +
-	"\tLogoutAll\x12#.fleetly.server.v1.LogoutAllRequest\x1a$.fleetly.server.v1.LogoutAllResponse\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/auth/logout-all\x12V\n" +
-	"\x02Me\x12\x1c.fleetly.server.v1.MeRequest\x1a\x1d.fleetly.server.v1.MeResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/auth/me\x12\x82\x01\n" +
-	"\fAcceptInvite\x12&.fleetly.server.v1.AcceptInviteRequest\x1a'.fleetly.server.v1.AcceptInviteResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/auth/invite:accept\x12\x96\x01\n" +
+	"\x05Login\x12\x1f.fleetly.server.v1.LoginRequest\x1a .fleetly.server.v1.LoginResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/v1/auth/login\x12q\n" +
+	"\x06Logout\x12 .fleetly.server.v1.LogoutRequest\x1a!.fleetly.server.v1.LogoutResponse\"\"\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/auth/logout\x12~\n" +
+	"\tLogoutAll\x12#.fleetly.server.v1.LogoutAllRequest\x1a$.fleetly.server.v1.LogoutAllResponse\"&\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/v1/auth/logout-all\x12^\n" +
+	"\x02Me\x12\x1c.fleetly.server.v1.MeRequest\x1a\x1d.fleetly.server.v1.MeResponse\"\x1b\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\r\x12\v/v1/auth/me\x12\x8a\x01\n" +
+	"\fAcceptInvite\x12&.fleetly.server.v1.AcceptInviteRequest\x1a'.fleetly.server.v1.AcceptInviteResponse\")\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/v1/auth/invite:accept\x12\x96\x01\n" +
 	"\x14GetRegistrationState\x12..fleetly.server.v1.GetRegistrationStateRequest\x1a/.fleetly.server.v1.GetRegistrationStateResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\x12\x15/v1/auth/registrationB\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +

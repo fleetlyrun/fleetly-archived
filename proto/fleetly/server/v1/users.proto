@@ -5,6 +5,7 @@ package fleetly.server.v1;
 option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
 
 import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -33,57 +34,67 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 service UsersService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
     option (google.api.http) = { get: "/v1/users" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
     option (google.api.http) = {
       post: "/v1/users"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc DisableUser(DisableUserRequest) returns (DisableUserResponse) {
     option (google.api.http) = {
       post: "/v1/users/{id}/disable"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc EnableUser(EnableUserRequest) returns (EnableUserResponse) {
     option (google.api.http) = {
       post: "/v1/users/{id}/enable"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc ResetUserPassword(ResetUserPasswordRequest) returns (ResetUserPasswordResponse) {
     option (google.api.http) = {
       post: "/v1/users/{id}/password:reset"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc GrantPlatformAdmin(GrantPlatformAdminRequest) returns (GrantPlatformAdminResponse) {
     option (google.api.http) = {
       post: "/v1/users/{id}/platform-admin:grant"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc RevokePlatformAdmin(RevokePlatformAdminRequest) returns (RevokePlatformAdminResponse) {
     option (google.api.http) = {
       post: "/v1/users/{id}/platform-admin:revoke"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc SetRegistration(SetRegistrationRequest) returns (SetRegistrationResponse) {
     option (google.api.http) = {
       put: "/v1/auth/registration"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc GetAuditRetention(GetAuditRetentionRequest) returns (GetAuditRetentionResponse) {
     option (google.api.http) = { get: "/v1/audit/retention" };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
   rpc SetAuditRetention(SetAuditRetentionRequest) returns (SetAuditRetentionResponse) {
     option (google.api.http) = {
       put: "/v1/audit/retention"
       body: "*"
     };
+    option (fleetly.annotations.v1.scope) = "admin";
   }
 }
 

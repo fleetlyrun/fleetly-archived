@@ -8,6 +8,7 @@ package serverv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/fleetlyrun/fleetly/genproto/fleetly/annotations/v1"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -1366,7 +1367,7 @@ var File_fleetly_server_v1_apps_proto protoreflect.FileDescriptor
 
 const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"\n" +
-	"\x1cfleetly/server/v1/apps.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\x1a#fleetly/server/v1/deployments.proto\x1a!fleetly/server/v1/placement.proto\"V\n" +
+	"\x1cfleetly/server/v1/apps.proto\x12\x11fleetly.server.v1\x1a\x1bbuf/validate/validate.proto\x1a(fleetly/annotations/v1/annotations.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a.protoc-gen-openapiv2/options/annotations.proto\x1a#fleetly/server/v1/deployments.proto\x1a!fleetly/server/v1/placement.proto\"V\n" +
 	"\x0fListAppsRequest\x12 \n" +
 	"\x05limit\x18\x01 \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xe8\a(\x00R\x05limit\x12!\n" +
@@ -1479,18 +1480,19 @@ const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"\x1bRemoveScalingPolicyResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aservice\x18\x02 \x01(\tR\aservice\x12\x18\n" +
-	"\aremoved\x18\x03 \x01(\bR\aremoved2\xd4\t\n" +
-	"\vAppsService\x12e\n" +
-	"\bListApps\x12\".fleetly.server.v1.ListAppsRequest\x1a#.fleetly.server.v1.ListAppsResponse\"\x10\x82\xd3\xe4\x93\x02\n" +
-	"\x12\b/v1/apps\x12f\n" +
-	"\x06GetApp\x12 .fleetly.server.v1.GetAppRequest\x1a!.fleetly.server.v1.GetAppResponse\"\x17\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/apps/{name}\x12o\n" +
-	"\tDeleteApp\x12#.fleetly.server.v1.DeleteAppRequest\x1a$.fleetly.server.v1.DeleteAppResponse\"\x17\x82\xd3\xe4\x93\x02\x11*\x0f/v1/apps/{name}\x12\x9f\x01\n" +
-	"\x13SetAppWebhookSecret\x12-.fleetly.server.v1.SetAppWebhookSecretRequest\x1a..fleetly.server.v1.SetAppWebhookSecretResponse\")\x82\xd3\xe4\x93\x02#:\x01*\x1a\x1e/v1/apps/{name}/webhook-secret\x12\x86\x01\n" +
-	"\x0eShowAppWebhook\x12(.fleetly.server.v1.ShowAppWebhookRequest\x1a).fleetly.server.v1.ShowAppWebhookResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/apps/{name}/webhook\x12\x82\x01\n" +
-	"\fSetAppSource\x12&.fleetly.server.v1.SetAppSourceRequest\x1a'.fleetly.server.v1.SetAppSourceResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/v1/apps/{name}/source\x12\x96\x01\n" +
-	"\x10GetScalingPolicy\x12*.fleetly.server.v1.GetScalingPolicyRequest\x1a+.fleetly.server.v1.GetScalingPolicyResponse\")\x82\xd3\xe4\x93\x02#\x12!/v1/apps/{name}/scaling/{service}\x12\x99\x01\n" +
-	"\x10SetScalingPolicy\x12*.fleetly.server.v1.SetScalingPolicyRequest\x1a+.fleetly.server.v1.SetScalingPolicyResponse\",\x82\xd3\xe4\x93\x02&:\x01*\x1a!/v1/apps/{name}/scaling/{service}\x12\x9f\x01\n" +
-	"\x13RemoveScalingPolicy\x12-.fleetly.server.v1.RemoveScalingPolicyRequest\x1a..fleetly.server.v1.RemoveScalingPolicyResponse\")\x82\xd3\xe4\x93\x02#*!/v1/apps/{name}/scaling/{service}B\x98\x01\x92ARRP\n" +
+	"\aremoved\x18\x03 \x01(\bR\aremoved2\xa4\n" +
+	"\n" +
+	"\vAppsService\x12m\n" +
+	"\bListApps\x12\".fleetly.server.v1.ListAppsRequest\x1a#.fleetly.server.v1.ListAppsResponse\"\x18\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\n" +
+	"\x12\b/v1/apps\x12n\n" +
+	"\x06GetApp\x12 .fleetly.server.v1.GetAppRequest\x1a!.fleetly.server.v1.GetAppResponse\"\x1f\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02\x11\x12\x0f/v1/apps/{name}\x12x\n" +
+	"\tDeleteApp\x12#.fleetly.server.v1.DeleteAppRequest\x1a$.fleetly.server.v1.DeleteAppResponse\" \x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x11*\x0f/v1/apps/{name}\x12\xa8\x01\n" +
+	"\x13SetAppWebhookSecret\x12-.fleetly.server.v1.SetAppWebhookSecretRequest\x1a..fleetly.server.v1.SetAppWebhookSecretResponse\"2\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02#:\x01*\x1a\x1e/v1/apps/{name}/webhook-secret\x12\x8f\x01\n" +
+	"\x0eShowAppWebhook\x12(.fleetly.server.v1.ShowAppWebhookRequest\x1a).fleetly.server.v1.ShowAppWebhookResponse\"(\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/apps/{name}/webhook\x12\x8b\x01\n" +
+	"\fSetAppSource\x12&.fleetly.server.v1.SetAppSourceRequest\x1a'.fleetly.server.v1.SetAppSourceResponse\"*\x82\xb5\x18\x05admin\x82\xd3\xe4\x93\x02\x1b:\x01*\x1a\x16/v1/apps/{name}/source\x12\x9e\x01\n" +
+	"\x10GetScalingPolicy\x12*.fleetly.server.v1.GetScalingPolicyRequest\x1a+.fleetly.server.v1.GetScalingPolicyResponse\"1\x82\xb5\x18\x04read\x82\xd3\xe4\x93\x02#\x12!/v1/apps/{name}/scaling/{service}\x12\xa3\x01\n" +
+	"\x10SetScalingPolicy\x12*.fleetly.server.v1.SetScalingPolicyRequest\x1a+.fleetly.server.v1.SetScalingPolicyResponse\"6\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02&:\x01*\x1a!/v1/apps/{name}/scaling/{service}\x12\xa9\x01\n" +
+	"\x13RemoveScalingPolicy\x12-.fleetly.server.v1.RemoveScalingPolicyRequest\x1a..fleetly.server.v1.RemoveScalingPolicyResponse\"3\x82\xb5\x18\x06deploy\x82\xd3\xe4\x93\x02#*!/v1/apps/{name}/scaling/{service}B\x98\x01\x92ARRP\n" +
 	"\adefault\x12E\n" +
 	"\x1dAn unexpected error response.\x12$\n" +
 	"\"\x1a .fleetly.shared.v1.ErrorResponseZAgithub.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1b\x06proto3"

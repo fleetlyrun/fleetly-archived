@@ -21,11 +21,11 @@ v0.3 主线 C 票的专项设计（V3-1：先团队/RBAC 后生产深化）。�
 
 **前提修订（2026-09-23 用户澄清）**：现役部署仅一处 staging 且可清空重建——v0.2→v0.3 **无升级迁移负担**，本文档按净新增面取最优设计（认领/收编/NULL 窗口等升级兼容机制一律不设，见 §8 与 §13 D-W0-5 修订）。
 
-横切红线沿用：单写点（新表全走 InTx）、默认捆绑预算 600MB（本设计**零新增常驻组件**）、契约纪律（proto 唯一真源 + scope.go fail-closed 登记制）、文档先行。
+横切红线沿用：单写点（新表全走 InTx）、默认捆绑预算 600MB（本设计**零新增常驻组件**）、契约纪律（proto 唯一真源 + scope fail-closed 登记制——**登记面 = 每 RPC 的 proto scope option 注解**〔IMPL-ARCH-J 自 scope.go 手工表搬家，用户裁决批准〕，运行时 map 启动期从 descriptor 生成；未登记 fail-closed 按 admin 拒与「改登记 = 改测试」descriptor-walk 守卫不变）、文档先行。
 
 ## 1. 现状底座（设计输入的事实核对，2026-09-23 读码结论）
 
-- **认证**：`Authorization: Bearer` → tokens 表哈希比对（常量时间二次校验）→ scope 判定（`read ⊂ deploy ⊂ admin ⊕ terminal`，admin 蕴含全部；`internal/api/auth.go`）。未登记方法 fail-closed 按 admin 拒（`internal/api/scope.go` 登记制）。Principal = {TokenID, Scopes}，无用户概念。
+- **认证**：`Authorization: Bearer` → tokens 表哈希比对（常量时间二次校验）→ scope 判定（`read ⊂ deploy ⊂ admin ⊕ terminal`，admin 蕴含全部；`internal/api/auth.go`）。未登记方法 fail-closed 按 admin 拒（scope 登记 = proto scope option 注解，IMPL-ARCH-J 后；运行时 `internal/api/scope.go` 启动期从 descriptor 生成）。Principal = {TokenID, Scopes}，无用户概念。
 - **审计**：`audit_log` 表已在 v0.1 落地（actor / actor_token_id / action / target / result / error_code / request_id / diff_summary；事务内写、CHECK 约束 fail-closed、janitor 365d 常量留存、**读面缺失**）。actor 词表 human/ai_agent/system 已预留。
 - **网络隔离（关键发现）**：每 app 专属 overlay `fleetly-<app>-net`（`naming.NetworkName`），Traefik 按需逐网附着（`internal/ingress/traefik.go:11` 拓扑注释 + attachNetwork 幂等增挂），**app 间 L3 互不可见在 v0.2 底座已成立**。平台网（fleetly-system / rustfs / metrics / victorialogs 内部网）仅平台组件挂接。唯一跨 app 连通通道 = E4 库网络 `fleetly-db-<name>-net`（引用方 app 部署时平台附加挂载）——**项目隔离的准入守门点收敛为此一处**（§4.1）。
 - **git SSH host key**：服务端文件持久化（`git.host_key_file`，ensureHostKey 装载/生成）；客户端拉源 TOFU（accept-new）+ `git.hostkey_first_seen` 审计。指纹无披露面（FZ-12 现状，§13 Q4）。
@@ -71,7 +71,7 @@ tokens 表加列：`user_id`（NULL = 平台机具令牌，**bootstrap token 及
 - **PAT 有效权限 = min(token scopes, 用户在目标 project 的角色蕴含)**——双门（§4.2），token 只能收缩不能放大。
 - CreateToken 校验声明 scopes ⊆ 用户可达集（防呆非防险——角色门仍是硬边界）。
 - **机具令牌（user NULL）**：v0.3 的**设计语义**（非兼容残留）——平台管理员显式创建的平台级凭据（CI/CD、基础设施自动化），全库 admin 等价，可带 team/project 绑定收缩。**bootstrap token 生命周期收敛**：零用户窗口的桥梁凭据（首启生成语义沿用），**首用户注册事务内自动吊销**——目的达成即死，不留常驻后门（fleetly-bootstrap-token 挂账项就此收口）。
-- **TokensService 语义迁移（W2）**：CreateToken/ListTokens/RevokeToken 从「admin 全局面」改为「用户自服务面」——登录用户管自己的 PAT；平台管理员可看全部、可建平台级机具令牌。scope.go 登记随迁（纪律：改登记 = 改测试）。
+- **TokensService 语义迁移（W2）**：CreateToken/ListTokens/RevokeToken 从「admin 全局面」改为「用户自服务面」——登录用户管自己的 PAT；平台管理员可看全部、可建平台级机具令牌。scope 登记随迁（纪律：改登记 = 改测试；登记面现为 proto scope option 注解，IMPL-ARCH-J）。
 - **GitKeys 迁移用户化（W2）**：git 公钥表加 user_id；AddGitKey 自服务（登录用户加自己的 push key），SSH push 按署名用户入审计 actor。
 
 ### 2.4 CLI 登录与上下文
@@ -115,7 +115,7 @@ CREATE TABLE project_members (          -- D-W0-2 修订：队内覆写形（§3
 
 ### 3.2 角色（R5 重设计：四档 + 平台管理员分离）
 
-**裁决 D-W0-3**：团队角色四档，语义直接对齐既有 scope 链（scope.go 的方法级映射不动，角色是 scope 之上的**归属解析层**）：
+**裁决 D-W0-3**：团队角色四档，语义直接对齐既有 scope 链（既有方法级 scope 映射不动〔登记面 = proto option，IMPL-ARCH-J 后〕，角色是 scope 之上的**归属解析层**）：
 
 | 角色 | 蕴含资源权限 | 对齐 scope | 说明 |
 |---|---|---|---|
@@ -125,7 +125,7 @@ CREATE TABLE project_members (          -- D-W0-2 修订：队内覆写形（§3
 | owner | admin + 团队管理：成员/角色/邀请、项目创建与删除、team 改名与删除 | — | 队伍终极责任人 |
 | 平台管理员（`is_platform_admin`，用户标志非角色） | 平台面：用户管理/注册开关/节点/S3/通知端点/TLS/日志后端与 metrics 模式等全局设置/平台备份/审计读（W3）/未认领资源认领。**全团队项目只读**（support 视角）+ 认领迁移权；**不代团队做写操作**（写操作仍需入队拿角色——职责分离，审计 actor 干净） | 平台面 | 首注册用户 + 显式授予 |
 
-权限矩阵（方法级；scope.go 既有映射的资源面抽检）：
+权限矩阵（方法级；既有 scope 映射〔proto scope option，IMPL-ARCH-J 后〕的资源面抽检）：
 
 | 面 | viewer | developer | admin | owner | 平台管理员 |
 |---|---|---|---|---|---|
@@ -216,7 +216,7 @@ CREATE TABLE project_members (          -- D-W0-2 修订：队内覆写形（§3
 | SystemService 增量 | GetSystemStatus 增 git SSH host key SHA256 指纹字段（FZ-12 披露面，D-W0-8） | W3 |
 | 既有资源 API | Deploy/CreateDatabase 请求增 project 字段（裸名或 `team/project` 限定形，D-W0-9 解析规则）；List* 增 project 过滤（同解析规则）；TokensService/GitKeysService 语义随迁（§2.3） | W2 |
 
-纪律：新方法全部登记 scope.go（fail-closed）；错误码按注册表现状（新增 E_TEAM_LAST_OWNER / E_INVITE_INVALID / E_DB_PROJECT_MISMATCH / E_PROJECT_AMBIGUOUS / E_APP_AMBIGUOUS / E_TEAM_SLUG_RESERVED 等进 errcode 注册表；E_APP_NAME_RESERVED 随保留字迁移退役〔§4.3〕）。
+纪律：新方法全部带 proto scope option 注解登记（fail-closed 兜底不变；登记面 = proto，IMPL-ARCH-J 自 scope.go 手工表搬家——唯一人类编辑点）；错误码按注册表现状（新增 E_TEAM_LAST_OWNER / E_INVITE_INVALID / E_DB_PROJECT_MISMATCH / E_PROJECT_AMBIGUOUS / E_APP_AMBIGUOUS / E_TEAM_SLUG_RESERVED 等进 errcode 注册表；E_APP_NAME_RESERVED 随保留字迁移退役〔§4.3〕）。
 
 ## 6. 审计与事件衔接（W3 铺垫）
 
