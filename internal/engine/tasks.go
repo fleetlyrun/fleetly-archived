@@ -583,12 +583,14 @@ func (e *Engine) reconTasks(ctx context.Context) {
 			}
 		}
 		orphanSet[svc.Name] = true
-		if !e.taskOrphanSeen[svc.Name] {
-			if err := e.reportTaskOrphan(ctx, svc); err != nil {
-				e.log.Warn("engine: report orphan task", "service", svc.Name, "error", err)
-				continue
-			}
-			e.taskOrphanSeen[svc.Name] = true
+		// 持续形态只报一次（回收成功/条件解除清零可再报）；事件+审计同
+		// 事务，事务失败不标记——下一拍重试（disclosure.go 单点）。
+		reported, rerr := e.discloseOnce(ctx, &e.taskOrphanSeen, svc.Name, taskOrphanDisclosure(svc))
+		if rerr != nil {
+			e.log.Warn("engine: report orphan task", "service", svc.Name, "error", rerr)
+			continue
+		}
+		if reported {
 			e.log.Warn("engine: task service without a non-terminal state row (disclosed and reclaimed)",
 				"service", svc.Name, "task", taskID)
 		}
@@ -596,31 +598,23 @@ func (e *Engine) reconTasks(ctx context.Context) {
 			e.log.Warn("engine: orphan task reclaim failed (next beat retries)", "service", svc.Name, "error", rerr)
 			continue
 		}
-		delete(e.taskOrphanSeen, svc.Name)
+		e.taskOrphanSeen.clear(svc.Name) // 回收成功：记忆清零可再报
 	}
-	for name := range e.taskOrphanSeen {
-		if !orphanSet[name] {
-			delete(e.taskOrphanSeen, name) // 恢复/回收成功：记忆清零可再报
-		}
-	}
+	e.taskOrphanSeen.sweep(orphanSet) // 恢复/回收成功：记忆清零可再报
 }
 
-// reportTaskOrphan 落孤儿 task 披露（事件 + 审计，同事务 fail-closed）。
-// payload 只带事实字段（服务名/task 归属/属主/状态），零敏感材料。
-func (e *Engine) reportTaskOrphan(ctx context.Context, svc ServiceState) error {
+// taskOrphanDisclosure 构造孤儿 task 披露载荷（事件 task.orphaned + 审计
+// reconcile.task_orphaned，同事务 fail-closed）。payload 只带事实字段
+// （服务名/task 归属/属主），零敏感材料。
+func taskOrphanDisclosure(svc ServiceState) disclosure {
 	taskID := svc.Labels[state.LabelTaskID]
 	owner := svc.Labels[state.LabelTaskOwner]
-	return e.store.InTx(ctx, func(tx *state.Tx) error {
-		if err := appendEvents(ctx, tx, eventOf("task.orphaned", "task:"+taskID,
-			"service", svc.Name, "task", taskID, "owner_token", owner)); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:       "system",
-			Action:      "reconcile.task_orphaned",
-			Target:      "task:" + taskID,
-			Result:      "ok",
-			DiffSummary: state.DiffSummary("service", svc.Name, "task", taskID, "owner_token", owner),
-		})
-	})
+	return disclosure{
+		eventCode:   "task.orphaned",
+		subject:     "task:" + taskID,
+		payload:     []string{"service", svc.Name, "task", taskID, "owner_token", owner},
+		auditAction: "reconcile.task_orphaned",
+		auditTarget: "task:" + taskID,
+		auditDiff:   state.DiffSummary("service", svc.Name, "task", taskID, "owner_token", owner),
+	}
 }

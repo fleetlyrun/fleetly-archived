@@ -226,17 +226,16 @@ func joinDimension(acc, dir string) string {
 // 生产由 tick 周期驱动，safeCall 收口 MG-5）。
 func (e *Engine) AutoscalingTick(ctx context.Context) { e.dutyAutoscaling(ctx, true) }
 
-// dutyAutoscaling 是收敛拍尾部的扩缩 duty：频控（substrateRecon 同模式
-// 时间闸）→ 候选集 = 全部策略行 → 逐策略门槛检查 → 求值 → 动作。
+// dutyAutoscaling 是收敛拍尾部的扩缩 duty：频控（scanGate 单点时间闸，
+// disclosure.go）→ 候选集 = 全部策略行 → 逐策略门槛检查 → 求值 → 动作。
 func (e *Engine) dutyAutoscaling(ctx context.Context, force bool) {
 	if e.metricsQ == nil {
 		return // 查询面未装配：duty 不在评估域（装配形态；无披露——不冒充运行态）
 	}
 	now := e.now()
-	if !force && now.Before(e.scalingNextAt) {
+	if !e.scalingScanGate.due(now, force, autoscalingInterval) {
 		return
 	}
-	e.scalingNextAt = now.Add(autoscalingInterval)
 	policies, err := e.store.ListScalingPolicies(ctx)
 	if err != nil {
 		e.log.Warn("engine: autoscaling list policies", "error", err)
@@ -252,9 +251,9 @@ func (e *Engine) dutyAutoscaling(ctx context.Context, force bool) {
 	}
 	if in.Mode != state.MetricsModeOn {
 		// 策略休眠（设计 §1.2）：每策略一次性披露；metrics 回 on 时清记忆
-		// （duty 的 on 路径逐策略 delete）——再离线可再披露一次。
+		//（duty 的 on 路径逐策略 clear）——再离线可再披露一次。
 		for _, p := range policies {
-			e.discloseScalingOnce(ctx, e.scalingDormantSeen, "scaling.dormant", p, "metrics_off")
+			e.discloseScalingOnce(ctx, &e.scalingDormantSeen, "scaling.dormant", p, "metrics_off")
 		}
 		return
 	}
@@ -279,7 +278,7 @@ func (e *Engine) dutyAutoscaling(ctx context.Context, force bool) {
 		}
 	}
 	for _, p := range policies {
-		delete(e.scalingDormantSeen, p.AppID+"/"+p.Service) // metrics on：休眠解除（可再披露）
+		e.scalingDormantSeen.clear(p.AppID + "/" + p.Service) // metrics on：休眠解除（可再披露）
 		app, ok := active[p.AppID]
 		if !ok || inFlight[p.AppID] {
 			continue
@@ -368,12 +367,12 @@ func (e *Engine) evaluateScalingPolicy(ctx context.Context, app state.App, p sta
 		return
 	}
 	if (cpuEvaluable && !cpu.ok) || (memEvaluable && !mem.ok) {
-		e.discloseScalingOnce(ctx, e.scalingNoDataSeen, "scaling.no_data", p, "no_series")
+		e.discloseScalingOnce(ctx, &e.scalingNoDataSeen, "scaling.no_data", p, "no_series")
 		return
 	}
 	d := evaluateScaling(p, expected, len(spec.Mounts) > 0, cpuLimitCores, memLimitBytes, cpu, mem)
 	if !d.actionable {
-		delete(e.scalingNoDataSeen, p.AppID+"/"+p.Service) // 有数据：no_data 解除（可再披露）
+		e.scalingNoDataSeen.clear(p.AppID + "/" + p.Service) // 有数据：no_data 解除（可再披露）
 		return
 	}
 	e.applyScalingDecision(ctx, app, p, source.ID, *spec, expected, d)
@@ -448,7 +447,7 @@ func (e *Engine) applyScalingDecision(ctx context.Context, app state.App, p stat
 			"app", app.Name, "service", p.Service, "error", err)
 		return
 	}
-	delete(e.scalingNoDataSeen, p.AppID+"/"+p.Service)
+	e.scalingNoDataSeen.clear(p.AppID + "/" + p.Service)
 	e.log.Info("engine: autoscaler adjusted replicas",
 		"app", app.Name, "service", p.Service, "dimension", d.dimension,
 		"replicas_before", before, "replicas_after", after)
@@ -469,10 +468,13 @@ func scalingAdjustPayload(d scalingDecision, before uint64) []string {
 }
 
 // discloseScalingOnce 是一次性披露的共享形态（dormant/no_data 同款）：
-// 记忆命中即跳过；事件落库成功才置记忆（失败下一拍重试——披露不丢）。
-func (e *Engine) discloseScalingOnce(ctx context.Context, seen map[string]bool, event string, p state.ScalingPolicy, reason string) {
+// 记忆命中即跳过（保持既有读序——命中时不触 store 读 app 行）；仅事件
+// 无审计面（scaling.dormant / scaling.no_data 族的既有契约）；事件落库
+// 成功才置记忆（失败下一拍重试——披露不丢）。配对与 once 语义经
+// disclosure.go 单点。
+func (e *Engine) discloseScalingOnce(ctx context.Context, set *disclosureSet, event string, p state.ScalingPolicy, reason string) {
 	key := p.AppID + "/" + p.Service
-	if seen[key] {
+	if set.reported(key) {
 		return
 	}
 	app, err := e.store.GetAppByID(ctx, p.AppID)
@@ -480,14 +482,13 @@ func (e *Engine) discloseScalingOnce(ctx context.Context, seen map[string]bool, 
 	if err == nil {
 		appName = app.Name
 	}
-	if err := e.store.InTx(ctx, func(tx *state.Tx) error {
-		return appendEvents(ctx, tx, appEvent(event, appName,
-			"app_id", p.AppID, "service", p.Service, "reason", reason))
+	if _, err := e.discloseOnce(ctx, set, key, disclosure{
+		eventCode: event,
+		subject:   "app:" + appName,
+		payload:   []string{"app", appName, "app_id", p.AppID, "service", p.Service, "reason", reason},
 	}); err != nil {
 		e.log.Warn("engine: autoscaling disclosure failed (retrying)", "event", event, "app", appName, "error", err)
-		return
 	}
-	seen[key] = true
 }
 
 // pinScalingReplicaOverrides 把活覆盖（deployment_id == 期望态来源部署）的

@@ -159,13 +159,13 @@ func TestReapDeletingAppsWaitsForInFlightDeployment(t *testing.T) {
 }
 
 // TestReapDeletingAppsThrottledByTimeGate 频控闸：tick 驱动形态受
-// deleteScanNextAt 约束——闸内重拍不触达底座（ServiceList 计数不变），
+// deleteScanGate 约束——闸内重拍不触达底座（ServiceList 计数不变），
 // 时钟推进过闸后恢复扫描。闸显式清零启动（runToTerminal 的 tick 已可能
 // 推过闸，清零使首拍确定性直通）。
 func TestReapDeletingAppsThrottledByTimeGate(t *testing.T) {
 	h := deletingAppWithServices(t)
 	ctx := context.Background()
-	h.eng.deleteScanNextAt = time.Time{}
+	h.eng.deleteScanGate = scanGate{}
 
 	// 第一拍（force=false，闸清零直通）：执行扫描（ServiceList ×1）。
 	h.eng.reapDeletingApps(ctx, false)

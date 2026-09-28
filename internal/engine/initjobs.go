@@ -360,14 +360,12 @@ func (e *Engine) SweepInitJobs(ctx context.Context) { e.sweepInitJobs(ctx, true)
 // 扫描全部受管服务中的 fleetly-init- 前缀族，移除「部署行缺失/终态/相位
 // 已离开 init_jobs」的残留（完成清场失败、失败清场失败、崩溃半程、外部
 // 注入）。非终态且仍在 init 相位的服务=管线自有对象，不动。频控：非
-// force 形态受 initScanNextAt 时间闸（tick goroutine 专用字段，与
-// substrateNextAt 同模式）。幂等：ServiceRemove 缺失视为成功。
+// force 形态受 initScanGate 时间闸（tick goroutine 专用，scanGate 单点
+// 见 disclosure.go）。幂等：ServiceRemove 缺失视为成功。
 func (e *Engine) sweepInitJobs(ctx context.Context, force bool) {
-	now := e.now()
-	if !force && now.Before(e.initScanNextAt) {
+	if !e.initScanGate.due(e.now(), force, initJobSweepInterval) {
 		return
 	}
-	e.initScanNextAt = now.Add(initJobSweepInterval)
 	services, err := e.sub.ServiceList(ctx, map[string]string{
 		state.LabelManaged: state.ManagedLabelValue,
 	})

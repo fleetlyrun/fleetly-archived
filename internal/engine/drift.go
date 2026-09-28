@@ -470,13 +470,15 @@ func (e *Engine) driftScan(ctx context.Context) {
 			continue
 		}
 		if report.DesiredDeployment == "" || !report.Drifted {
-			delete(e.driftSeen, app.ID)
+			e.driftSeen.clear(app.ID)
 			continue
 		}
-		if e.driftSeen[app.ID] {
+		if e.driftSeen.reported(app.ID) {
 			continue // 仍在上次报告的漂移中：不重复发事件
 		}
-		e.driftSeen[app.ID] = true
+		// 先标后报（既有语义，IMPL-ARCH-E 逐面核对保持）：标记在披露前
+		// ——报告事务失败不重试本拍事件（漂移恢复清零后再次漂移才可再报）。
+		e.driftSeen.mark(app.ID)
 		if err := e.reportDrift(ctx, app.ID, app.Name, report); err != nil {
 			e.log.Warn("engine: report drift", "app", app.Name, "error", err)
 			continue
@@ -494,12 +496,13 @@ func (e *Engine) driftScan(ctx context.Context) {
 			e.log.Warn("engine: auto converge failed (keeps drifting silently)", "app", app.Name, "error", err)
 			continue
 		}
-		delete(e.driftSeen, app.ID) // 收敛成功：下一拍重新基线
+		e.driftSeen.clear(app.ID) // 收敛成功：下一拍重新基线
 	}
 }
 
 // reportDrift 落 drift_detected 事件与审计（同事务 fail-closed；diff 为
-// 投影形态 JSON——env 只到键名 + hash）。
+// 投影形态 JSON——env 只到键名 + hash）。事件+审计配对经 disclosure.go
+// 单点（discloseTx）。
 func (e *Engine) reportDrift(ctx context.Context, appID, appName string, report *DriftReport) error {
 	diffRaw, err := canonicalJSON(report.Services)
 	if err != nil {
@@ -507,20 +510,13 @@ func (e *Engine) reportDrift(ctx context.Context, appID, appName string, report 
 	}
 	e.log.Warn("engine: drift detected", "app", appName, "deployment", report.DesiredDeployment,
 		"services", len(report.Services))
-	return e.store.InTx(ctx, func(tx *state.Tx) error {
-		if err := appendEvents(ctx, tx, eventOf("reconcile.drift_detected", "app:"+appName,
-			"app", appName, "app_id", appID,
-			"desired_deployment", report.DesiredDeployment,
-			"diff", string(diffRaw))); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:       "system",
-			Action:      "reconcile.drift_detected",
-			Target:      "app:" + appName,
-			Result:      "ok",
-			DiffSummary: string(diffRaw),
-		})
+	return e.discloseTx(ctx, disclosure{
+		eventCode:   "reconcile.drift_detected",
+		subject:     "app:" + appName,
+		payload:     []string{"app", appName, "app_id", appID, "desired_deployment", report.DesiredDeployment, "diff", string(diffRaw)},
+		auditAction: "reconcile.drift_detected",
+		auditTarget: "app:" + appName,
+		auditDiff:   string(diffRaw),
 	})
 }
 

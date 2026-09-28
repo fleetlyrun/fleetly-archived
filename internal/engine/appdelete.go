@@ -28,14 +28,12 @@ func (e *Engine) ReapDeletingApps(ctx context.Context) { e.reapDeletingApps(ctx,
 
 // reapDeletingApps 是 tick 的 deleting 回收 duty（H10/MG-3）：扫描全部
 // deleting 应用并逐个收敛（受管服务移除 → deleting → deleted + 终局事件
-// 与审计）。频控：非 force 形态受 deleteScanNextAt 时间闸（tick goroutine
-// 专用字段，与 recoveryNextAt 同模式）。
+// 与审计）。频控：非 force 形态受 deleteScanGate 时间闸（tick goroutine
+// 专用，scanGate 单点见 disclosure.go）。
 func (e *Engine) reapDeletingApps(ctx context.Context, force bool) {
-	now := e.now()
-	if !force && now.Before(e.deleteScanNextAt) {
+	if !e.deleteScanGate.due(e.now(), force, appDeleteScanInterval) {
 		return
 	}
-	e.deleteScanNextAt = now.Add(appDeleteScanInterval)
 	apps, err := e.store.ListAppsByLifecycle(ctx, state.LifecycleDeleting)
 	if err != nil {
 		e.log.Warn("engine: list deleting apps", "error", err)

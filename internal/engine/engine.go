@@ -82,9 +82,20 @@ type Engine struct {
 	// waterMarks 是副本水位不足判定的进程内计时（观察窗辅助信号；引擎
 	// 重启后重摆——窗口本身持久化，重启代价可接受）。
 	waterMarks map[string]time.Time
-	// driftSeen 是漂移上报的进程内迁移记忆（no-drift → drift 只报一次；
-	// 重启清零 = 漂移存续时重报一次，漏报劣于重复）。
-	driftSeen map[string]bool
+	// ── 「披露一次」骨架的 seen 记忆（IMPL-ARCH-E 单点收敛：类型与契约
+	// 散文单点在 disclosure.go）——持续异常形态只报一次；恢复/条件解除
+	// 清零可再报；进程重启清零 = 重报一次，重复优于漏报。八面对账披露
+	// 共用同一类型与一份逻辑（此前 8 个裸 map 字段各带一份逐字近同的
+	// 契约散文）；事件+审计同事务配对同文件。非并发安全：只在对账 duty
+	// 调用栈上使用（tick goroutine 专用，与收敛前的裸 map 同纪律）──
+	driftSeen            disclosureSet // 漂移面：no-drift → drift 迁移判定（T2.13）
+	substrateMissingSeen disclosureSet // 存在性对账：服务缺失（T0-V2.2/R2）
+	substrateDrainedSeen disclosureSet // 存在性对账：服务在、任务全无（F11）
+	networkOrphanSeen    disclosureSet // networks 对账：孤儿网（IMPL-T15-1）
+	networkMissingSeen   disclosureSet // networks 对账：期望项目网缺失（OT-1）
+	taskOrphanSeen       disclosureSet // tasks 对账：孤儿 task（DT-5）
+	scalingDormantSeen   disclosureSet // 扩缩披露：metrics off 休眠（W5-S1）
+	scalingNoDataSeen    disclosureSet // 扩缩披露：查不到序列（W5-S1）
 	// routeBudget 是单次路由发布的 tick 预算（H11/M1 相关评审 H11 项；
 	// 缺省 routePublishBudget，字段化为单测注入缝——见 routes.go）。
 	routeBudget time.Duration
@@ -96,52 +107,22 @@ type Engine struct {
 	// recoveryStuck 是单记录瞬态失败（底座读失败等）的待重试集合；重试轮
 	// 只处理仍卡住的记录，避免反复重开已恢复记录的观察窗。
 	recoveryStuck map[string]bool
-	// recoveryNextAt 是下一次恢复重试的最早时刻（频控）。
+	// recoveryNextAt 是下一次恢复重试的最早时刻（频控）。臂闸语义（arm 时
+	// 推进、读时不推进）与 disclosure.go 的 scanGate（读时到期即推进）
+	// 不同型，且与 recoveryPending/recoveryStuck 同属 M1-8 一个机制——
+	// 不并入节拍门单点，保留原样（IMPL-ARCH-E 汇总有记）。
 	recoveryNextAt time.Time
-	// deleteScanNextAt 是 deleting 应用回收扫描的最早时刻（H10/MG-3 频控，
-	// 与 recoveryNextAt 同模式：tick goroutine 专用——Run 单 goroutine 驱动，
-	// 无并发访问；重启即清零 = 重启后立即扫一拍）。
-	deleteScanNextAt time.Time
-	// initScanNextAt 是 init 孤儿服务清扫的最早时刻（DT-4 频控，同上模式；
-	// 重启即清零 = 重启后立即扫一拍——崩溃残留在一个窗口内被收口）。
-	initScanNextAt time.Time
-	// substrateNextAt 是运行期存在性对账扫描的最早时刻（T0-V2.2/R2 频控，
-	// 与 deleteScanNextAt 同模式：tick goroutine 专用；重启即清零 = 重启后
-	// 立即扫一拍）。
-	substrateNextAt time.Time
-	// substrateMissingSeen 是 substrate 服务缺失上报的进程内记忆（T0-V2.2/R2：
-	// 持续缺失只报一次；服务恢复后清零可再报；重启清零 = 缺失存续时重报
-	// 一次——重复优于漏报，与 driftSeen 同语义）。
-	substrateMissingSeen map[string]bool
-	// substrateDrainedSeen 是「服务在、任务全无」（F11，settled 应用 drain
-	// 事件面）披露的进程内记忆：语义与 substrateMissingSeen 同款（持续形态
-	// 只报一次；任务回岗清零可再报；重启清零 = 重报一次，重复优于漏报）。
-	substrateDrainedSeen map[string]bool
-	// networkOrphanSeen / networkMissingSeen 是 networks 对账面（IMPL-T15-1）
-	// 两类披露的进程内记忆：按网络名节流（持续形态只报一次；条件解除清零
-	// 可再报；重启清零 = 重报一次——与 substrateMissingSeen 同语义）。
-	networkOrphanSeen  map[string]bool
-	networkMissingSeen map[string]bool
-	// taskOrphanSeen 是 tasks 对账面（DT-5/IMPL-T2-1）孤儿 task 披露的进程内
-	// 记忆：按服务名节流（持续形态只报一次；回收成功/条件解除清零可再报；
-	// 重启清零 = 重报一次——与 networkOrphanSeen 同语义）。
-	taskOrphanSeen map[string]bool
-	// projectNetNextAt 是项目网收敛 duty 的最早时刻（projectNetworkSweepInterval
-	// 频控，substrateNextAt 同模式：tick goroutine 专用；重启即清零 = 重启后
-	// 立即扫一拍）。
-	projectNetNextAt time.Time
+	// ── 30s 节拍门（IMPL-ARCH-E 单点收敛：disclosure.go scanGate——到期
+	// 判定 + 推进一份逻辑；tick goroutine 专用——Run 单 goroutine 驱动，
+	// 无并发访问；零值即刻到期 = 重启后立即扫一拍）──
+	deleteScanGate         scanGate // deleting 应用回收扫描（H10/MG-3）
+	initScanGate           scanGate // init 孤儿服务清扫（DT-4）
+	substrateScanGate      scanGate // 运行期存在性对账扫描（T0-V2.2/R2；含 networks/tasks 面）
+	projectNetworkScanGate scanGate // 项目网收敛 duty（IMPL-T15-1）
+	scalingScanGate        scanGate // 扩缩评估扫描（W5-S1）
 	// metricsQ 是 VM 瞬时查询端口（autoscaler 评估器的数据面；nil = duty
 	// 整体不在评估域——装配层经 WithMetricsQuerier 注入）。
 	metricsQ MetricsQuerier
-	// scalingNextAt 是扩缩评估扫描的最早时刻（autoscalingInterval 频控，
-	// substrateNextAt 同模式：tick goroutine 专用；重启即清零 = 重启后立即
-	// 评估一拍）。
-	scalingNextAt time.Time
-	// scalingDormantSeen / scalingNoDataSeen 是扩缩披露的进程内记忆（每策略
-	// 一次性语义：条件存续只报一次；条件解除清零可再报；重启清零 = 重报
-	// 一次，重复优于漏报——与 driftSeen 同族）。
-	scalingDormantSeen map[string]bool
-	scalingNoDataSeen  map[string]bool
 	// dutyPanicOn / dutyCalls 是 safeCall 的测试注入缝（MG-5 覆盖面测试）：
 	// 前者按 duty 名注入 panic（验证包壳隔离），后者记录经 safeCall 执行的
 	// duty 名与次数（验证 duty 清单全部收口；Run goroutine 写、测试 goroutine
@@ -163,25 +144,17 @@ type PlacementResolver interface {
 func NewEngine(cfg Config, store *state.Store, sub Substrate, images ImageChecker,
 	resolver PlacementResolver, box *secrets.Box, log *slog.Logger) *Engine {
 	return &Engine{
-		cfg:                  cfg.Normalize(),
-		store:                store,
-		sub:                  sub,
-		images:               images,
-		resolver:             resolver,
-		box:                  box,
-		clock:                realClock{},
-		log:                  log,
-		waterMarks:           map[string]time.Time{},
-		driftSeen:            map[string]bool{},
-		routeBudget:          routePublishBudget,
-		recoveryStuck:        map[string]bool{},
-		substrateMissingSeen: map[string]bool{},
-		substrateDrainedSeen: map[string]bool{},
-		networkOrphanSeen:    map[string]bool{},
-		networkMissingSeen:   map[string]bool{},
-		taskOrphanSeen:       map[string]bool{},
-		scalingDormantSeen:   map[string]bool{},
-		scalingNoDataSeen:    map[string]bool{},
+		cfg:           cfg.Normalize(),
+		store:         store,
+		sub:           sub,
+		images:        images,
+		resolver:      resolver,
+		box:           box,
+		clock:         realClock{},
+		log:           log,
+		waterMarks:    map[string]time.Time{},
+		routeBudget:   routePublishBudget,
+		recoveryStuck: map[string]bool{},
 	}
 }
 

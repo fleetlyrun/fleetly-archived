@@ -129,22 +129,19 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 			continue // 任一归属锚 label 非空 = 自描述归属明确，不进孤儿面
 		}
 		orphanSet[net.Name] = true
-		if e.networkOrphanSeen[net.Name] {
-			continue // 持续形态已报过：不重复（恢复清零可再报）
-		}
-		if err := e.reportNetworkOrphan(ctx, net); err != nil {
-			e.log.Warn("engine: report orphan network", "network", net.Name, "error", err)
+		// 持续形态只报一次（恢复清零可再报）；事件+审计同事务，事务失败
+		// 不标记——下一拍重试（disclosure.go 单点）。
+		reported, rerr := e.discloseOnce(ctx, &e.networkOrphanSeen, net.Name, networkOrphanDisclosure(net))
+		if rerr != nil {
+			e.log.Warn("engine: report orphan network", "network", net.Name, "error", rerr)
 			continue
 		}
-		e.networkOrphanSeen[net.Name] = true
-		e.log.Warn("engine: platform-prefixed managed network without state attribution (disclosed only, never deleted silently)",
-			"network", net.Name, "driver", net.Driver, "containers", net.Containers)
-	}
-	for name := range e.networkOrphanSeen {
-		if !orphanSet[name] {
-			delete(e.networkOrphanSeen, name) // 恢复/归因成功：记忆清零可再报
+		if reported {
+			e.log.Warn("engine: platform-prefixed managed network without state attribution (disclosed only, never deleted silently)",
+				"network", net.Name, "driver", net.Driver, "containers", net.Containers)
 		}
 	}
+	e.networkOrphanSeen.sweep(orphanSet) // 恢复/归因成功：记忆清零可再报
 	// ② 缺失方向：期望项目网不在底座（外部移除）→ 披露；修正归收敛 duty。
 	missingSet := map[string]bool{}
 	names := make([]string, 0, len(projectNets))
@@ -157,22 +154,18 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 			continue
 		}
 		missingSet[name] = true
-		if e.networkMissingSeen[name] {
+		// 持续形态只报一次（条件解除清零可再报）；同事务配对同上。
+		reported, rerr := e.discloseOnce(ctx, &e.networkMissingSeen, name, networkMissingDisclosure(name, projectNets[name]))
+		if rerr != nil {
+			e.log.Warn("engine: report missing project network", "network", name, "error", rerr)
 			continue
 		}
-		if err := e.reportNetworkMissing(ctx, name, projectNets[name]); err != nil {
-			e.log.Warn("engine: report missing project network", "network", name, "error", err)
-			continue
-		}
-		e.networkMissingSeen[name] = true
-		e.log.Warn("engine: expected project network absent from the substrate (the convergence duty re-ensures it)",
-			"network", name, "project_id", projectNets[name])
-	}
-	for name := range e.networkMissingSeen {
-		if !missingSet[name] {
-			delete(e.networkMissingSeen, name)
+		if reported {
+			e.log.Warn("engine: expected project network absent from the substrate (the convergence duty re-ensures it)",
+				"network", name, "project_id", projectNets[name])
 		}
 	}
+	e.networkMissingSeen.sweep(missingSet)
 }
 
 // expectedNetworks 从 state 推导 networks 对账的期望面（读错即整体放弃本拍）。
@@ -236,43 +229,31 @@ func (e *Engine) expectedNetworks(ctx context.Context) (map[string]bool, map[str
 	return expected, projectNets, nil
 }
 
-// reportNetworkOrphan 落孤儿网披露（事件 + 审计，同事务 fail-closed）。
-// payload 只带事实字段（网络名/驱动/挂接容器数），零敏感材料。
-func (e *Engine) reportNetworkOrphan(ctx context.Context, net NetworkState) error {
-	return e.store.InTx(ctx, func(tx *state.Tx) error {
-		if err := appendEvents(ctx, tx, eventOf("network.orphaned", "network:"+net.Name,
-			"network", net.Name,
-			"driver", net.Driver,
-			"containers", fmt.Sprint(net.Containers))); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:  "system",
-			Action: "reconcile.network_orphaned",
-			Target: "network:" + net.Name,
-			Result: "ok",
-			DiffSummary: state.DiffSummary("network", net.Name,
-				"driver", net.Driver, "containers", net.Containers),
-		})
-	})
+// networkOrphanDisclosure 构造孤儿网披露载荷（事件 network.orphaned +
+// 审计 reconcile.network_orphaned，同事务 fail-closed）。payload 只带事实
+// 字段（网络名/驱动/挂接容器数），零敏感材料。
+func networkOrphanDisclosure(net NetworkState) disclosure {
+	return disclosure{
+		eventCode:   "network.orphaned",
+		subject:     "network:" + net.Name,
+		payload:     []string{"network", net.Name, "driver", net.Driver, "containers", fmt.Sprint(net.Containers)},
+		auditAction: "reconcile.network_orphaned",
+		auditTarget: "network:" + net.Name,
+		auditDiff:   state.DiffSummary("network", net.Name, "driver", net.Driver, "containers", net.Containers),
+	}
 }
 
-// reportNetworkMissing 落期望项目网缺失披露（事件 + 审计，同事务 fail-closed）。
-func (e *Engine) reportNetworkMissing(ctx context.Context, name, projectID string) error {
-	return e.store.InTx(ctx, func(tx *state.Tx) error {
-		if err := appendEvents(ctx, tx, eventOf("network.missing", "network:"+name,
-			"network", name,
-			"project_id", projectID)); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:       "system",
-			Action:      "reconcile.network_missing",
-			Target:      "network:" + name,
-			Result:      "ok",
-			DiffSummary: state.DiffSummary("network", name, "project_id", projectID),
-		})
-	})
+// networkMissingDisclosure 构造期望项目网缺失披露载荷（事件 network.missing
+// + 审计 reconcile.network_missing，同事务 fail-closed）。
+func networkMissingDisclosure(name, projectID string) disclosure {
+	return disclosure{
+		eventCode:   "network.missing",
+		subject:     "network:" + name,
+		payload:     []string{"network", name, "project_id", projectID},
+		auditAction: "reconcile.network_missing",
+		auditTarget: "network:" + name,
+		auditDiff:   state.DiffSummary("network", name, "project_id", projectID),
+	}
 }
 
 // ── 项目网收敛 duty（成员 ensure + 空网回收）────────────────────────────────
@@ -286,14 +267,12 @@ func (e *Engine) ReconcileProjectNetworks(ctx context.Context) { e.reconcileProj
 //  2. 无成员项目网回收：带自描述 label 归属、零挂接端点才删（in-use 由底座
 //     拒绝兜底——真机实证 FailedPrecondition）；失败留下拍重试。
 //
-// 频控：非 force 形态受 projectNetNextAt 时间闸（tick goroutine 专用字段，
-// substrateNextAt 同模式；重启即清零 = 重启后立即扫一拍）。读错不动作。
+// 频控：非 force 形态受 projectNetworkScanGate 时间闸（tick goroutine 专用，
+// scanGate 单点见 disclosure.go；重启即清零 = 重启后立即扫一拍）。读错不动作。
 func (e *Engine) reconcileProjectNetworks(ctx context.Context, force bool) {
-	now := e.now()
-	if !force && now.Before(e.projectNetNextAt) {
+	if !e.projectNetworkScanGate.due(e.now(), force, projectNetworkSweepInterval) {
 		return
 	}
-	e.projectNetNextAt = now.Add(projectNetworkSweepInterval)
 	if e.netSub == nil {
 		return // 未接线：duty 空转
 	}

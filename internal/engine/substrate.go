@@ -51,14 +51,13 @@ func (e *Engine) SubstrateRecon(ctx context.Context) { e.substrateRecon(ctx, tru
 
 // substrateRecon 是 tick 的存在性对账 duty（T0-V2.2/R2）。IMPL-T15-1 起
 // 含 networks 面（reconNetworks——孤儿网/缺失项目网披露；票面 DT-5 对账
-// 兜底守卫）。频控：非 force 形态受 substrateNextAt 时间闸（tick goroutine
-// 专用字段，与 deleteScanNextAt 同模式；重启即清零 = 重启后立即扫一拍）。
+// 兜底守卫）。频控：非 force 形态受 substrateScanGate 时间闸（tick
+// goroutine 专用，scanGate 单点见 disclosure.go；重启即清零 = 重启后立即
+// 扫一拍）。
 func (e *Engine) substrateRecon(ctx context.Context, force bool) {
-	now := e.now()
-	if !force && now.Before(e.substrateNextAt) {
+	if !e.substrateScanGate.due(e.now(), force, substrateReconInterval) {
 		return
 	}
-	e.substrateNextAt = now.Add(substrateReconInterval)
 	// networks 面先行（读面披露——与 services 面共享同一频控闸；读错各自
 	// 独立消化，互不阻塞）。
 	e.reconNetworks(ctx)
@@ -151,8 +150,8 @@ func (e *Engine) reconAppSubstrate(ctx context.Context, appID, appName, derived 
 		drained[specs[i].Name] = taskStateSummary(st, tasks)
 	}
 	if len(missing) > 0 {
-		delete(e.substrateDrainedSeen, appID) // 缺失揭示吞并 drained 形态（视图修正优先级 down > degraded）
-		if e.substrateMissingSeen[appID] {
+		e.substrateDrainedSeen.clear(appID) // 缺失揭示吞并 drained 形态（视图修正优先级 down > degraded）
+		if e.substrateMissingSeen.reported(appID) {
 			return // 持续缺失已报过：不重复发事件（节流；派生态已修，扫描候选过滤同样挡住重入）
 		}
 		if err := e.reportSubstrateMissing(ctx, appID, appName, *source, missing); err != nil {
@@ -162,15 +161,15 @@ func (e *Engine) reconAppSubstrate(ctx context.Context, appID, appName, derived 
 			e.log.Warn("engine: substrate recon report", "app", appName, "error", err)
 			return // 未记缺失记忆：下一拍重试（事件与修正同事务，失败即整体未生效）
 		}
-		e.substrateMissingSeen[appID] = true
+		e.substrateMissingSeen.mark(appID)
 		e.log.Warn("engine: running app's service(s) absent from the substrate (view corrected to down)",
 			"app", appName, "deployment", source.ID, "missing", strings.Join(missing, ","))
 		return
 	}
 	// 服务齐整：清缺失记忆（服务恢复后可再报——非永久静音）。
-	delete(e.substrateMissingSeen, appID)
+	e.substrateMissingSeen.clear(appID)
 	if len(drained) > 0 {
-		if e.substrateDrainedSeen[appID] {
+		if e.substrateDrainedSeen.reported(appID) {
 			return // 持续无任务已报过：节流（与缺失记忆同语义）
 		}
 		if err := e.reportSubstrateDrained(ctx, appID, appName, *source, drained); err != nil {
@@ -180,7 +179,7 @@ func (e *Engine) reconAppSubstrate(ctx context.Context, appID, appName, derived 
 			e.log.Warn("engine: substrate recon report drained", "app", appName, "error", err)
 			return
 		}
-		e.substrateDrainedSeen[appID] = true
+		e.substrateDrainedSeen.mark(appID)
 		e.log.Warn("engine: running app's services have zero running tasks (view corrected to degraded)",
 			"app", appName, "deployment", source.ID, "services", strings.Join(drainedSummary(drained), ","))
 		return
@@ -190,8 +189,8 @@ func (e *Engine) reconAppSubstrate(ctx context.Context, appID, appName, derived 
 	// 推导即回 running，映射事件 app.recovered 由其自带；若 degraded 来自
 	// DB 事实〔如窗后告警旗标〕，重推导维持 degraded——不越权翻转他人语义，
 	// 这也是 degraded 候选在健康拍重复刷新无害的原因）。
-	if e.substrateDrainedSeen[appID] || derived == DerivedDegraded {
-		delete(e.substrateDrainedSeen, appID)
+	if e.substrateDrainedSeen.reported(appID) || derived == DerivedDegraded {
+		e.substrateDrainedSeen.clear(appID)
 		if err := e.refreshDerivedState(ctx, appID, appName); err != nil {
 			e.log.Warn("engine: substrate recon refresh derived state (drain recovery)",
 				"app", appName, "error", err)
@@ -269,18 +268,14 @@ func (e *Engine) reportSubstrateMissing(ctx context.Context, appID, appName stri
 		if err := tx.SetAppDerivedState(ctx, appID, cur, DerivedDown); err != nil {
 			return err
 		}
-		if err := appendEvents(ctx, tx, appEvent("app.substrate_missing", appName,
-			"app_id", appID,
-			"desired_deployment", source.ID,
-			"missing_services", strings.Join(missing, ","))); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:  "system",
-			Action: "app.substrate_missing",
-			Target: "app:" + appName,
-			Result: "ok",
-			DiffSummary: state.DiffSummary("app", appName, "deployment", source.ID,
+		// 事件 + 审计配对经 disclosure.go 单点（派生态 CAS 之上的同事务组合）。
+		return writeDisclosure(ctx, tx, disclosure{
+			eventCode:   "app.substrate_missing",
+			subject:     "app:" + appName,
+			payload:     []string{"app", appName, "app_id", appID, "desired_deployment", source.ID, "missing_services", strings.Join(missing, ",")},
+			auditAction: "app.substrate_missing",
+			auditTarget: "app:" + appName,
+			auditDiff: state.DiffSummary("app", appName, "deployment", source.ID,
 				"missing_services", strings.Join(missing, ",")),
 		})
 	})
@@ -314,19 +309,14 @@ func (e *Engine) reportSubstrateDrained(ctx context.Context, appID, appName stri
 		if err := tx.SetAppDerivedState(ctx, appID, cur, DerivedDegraded); err != nil {
 			return err
 		}
-		if err := appendEvents(ctx, tx, appEvent("app.degraded", appName,
-			"app_id", appID,
-			"desired_deployment", source.ID,
-			"detection", "substrate_recon",
-			"services", strings.Join(rows, "; "))); err != nil {
-			return err
-		}
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:  "system",
-			Action: "app.substrate_drained",
-			Target: "app:" + appName,
-			Result: "ok",
-			DiffSummary: state.DiffSummary("app", appName, "deployment", source.ID,
+		// 事件 + 审计配对经 disclosure.go 单点（派生态 CAS 之上的同事务组合）。
+		return writeDisclosure(ctx, tx, disclosure{
+			eventCode:   "app.degraded",
+			subject:     "app:" + appName,
+			payload:     []string{"app", appName, "app_id", appID, "desired_deployment", source.ID, "detection", "substrate_recon", "services", strings.Join(rows, "; ")},
+			auditAction: "app.substrate_drained",
+			auditTarget: "app:" + appName,
+			auditDiff: state.DiffSummary("app", appName, "deployment", source.ID,
 				"services", strings.Join(rows, "; ")),
 		})
 	})

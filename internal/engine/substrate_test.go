@@ -229,7 +229,7 @@ func TestSubstrateReconTimeGateSkipsBeats(t *testing.T) {
 	ctx := context.Background()
 	deployDemoSucceeded(t, h)
 
-	h.eng.substrateRecon(ctx, false) // 首拍即扫（deleteScanNextAt 同语义：重启后立即扫一拍）
+	h.eng.substrateRecon(ctx, false) // 首拍即扫（scanGate 零值同语义：重启后立即扫一拍）
 	afterFirst := h.sub.inspectCalls
 
 	h.eng.substrateRecon(ctx, false) // 时钟未动：闸内跳过，不触底座
