@@ -1888,5 +1888,222 @@ staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构�
 - runbook §5 DNS 切换 + ACME HTTP-01 签发（T1-1 ⑤ 一并复验）+ §6.3 gRPC `h2c`/API 域名连通（含 SDK `DialGRPC(WithTLS())` 公共 CA 链）；
 - 建议窗口内同时核对：`fleetly domains verify` 输出中各域名 :80/:443 与证书 SAN；`W_ENV_PLATFORM_OVERRIDE` 在部署输出中对 4 个平台 env 键的呈现；mlbridge→Torchwood 公网网关连通（T2 前）。
 
+### IMPL-T2-3 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（无阻塞前置矛盾），进入实现。** 票面「映射表有缺口 → 停」的强制检查执行后，daemon.go 的 docker client 调用面逐项可映射；发现一处**未在票面展开的寻址缺口**（构建产物引用 ↔ 执行请求的逻辑镜像名）并给出裁决（dispatcher 侧 Redis 映射，见「缺口与裁决 1」）——不阻塞实现，记入设计冻结。改动全部落 torchwood 仓（基线 `54b666b`，与 origin/main 同步、工作区干净），fleetly 仓只写本文档。
+
+前置依赖核查（读 §4 各票记录 + 契约文件核对）：
+- T2-1 Tasks API 已验收：`TasksService` 六 RPC、task = swarm service（`restart: none` + 服务端强制加固 + 稳定 DNS `fleetly-task-<id>`）、TTL 60s–24h（缺省 600s）、scope `{kind, ref, internal}`（internal 仅 task-group）、配额 fail-closed、日志入 VL、机具令牌 scope `tasks`；`EnsureTaskNetwork.members` = 成员 app 经发布管线重部署挂靠（幂等键 `task_network_members`）。
+- T2-2 build-from-upload 已验收：`BuildFromUpload` gRPC-only client-streaming（首帧 metadata{name, dockerfile} + tar 分片）、产物 digest 钉定返回（registry 模式 `<host>/apps/<name>@sha256:<manifest>`；本地模式 `fleetly-local/<name>:<tag>`）、256MiB 上限、scope `build`。
+- T15-1 项目网/作用域机器已验收（task-group 网 `fleetly-taskgroup-<ref>` 与成员双挂投影复用其机器）；T1-2 镜像解析腿（digest 直通/registry-first/airgap 回落）与 T1-6 SDK TLS 已验收。
+- fleetly 契约基线：`fleetlyrun/fleetly` @ `1b60e146d20ea346b58bab99e370ad5ae97977b7`；vendored 三文件 sha256 记入 `third_party/fleetly/README.md`。
+
+#### A. daemon.go 的 docker client 调用面完整清单 → fleetly 映射表
+
+| 原方法/调用点（旧 `dispatcher/daemon.go`） | 原语义（docker.sock） | 目标语义（fleetly Tasks/build API） | 落点（torchwood） |
+|---|---|---|---|
+| `EnsureProjectNetwork(projectID, untrusted)`（NetworkInspect/Create/Connect/Disconnect + 自 attach + callback 容器 attach） | 建 per-project bridge `tw-func-<project>[-int]` 并 attach dispatcher/回调容器 | `TasksService.EnsureTaskNetwork{ref=p<project>／q<project>, internal, members=[app/service…]}`：task-group 网长活幂等；成员挂靠经平台发布管线重部署生效（每网一次声明，进程内 memo；失败不标记、下次重试） | `fleetlyDaemon.EnsureProjectNetwork` / `taskGroupRef` / `configuredMembers` |
+| `SpawnInstance(opts)`（ContainerCreate + ContainerStart + inspect 取 IP） | 建容器（CapDrop ALL/no-new-privileges/只读 rootfs/tmpfs/资源/StopTimeout=10）+ 取容器 IP | `TasksService.CreateTask{image（映射解析后的平台产物引用）, env(+TW_MAX_REQUESTS/TW_DRAIN_TIMEOUT_MS), scope={task-group,ref,internal}, ttl=86400, cpu/mem=SpecResources}` → 轮询 `GetTask` 至 running（failed 上抛平台原因并尽力回收）→ `Instance{ContainerID=taskID, IP=dns_name}` | `fleetlyDaemon.SpawnInstance` / `awaitTaskRunning` / `spawnEnv` |
+| `InspectInstance(id)`（ContainerInspect running+IP） | 本机容器运行态 | `GetTask(id)`：status==running → true；任务不存在 → 错误（池幽灵清理判据） | `fleetlyDaemon.InspectInstance` |
+| `StopInstance(id, timeout)`（ContainerStop；timeout≤0 SIGKILL） | 优雅/强杀停止容器 | `StopTask(id)`（幂等；平台固定 stop_grace 5s——timeout 参数不再改变行为） | `fleetlyDaemon.StopInstance` |
+| `RemoveInstance(id)`（ContainerRemove force） | 强删容器 | `DeleteTask(id)`（停止+移除底座服务+台账行；NotFound 容忍） | `fleetlyDaemon.RemoveInstance` |
+| `InstanceLogsTail(id, limit)`（ContainerLogs + stdcopy 解复用） | 容器 stdout/stderr 尾部（验证失败第一现场） | `GetTask` 台账投影（status/error/stop_reason + VictoriaLogs 指引）；机具令牌（tasks,build）无日志读面——**诚实边界** | `fleetlyDaemon.InstanceLogsTail` |
+| `BuildImage(opts)`（ImageBuild + BuildKit error 流 + verify + pushBuiltImage） | 渲染上下文 → docker build → 验证 spawn → push registry | 渲染上下文（**保留**：zip 解压/runtime 对账/.tw-runner.js/Dockerfile → tar 流）→ `BuildsService.BuildFromUpload{name=func-<fn>-<dep>, dockerfile="Dockerfile"}` → 登记逻辑名→产物引用映射 → 验证 spawn（平台引用直用） | `fleetlyDaemon.BuildImage` / `uploadImageName` / `grpcFleetlyClient.BuildFromUpload` |
+| `EnsureImage(ref)`（ImageInspect/ImagePull） | registry 模式冷启动本节点 pull | **删除**：平台 agent 在任务创建时按 digest 拉取，无「本节点镜像」前置 | Daemon 接口移除（池的调用点随 RoutingMode 一并删除） |
+| `ImportImage(opts)`（ImageInspect/Pull/ImageTag/ImageRemove + 契约验证） | host 校验 → pull → digest 钉死 → retag 平台命名 → 删原引用 → 验证 | host 准入校验（保留）→ 幂等快速路径（映射命中同 digest 零平台往返）→ 验证任务（平台解析/拉取/钉定；任务视图 image 即钉定引用）→ digest 漂移校验 → 契约验证 → 登记映射 → 返回 digest | `fleetlyDaemon.ImportImage` / `startVerificationTask` |
+| `RemoveImage(fn, dep)`（ImageRemove） | 删本地平台镜像 | 删「逻辑名→引用」映射（平台产物 GC 归平台；Tasks/build API 无镜像删除面） | `fleetlyDaemon.RemoveImage` |
+| `verifyBuild`/`verifyImported`（池外验证容器） | 池外 spawn + `/_tw/health` 探针 + 日志尾 | 池外验证任务（同一 Spawn/Stop/Delete 底座；镜像 = 平台产物引用/用户引用） | `spawnVerifyInstance` / `spawnVerificationTask` / `awaitVerificationHealthy` |
+| `detectSelfContainerID`/`ensureConnected`/`isAlreadyConnectedErr` | 自 attach 与陈旧 endpoint 自愈 | 删除：成员挂靠由平台发布管线承载（「per-task 动态 attach」结构性禁令的服务端镜像） | 删除 |
+| `pushBuiltImage`/`registryAuth`/`localImageMatches`/`pinnedDigest` | 本地镜像/推送原语 | 删除：推 registry 归平台 build API；digest 钉定归平台解析腿 | 删除 |
+| `tarDir`/`writeBuildContext`/`prepareBuildContext` | 构建上下文渲染 | **保留**（tar 流进 BuildFromUpload；umask 归一化语义不变） | 保留 |
+
+#### B. 池语义依赖的容器级细节 → swarm/service 语义等价物
+
+| 容器级细节 | 等价物 | 证据/说明 |
+|---|---|---|
+| inspect 取容器 IP（分发寻址） | `TaskView.dns_name`（= `fleetly-task-<id>`，作用域网内稳定 DNS） | T2-1 契约 `dns_name=service`；本仓 e2e 实证（见实施记录） |
+| health 探针（`/_tw/health`） | 平台任务收敛（queued→running，`awaitTaskRunning`）→ 池启动握手（runner health）→ `TW_MAX_REQUESTS` 自退 → `GetTask` 终态 | 双层预算（平台收敛 + runner 就绪各 boot_timeout）；e2e 全链通过 |
+| stop 宽限（per-instance timeout） | 平台固定 `stop_grace_period=5s`（T2-1 spec） | 行为差异如实登记：池 drain 宽限不再逐实例可变（见偏离 4） |
+| 镜像存在性（No such image → rebuild） | 映射缺失/平台解析失败 → `E_IMAGE_PULL_FAILED` → FailedPrecondition + ImageMissingMarker | `mapFleetlyError`；重建链路复用既有 rebuild 语义 |
+| `restart: none` 崩溃不静默自愈 | 平台任务 failed/rejected → 收敛为 failed；dispatcher 侧 transport-error 杀实例 + TimeoutBudget 熔断重建 | 池语义一行未动（pool.go 只删除多节点钩子） |
+| 幽灵对账（inspect 不存在/退出） | `GetTask` 非 running/NotFound → 记录清理；runner 自退由平台落 stopped/exited | e2e 断言 stopped + stop_reason=exited |
+
+#### C. 删除面与配额语义
+
+- 删除 `dispatcher/nodes.go`（节点注册表/心跳/容量键）、`dispatcher/capacity.go`（M4 全局容量）、`dispatcher/routing.go`（跨节点转发/BuildNode 亲和/DispatchForwarded）及其测试；`pool.go` 只做**机械摘除**（nodeID/forwarder/deadNodePending/容量刷新/路由调用点，池的租约/保温/熔断/TW_MAX_REQUESTS 逻辑逐字保留）；`registry.go` 去掉 NodeRegistry 组合与 Lua 的 node 收窄（旧记录 node 字段随解码自然丢弃）；`service.go` 去掉节点身份/心跳；`metrics.go` 去掉死节点/转发指标；config 删除 `node_id/node_url/routing_mode/registry_push/max_resident_instances_global/callback_container`（proto reserved）。
+- 配额语义：本地 `max_resident_instances` 保留为进程内 fail-closed 门；平台侧每令牌任务配额（并发/CPU/内存）由 CreateTask 同事务 fail-closed，触顶 → `E_TASK_QUOTA_EXCEEDED` → dispatcher 映射为 `ResourceExhausted` **立即上抛**（守卫③，不吞进排队等待）；镜像不可得 → FailedPrecondition（重建自愈）；其余平台错误 → Internal（池按可重试留现场）。
+
+#### D. 跨仓消费机制裁决（给证据）
+
+候选与否定项：
+1. **Go module 依赖 `github.com/fleetlyrun/fleetly/sdk/go`（否决）**：fleetly 的 `sdk/go` 与 `genproto` 是**两个未发布的独立 module**（`sdk/go/go.mod` replace 到 `../../genproto`，均无公开版本/tag）；torchwood CI 是公开 GitHub Actions（`torchwoodcloud/torchwood`），无 fleetly 仓凭据，`go mod` 拉取私有未发布 module 不可行。
+2. **SDK 代码拷贝（否决）**：SDK 本身 import `github.com/fleetlyrun/fleetly/genproto/...`，拷贝后同样不可得（同病）。
+3. **vendored proto + 本仓生成 stubs（采纳）**：`third_party/fleetly/`（独立 buf module，verbatim 三文件 + 来源 commit/sha256 台账 + 同步流程 + 独立 `buf.gen.yaml` 只出 pb/grpc）→ `genproto/fleetly/{server,shared}/v1`。自足、CI 友好；契约漂移由台账+同步流程显式管理（CI 无 fleetly 访问权，不做网络 drift 检查——如实登记）。
+   - 为什么独立 module 而非并入主 proto 模块：生成实验证明同模块生成会让 grpc-gateway import 别名（`sharedv1` vs `sharedv1_0`）与 openapiv2 definition 命名（`v1ErrorResponse` vs `torchwoodsharedv1ErrorResponse`）在既有生成物上产生大面积无关漂移；独立 module 隔离后 `buf generate` 只新增 `genproto/fleetly/**`。
+
+#### E. 其余裁决点（冻结）
+
+1. **常驻任务 TTL = 86400s（平台上限）作兜底**：平台无续期 RPC；正常生命周期由池自持（idle 回收/max_requests 自退/熔断重建，分钟级），TTL 只兜「dispatcher 整体失联」的泄漏面；到期由平台 janitor 回收（task.expired）。
+2. **构建上下文渲染保留**：`prepareBuildContext`（解压校验/runtime 对账/engines.node/模板渲染/.tw-runner.js）逐字保留；`uploadImageName = func-<function>-<deployment>`（小写化+非法字符折叠+长度收敛）作为平台镜像仓组件名。
+3. **产物命名空间**：不再 retag 为 `torchwood-funcs/func-…` 平台镜像；产物引用由平台生成（registry `<host>/apps/<name>@sha256:…` / 本地 `fleetly-local/<name>:<tag>`），torchwood 侧逻辑名（`functions.docker.registry` 前缀）降级为**映射键**。
+4. **网络生命周期**：per-项目 task-group 网长活（`fleetly-taskgroup-<ref>`），ref = `p<projectID>`（可信）/`q<projectID>`（internal 不可信变体）——首字符区分两变体 ⇒ 与 projectID 全集结构不相交（后缀方案会让以 u 结尾的 project 撞不可信变体，前缀方案无此碰撞，长度 ≤29≤32）；成员 = `functions.fleetly.app` + `network_members`（每网一次声明）；`callback_container` 语义由成员挂靠（别名 `<app>-<service>`）取代。
+5. **机具令牌注入**：新 config `functions.fleetly{endpoint, token, app, network_members}`；dispatcher 启动期校验 endpoint/token 必填、members 非空时 app 必填；令牌经 `TORCHWOOD_FUNCTIONS_FLEETLY_TOKEN` 部署注入，代码/日志/错误文本零出现（e2e 脚本也不 echo）。
+
+#### F. 缺口与边界（如实登记，不阻塞）
+
+1. **镜像引用寻址（唯一实质性缺口，已裁决）**：server 的执行规格只携带逻辑镜像名（server/dispatcher 同源派生）；fleetly 产物引用不可从逻辑名推导（平台 tag 含 build id）。**裁决 = dispatcher 侧 Redis 映射**（`torchwood:fnimg:<逻辑名>`，无 TTL，RemoveImage 显式回收；构建/导入成功即写）。映射缺失 → 原样引用交平台解析 → 必然失败 → ImageMissingMarker → server 重建链路重新构建并刷新映射（自愈闭环）。**否定项**：server 侧落库（需 app/domain 改动 + 新列/迁移，或把 `build_node` 语义挪用——超出票面且语义扭曲）；平台无「按名查构建产物」RPC。
+2. **验证失败日志面收窄**：`InstanceLogsTail` 只能回任务台账失败原因（VL 读面需 read scope，票面令牌 scope 仅 tasks,build）；错误信息已含 status/error/stop_reason + 指引。
+3. **停止宽限常量化**：平台固定 5s（T2-1 spec），池的逐实例 drain timeout 不再可变。
+4. **TLS**：dispatcher→fleetlyd 暂明文（栈内网络；T1-6 的 SDK TLS 面不覆盖本客户端），TLS 化挂后续票。
+5. **env 键字符集**：fleetly `ValidateEnvKey` 比 torchwood `sanitizeEnv` 更严（拒空白）；带空白键的任务创建会以 InvalidArgument 显式失败（fail-closed，不静默丢弃）。
+
+### IMPL-T2-3 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 改动全部落 torchwood 仓（基线 `54b666b`，与 origin/main 同步）；fleetly 仓仅本文档。三守卫逐条落回归/集成证据；本地 dind fleetly 端到端（真实 fleetlyd + 真实 swarm）**E2E PASS**（原始输出见下）；全量 `go test ./...` 绿。
+
+变更文件清单（每文件一句，均 torchwood 仓）：
+
+- `third_party/fleetly/README.md`（新）：vendored 契约来源台账（fleetly commit `1b60e14` + 三文件 sha256 + 同步流程）与「为何 vendored 而非 module 依赖」的裁决记录。
+- `third_party/fleetly/buf.yaml` + `buf.gen.yaml` + `buf.lock`（新）：独立 buf module（deps 同主仓：googleapis/protovalidate/grpc-gateway）与仅 pb/grpc 的生成配置（输出 `../../genproto`）。
+- `third_party/fleetly/proto/fleetly/server/v1/{tasks,builds}.proto` + `proto/fleetly/shared/v1/error.proto`（新）：fleetly 契约 verbatim 副本（tasks/builds 消费面 + 错误信封 detail 解码）。
+- `genproto/fleetly/server/v1/{tasks,builds}.{pb.go,grpc.pb.go}` + `genproto/fleetly/shared/v1/error.pb.go`（新）：本地生成 stubs（提交入库；`mise run generate:fleetly-proto` 可复跑）。
+- `mise.toml`：新增 `generate:fleetly-proto` 任务（vendored proto 再生成入口）。
+- `dispatcher/daemon.go`（重写）：`fleetlyDaemon`（Tasks/build API 客户端）+ `grpcFleetlyClient`（含 BuildFromUpload 流式实现与 io.EOF→CloseAndRecv 取信封）+ 任务生命周期（Ensure/Spawn/Inspect/Stop/Delete/LogsTail）+ 构建（渲染上下文保留 → BuildFromUpload → 映射登记 → 验证 spawn）+ ImportImage（准入/幂等快速路径/平台钉定/漂移校验/契约验证）+ 错误映射（`fleetlyErrorCode`/`mapFleetlyError`）+ `taskGroupRef`/`uploadImageName`/`spawnEnv`/`prepareBuildContext`/`tarDir`。
+- `dispatcher/registry.go`：Registry 去掉 NodeRegistry 组合、ClaimIdle 去 selfNodeID（Lua 去 node 收窄）、InstanceRecord 去 Node 字段；新增镜像引用映射面（`SaveImageRef/LoadImageRef/DeleteImageRef`，`torchwood:fnimg:*`）。
+- `dispatcher/pool.go`：机械摘除多节点钩子（nodeID/forwarder/容量键/死节点收敛/路由调用/DispatchForwarded）；**池语义（有界排队/租约/保温/熔断/TW_MAX_REQUESTS 判 draining）逐字保留**。
+- `dispatcher/service.go`：装配改 `NewFleetlyDaemon(cfg, registry)`；删除节点身份/心跳/转发器；启动日志带 fleetly endpoint（无令牌）。
+- `dispatcher/server.go` / `dispatcher/types.go`：执行端点去掉转发防环分支（DispatchForwarded 删除）；BuildResponse.NodeID 标记退役（恒空，wire 兼容）；包注/字段注释对齐新底座。
+- `dispatcher/metrics.go`：删除死节点回收/跨节点转发两指标（多节点模型退役）。
+- `dispatcher/nodes.go` / `capacity.go` / `routing.go`（删除）：节点注册表/心跳/容量键/跨节点转发/BuildNode 亲和整体退役。
+- `dispatcher/fleetly_daemon_test.go`（新）：底座映射回归（ref 变体/挂靠每网一次/失败重试/CreateTask 载荷/收敛等待/失败原因/配额 fail-closed/镜像缺失映射/生命周期/错误码矩阵/构建与映射/删除映射/未知网络显式失败）。
+- `dispatcher/daemon_import_test.go`（重写）：ImportImage 新链回归（主链/准入短路/幂等快速路径/漂移拒绝/无 digest 拒绝/验证失败现场/平台错误传播/untrusted internal/不触构建面）。
+- `dispatcher/fleetly_e2e_test.go`（新）：本地 dind 端到端两角色（编排器 + runner 契约双；环境变量门控，默认跳过）。
+- `dispatcher/import_guard_test.go`（新）：守卫②两层机制回归（源扫描 + `go list -deps ./...` 生产依赖图零 docker/moby；含自测）。
+- `dispatcher/testzip_test.go`（新）：测试 zip 构造助手（随 docker 集成测试删除后保留最小面）。
+- `dispatcher/daemon_test.go` / `daemon_verify_test.go` / `pool_test.go` / `registry_redis_integration_test.go`（改）：删除 docker-only 用例；fakeDaemon/fakeRegistry 对齐新接口；新增镜像映射 Redis 回归；网络名/日志文案对齐 fleetly 语义。
+- `dispatcher/daemon_spawn_test.go` / `daemon_push_test.go` / `daemon_integration_test.go` / `git_source_integration_test.go` / `image_source_integration_test.go` / `registry_integration_test.go` / `nodes_test.go` / `capacity_test.go` / `routing_test.go`（删除）：docker client/多节点模型的测试面整体退役。
+- `dispatcher/testdata/e2e/fleetly-dind.sh` + `in-e2e-boot.sh` + `in-e2e-run.sh` + `Dockerfile.driver` + `README.md` + `.gitignore`（新）：本地 dind fleetly 端到端编排（可复跑；产物 gitignore 覆盖）。
+- `internal/infra/functions/docker.go`：删除 `ResolveNetworkName/ResolveInternalNetworkName` 与 per-project 网络常量（网络归平台）；`ImageName` 注释改为「逻辑寻址键」。
+- `internal/infra/functions/docker_network_test.go`（删除）：网络名解析测试随功能删除。
+- `internal/pkg/config/config.proto` + `config.pb.go`（再生成）：`Functions.Fleetly` 新增（endpoint/token/app/network_members）；`Docker.host/network`、`Dispatcher.callback_container/node_id/node_url/routing_mode/registry_push/max_resident_instances_global` 删除（reserved 字段号+名）；相关注释对齐 fleetly 底座。
+- `internal/pkg/config/functions.go`（删除）：路由模式常量/归一化（多节点退役）。
+- `internal/pkg/bootkit/config.go` + `config_test.go`：`ValidateFunctionsDispatchConfig` 收敛为 url 必填；新增 `ValidateFunctionsFleetlyConfig`（endpoint/token 必填、members⇒app）；测试重写。
+- `internal/pkg/config/bind_test.go`：YAML 夹具改 fleetly 段；残留键容忍断言覆盖 `functions.docker.host`。
+- `cmd/dispatcher/provides.go`：启动期校验改 `ValidateFunctionsFleetlyConfig`。
+- `internal/domain/functions/executor.go` / `internal/infra/functions/dispatcher_client.go`：注释对齐（DeploymentID=逻辑寻址键、build_node 退役恒空）。
+- `configs/config.yaml.template`：functions 段改 fleetly（docker host/network 删除、dispatcher 多节点键删除、execution.api_base_url 说明改成员别名）。
+- `docker/dokploy/config.yaml` + `docker-compose.yml` + `README.md`：dispatcher 服务去 docker.sock 挂载/root user/多节点 env，改 fleetly endpoint/token/app/members 注入；镜像持久化模型改映射描述；文首标注 T2-4 割接将整体改写。
+- `docs/developer/03-configuration.md`：§1.5 functions 配置参考全量改写（fleetly 段/删除键/校验表/残留键清单）。
+- `docs/developer/08-functions.md` / `13-operations.md`：文首加 IMPL-T2-3 迁移注（docker.sock/tw-func 网络/routing_mode/build_node 表述按历史形态阅读；执行面契约不变）。
+- `.github/workflows/ci.yml`：删除 docker.sock 时代的 node:18-alpine 预拉与 `TestDockerExecutor_` 防假绿步骤、`TORCHWOOD_RUN_DOCKER_TESTS` env（无消费方）。
+- `go.mod` / `go.sum`：`go mod tidy`——docker/docker、docker/go-connections、opencontainers/image-spec、containerd/errdefs 退出直接依赖（docker 仍以 indirect 出现在 module 图：golang-migrate 的 dktest 测试依赖，生产依赖图零 docker 包，守卫②钉死）。
+
+测试清单 ↔ 三守卫逐条对应表：
+
+| 守卫/验收条款 | 回归/集成测试 |
+|---|---|
+| ① 端到端：spawn→health 握手→请求分发→TW_MAX_REQUESTS 自退→平台回收 | **本地 dind fleetly 端到端（真实 fleetlyd + 真实 swarm）**：`TestE2EFleetlyTaskLifecycle`（编排器任务，真实 fleetly 客户端 + 真实池 + miniredis 注册表：EnsureProjectNetwork → Dispatch 冷启动 → fleetly CreateTask → /_tw/health 握手 → 两次分发 → runner 自退 → 任务 stopped/exited → reaper 幽灵清理 → Stop/Delete 幂等）+ `TestE2ERunnerServer`（函数侧 runner 契约双）；编排脚本 `dispatcher/testdata/e2e/fleetly-dind.sh` 可复跑，原始输出见下。staging 多节点版待 T2-4 窗口。 |
+| ② 零 docker client（机制回归，事故类结构上不可复现） | `TestNoDockerClientImportsInDispatcherSources`（dispatcher/ + cmd/dispatcher + internal/infra/functions 生产源零 docker/moby import）+ `TestNoDockerClientInProductionDependencyGraph`（`go list -deps ./...` 全仓生产依赖图零 docker/moby/errdefs/image-spec）+ `TestNoDockerClientImportsInSourcesDetectsNestedViolation`（守卫自测） |
+| ③ 配额触顶 fail-closed 上抛 | `TestSpawnInstanceQuotaExceededFailsClosed`（E_TASK_QUOTA_EXCEEDED 信封 detail → ResourceExhausted；池级 Dispatch 立即上抛不等队首超时）+ `TestMapFleetlyErrorCodes`（映射矩阵）+ `TestFleetlyErrorCodeExtraction`（信封 detail 优先/文本兜底） |
+| 映射表落地（逐方法） | `TestSpawnInstanceCreatesTaskWithScopeEnvAndResources`（CreateTask 载荷全量：映射解析/scope/env/TTL/资源/名）、`TestSpawnInstanceMappingMissPassesReferenceThrough`、`TestSpawnInstanceAwaitsRunning`、`TestSpawnInstanceFailedTaskSurfacesReason`、`TestInspectStopRemoveLifecycle`、`TestInstanceLogsTailReportsTaskStatus`、`TestEnsureProjectNetworkMembersOncePerNetwork`、`TestEnsureProjectNetworkFailureRetriesMembers`、`TestTaskGroupRefVariants`、`TestUploadImageName`、`TestSpawnInstanceUnknownNetworkFailsExplicit`、`TestFleetlyClientUnavailableWithoutEndpoint` |
+| 构建/导入链（映射 + 验证 + 失败面） | `TestBuildImageUploadsRenderedContextAndRecordsMapping`（tar 条目含 .tw-runner.js/Dockerfile/index.js；name/Dockerfile 入口；映射落库；Verify=false 不触验证）、`TestBuildImageVerifyFailureFailsBuild`、`TestBuildImageFailureDoesNotRecordMapping`、`TestBuildImageEmptyImageRefFails`、`TestRemoveImageDropsMapping`；ImportImage：`TestImportImage_ResolvesPinsAndRecordsMapping`、`_HostValidationShortCircuits`、`_ExpectedDigestMappingHitSkipsPlatform`、`_ExpectedDigestTagDriftRejected`、`_NoDigestResolvedRejected`、`_VerifyFailureCarriesTaskStatus`、`_PlatformErrorPropagates`、`_UntrustedUsesInternalScope`、`_StreamingBuildNotInvolved` |
+| 池语义零变化（多节点钩子摘除的机械性） | 既有池回归全量保留并通过：冷启动/复用、spawn 收敛、排队深度、队首超时（携最后 spawn 失败现场）、镜像缺失 fail-fast、超时不杀实例、调用方取消、传输错误杀实例、超时熔断、idle 回收、保温、幽灵对账、draining 判杀锚、max_requests draining、drain 宽限、applyDefaults、egress 选网、并发 claim/release 收敛 |
+| Redis 注册表/映射真 Lua | `TestRedisRegistry_*`（claim/release/并发/兼容/熔断/draining/spawn 锁）+ 新 `TestRedisRegistry_ImageRefMapping`（SET/GET/DEL/无 TTL） |
+| 迁移/配置纪律 | config.proto reserved 字段 + `config.pb.go` 显式再生成（二次幂等 sha256 一致）；vendored proto 生成幂等；`buf lint`（主模块+vendored）与 `buf breaking --against origin/main` 净 |
+
+一手验证证据（原始输出摘要）：
+
+```
+$ go test -count=1 ./...        （torchwood 仓，本地 Postgres/Redis/MinIO + 测试 env）
+（两轮全量并行跑：本票改动面全绿（dispatcher 8.6s / config / bootkit / infra/functions /
+ app/functions / runtime / cmd 等）。三个与本票零文件交集的重包（internal/app/client
+ 433s、internal/app/server 134-540s、internal/infra/documentdb 450s，单跑均 ok）在
+ 全量并行下受本机单 Postgres/Redis + CPU 争用影响超过 go test 缺省 10m/包超时；
+ 逐包单跑复验全绿（原始输出见下）；`-timeout 30m` 全量复跑见下节）
+
+$ go vet ./...                  （零输出，rc=0）
+$ gofmt -l dispatcher internal cmd configs   （零输出）
+$ golangci-lint run ./dispatcher/... ./internal/pkg/config/... ./internal/pkg/bootkit/... ./internal/infra/functions/... ./cmd/dispatcher/...
+0 issues.
+$ buf lint（主模块）rc=0；cd third_party/fleetly && buf lint rc=0；buf breaking --against origin/main rc=0
+$ protoc config.proto 二次生成 sha256 一致（F6EB69CC…）；buf generate（vendored）二次生成 sha256 一致（667E6FC4…）
+
+$ go test ./dispatcher/ -run 'TestNoDockerClient' -v
+=== RUN   TestNoDockerClientImportsInDispatcherSources
+--- PASS: TestNoDockerClientImportsInDispatcherSources (0.00s)
+=== RUN   TestNoDockerClientInProductionDependencyGraph
+--- PASS: TestNoDockerClientInProductionDependencyGraph (5.64s)
+=== RUN   TestNoDockerClientImportsInSourcesDetectsNestedViolation
+--- PASS: TestNoDockerClientImportsInSourcesDetectsNestedViolation (0.01s)
+PASS
+
+$ go list -deps ./... | grep -E 'docker|moby'        （零命中——生产依赖图）
+$ go mod why -m github.com/docker/docker
+# github.com/docker/docker
+github.com/torchwoodcloud/torchwood/internal/pkg/testutil
+github.com/torchwoodcloud/torchwood/internal/pkg/testutil.test
+github.com/golang-migrate/migrate/v4/database/postgres
+github.com/golang-migrate/migrate/v4/database/postgres.test
+github.com/dhui/dktest
+github.com/docker/docker/api/types/container      ← 仅第三方测试依赖（module 图 indirect），不进生产构建
+
+$ FLEETLY_REPO=/d/Codes/qiulin/fleetly sh dispatcher/testdata/e2e/fleetly-dind.sh
+run dir: …/artifacts/20260928-064322
+=== boot fleetlyd + swarm init ===
+=== register founder + mint machine token (host -> published REST port) ===
+founder registered; machine token minted (stored in run dir, not echoed)
+=== stage token + run inner e2e ===
+container->host gateway: 172.19.0.1
+=== ensure task-group network ===
+task-group network fleetly-taskgroup-pe2e internal=false
+=== run e2e orchestrator as a task on the task-group network ===
+orchestrator task: 01M3KC3M5VA2NA5ZHYVZBK8XBK (service fleetly-task-01M3KC3M5VA2NA5ZHYVZBK8XBK)
+t=10 status=Complete 1 second ago
+=== orchestrator logs ===
+=== RUN   TestE2EFleetlyTaskLifecycle
+    fleetly_e2e_test.go:146: spawned task: 01M3KC3P3Q2BDJN37SYW98A85V (dns=fleetly-task-01M3KC3P3Q2BDJN37SYW98A85V)
+    fleetly_e2e_test.go:166: platform reclaimed task 01M3KC3P3Q2BDJN37SYW98A85V (stopped/exited)
+    fleetly_e2e_test.go:184: E2E PASS: spawn -> health -> dispatch -> TW_MAX_REQUESTS self-retire -> platform reclaim
+--- PASS: TestE2EFleetlyTaskLifecycle (7.82s)
+PASS
+E2E-RESULT: PASS
+=== E2E DONE ===
+
+（fleetlyd 侧同 run 原始日志佐证：CreateTask → registry 解析回落 local inspect →
+ engine: task converged → 两次分发（GetTask 轮询）→ runner 容器 complete →
+ engine: task stopped reason=exited → orchestrator 的 StopTask/DeleteTask →
+ engine: task deleted；产物见 artifacts/20260928-064322/{inner.log,fleetlyd.log,orchestrator.log}）
+
+$ 独立复跑（同日第二次执行，artifacts/20260928-072449）：
+orchestrator task: 01M3KEF4HPYTMMXE7TSHEQJEHC
+--- PASS: TestE2EFleetlyTaskLifecycle (7.26s)；E2E-RESULT: PASS（可复跑性佐证）
+```
+
+偏离清单（实现中的决策与修正，均按纪律登记）：
+
+1. **镜像引用映射落 Redis（审查 §F.1 裁决）**：`torchwood:fnimg:<逻辑名>` → 平台产物引用；BuildImage/ImportImage 成功即写，spawn 时解析；映射缺失走「原样引用 → 平台解析失败 → ImageMissingMarker → server 重建」自愈。否定项（server 落库/挪用 build_node）见审查节。
+2. **`EnsureImage` 从 Daemon 接口删除**（原 registry 模式冷启动 pull）：平台 agent 在任务创建时按 digest 拉取，本仓无「本节点镜像」概念；池的调用点随 `RoutingMode` 删除（池语义不受影响）。
+3. **`pool.go` 机械摘除多节点钩子**（票面「pool.go 一行不动」的边界澄清）：多节点删除面必然穿透 pool.go（nodeID/容量刷新/死节点收敛/路由调用点在此）；摘除仅限多节点机制，池的租约/保温/熔断/TW_MAX_REQUESTS/排队/drain 语义逐字保留（既有池回归全量通过）。摘除的池内锚点：`SetNodeID/NodeID/SetForwarder/ownedBySelf/tryReserveGlobal/refreshCapacity/deadNodePending/DispatchForwarded/route 调用`。
+4. **停止宽限常量化**：平台 `stop_grace_period=5s` 固定，`StopInstance(timeout)` 的 timeout 参数不再改变行为（drain 宽限语义降级为平台常数；如实登记，不伪造等价物）。
+5. **验证失败现场改任务台账投影**：`InstanceLogsTail` 不再解复用容器日志（VL 读面需 read scope，与票面令牌 scope 冲突）；错误携带 status/error/stop_reason + `fleetly tasks logs` 指引。
+6. **`routing.go`/`nodes.go`/`capacity.go` 整体删除而非保留 no-op**：多节点模型的机制性退役要求「结构上不可复现」，保留空壳会留下第二写通道幻觉；`DispatchForwarded` 与转发 header 分支同步删除。
+7. **`BuildResponse.NodeID` 保留恒空（wire 兼容）**：server 侧 dispatcher 客户端解析面零改动；`ExecuteRequest.BuildNode` 保留但 dispatcher 不消费（存量载荷无害）。
+8. **vendored proto 独立 buf module**：主模块内生成会改变既有 gateway import 别名与 swagger definition 命名（实验实证），独立 module 把生成影响面收敛到 `genproto/fleetly/**`；`buf.lock` 随生成入库。
+9. **e2e 用 dind 内 `docker build` 的本地镜像 + 映射种子**（不跑真实 BuildFromUpload）：守卫①不要求构建腿（build-from-upload 真机腿由 T2-2 探针承接）；e2e 聚焦网络/任务/池/自退/回收全链，构建链由 fake client 单测 + T2-2 真机证据覆盖（诚实边界写进 e2e README）。
+10. **e2e 编排脚本宿主侧注册/铸令牌走发布端口 + `--noproxy '*'` + cygpath**：宿主环境带 HTTP(S)_PROXY（本机事实），回环发布端口会被代理截断；cookie jar 路径在 `MSYS_NO_PATHCONV=1` 下须 Windows 形态。令牌只落 run 目录且收集后即删（不进对话/日志/镜像构建上下文）。
+11. **`dispatcher/testzip_test.go` 保留测试 zip 助手**：原在 docker 集成测试文件内，删除集成测试后 `build_context_test.go` 仍消费（最小面搬迁）。
+12. **CI 清理**：删除 node:18-alpine 预拉与 `TestDockerExecutor_` 防假绿步骤（无消费方）；`TORCHWOOD_RUN_DOCKER_TESTS` env 删除。
+13. **文档按「迁移注 + 配置参考全量改写」处理**：03-configuration 是配置契约面必须全量对齐；08-functions/13-operations 体量大、涉及大量历史形态叙述，加迁移注 + 历史形态阅读指引，完整部署形态叙述留给 T2-4（割接票职责）。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认五项裁决与十三项偏离：①跨仓消费 = vendored proto + 本仓生成 stubs（独立 buf module + 台账）；②镜像引用寻址缺口 = dispatcher 侧 Redis 映射（`torchwood:fnimg:*`；缺失走重建自愈闭环）；③常驻 task TTL 86400s 兜底；④pool.go「一行不动」边界 = 仅机械摘除多节点钩子（池语义逐字保留）；⑤如实降级登记（stop 宽限常量化 5s / 验证日志面收窄为台账投影 / dispatcher→fleetlyd 暂明文）；及全部登记偏离（nodes/capacity/routing 整体删除、NodeID 恒空 wire 兼容、e2e 不跑构建腿、CI 清理、文档迁移注、testzip 助手保留等）。staging 项（多节点 e2e、真实 BuildFromUpload registry 腿、TLS、成员挂靠复验、internal 端到端）按记录执行。
+
+staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构）：
+
+- **staging 多节点端到端**（守卫①真机版）：对真实 fleetly 控制面 + 多节点 swarm 复跑 e2e（等价流程：`tasks network ensure` + 把编排器任务跑在任务网络内），核跨节点调度下的任务 DNS 可达、TTL 回收时延、平台配额触顶呈现。
+- **真实 BuildFromUpload 构建腿**：dispatcher `BuildImage` 对真实 fleetly buildkitd + zot（registry 模式）端到端（本票 fake client 单测 + T2-2 本机真机探针；registry 模式为纯配置差异）。
+- **dispatcher→fleetlyd TLS**：当前明文（栈内）；TLS 化与凭证面挂后续票。
+- **函数回访平台 API（成员挂靠别名 `<app>-<service>`）**：需要真实 fleetly app + server 服务存在才能验证（T2-4 割接时按成员声明挂靠后复验）。
+- **internal 变体不可信函数端到端**：T2-1 已实证 internal 出网封死；dispatcher 侧 internal scope 路径单测覆盖（e2e 用普通变体）。
+
 
 
