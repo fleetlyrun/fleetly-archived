@@ -1,8 +1,8 @@
-# 架构评审机制缺口整改批(IMPL-ARCH-A~H)
+# 架构评审机制缺口整改批(IMPL-ARCH-A~M)
 
 | 状态 | 日期 | 关联 |
 |---|---|---|
-| 已实现(九票:A/B/C1/C2/D 2026-09-28;E/F/G/H 2026-09-29) | 2026-09-29 | 2026-09-28 架构评审(三路走查报告,临时 HTML 未入仓;候选编号本文沿用)→ 机制缺口排查 → rethink 复查(两修正五补充);还原点 **28ad020**(A)/ **1ead912**(B)/ **46dc3da**(C1)/ **dc88c00**(C2)/ **c266e91**(D)/ **211adf6**(E)/ **22915fa**(F)/ **5124337**(G)/ **148e689**(H);docs 记录 **45b05a1**(首批) |
+| 已实现(十四票:A/B/C1/C2/D 2026-09-28;E~M 2026-09-29;含两项用户裁决 6b 搬家与候选 9 发布) | 2026-09-29 | 2026-09-28 架构评审(三路走查报告,临时 HTML 未入仓;候选编号本文沿用)→ 机制缺口排查 → rethink 复查(两修正五补充);还原点 **28ad020**(A)/ **1ead912**(B)/ **46dc3da**(C1)/ **dc88c00**(C2)/ **c266e91**(D)/ **211adf6**(E)/ **22915fa**(F)/ **5124337**(G)/ **148e689**(H)/ **f6ffef9**(I)/ **9aa71b1**(J)/ **fdb6004**(K)/ **a251e6c**(L)/ **ef41b64**(M);模块 tag **genproto/v0.1.0** 与 **sdk/go/v0.1.0**(本地已建,push 待用户);docs 记录 **45b05a1**(首批)/ **c7fc4db**(第二批) |
 
 ## 1. 背景与元类判定
 
@@ -91,6 +91,29 @@
 - **根 go.mod 记录**(保持原样):对 genproto 同款 replace + 零伪版本(无外部消费者,离线 replace 兜底足够);对 sdk/go 挂真实伪版本 `v0.0.0-20260920151618-0ea0ebf6cf4a` 且**无 replace**(workspace 构建不受影响;GOWORK=off 场景仅 go generate 不解析导入,现状可用)——tag push 后可择机升 `v0.1.0`,挂账见 §4。
 - **跨仓待办**(不属本仓改动):tag push 后 torchwood 侧改 import `github.com/fleetlyrun/fleetly/sdk/go@v0.1.0` 并删除 vendored fork;CI 核查结论:pr.yml 全部 Go job 为 workspace 形态或 sdk/go 目录内 GOWORK=off(replace 生效),无 `go mod tidy -diff` 门,本变更零 CI 风险。
 
+## 2e. 裁决三/四落地(L/M,2026-09-29;6b 前半 I 见 f6ffef9)
+
+### IMPL-ARCH-I(f6ffef9)服务登记表收敛(候选 6b 前半)
+
+- **裁决**:用户批准搬家(2026-09-29)。
+- **修法**:internal/runtime/registration.go 唯一登记表(27 条,泛型编译期对型 + gateway 注册器可空=Cron/Tasks 显式 gRPC-only;表序=原 grpc.go 注册序快照)被 grpc/gateway/apitest 三消费者共用;NewGRPCServer 签名零改动(wire/D20 不动);auth.go scopeWords 词表单点(词→蕴含集/排序,admin impliesAll 开放集语义逐字);五份清单盘点:harness_test 小清单保留(鉴权矩阵测试的范围选择,不同构)。
+- **收编即抓真漂移**:apitest 原漏登 CronService/ExecService——表对账要求全集补齐为主会话追认的降级装配(零既有测试经 apitest 调这两面)。
+- **守卫**:registration_test 三条(反射参数数≡表条目/AST 装配键集⇆表双向/表外 Register* 引用源码扫描)+ auth_scope_words_test 三条(表⇆常量双向/蕴含形状/排序投影);红态四向演示过。
+
+### IMPL-ARCH-L(a251e6c)E_APP_AMBIGUOUS 六站文案统一(裁决三)
+
+- **裁决**:按建议以 ownership.resolveApp 为基准统一。
+- **修法**:errors.go 唯一构造函数 `ambiguousRefErr(kindName, qualifiedForm, ref, candidates)`,标准句取基准原文参数化(app/database 两族);kindName 兼任信封 context 键(六站既有键逐一不变);状态码/注册码/投影零变化;既有断言零改动(全仓唯一钉 detail 的 drift_test 子串断言原样保留)。
+- **守卫**:`TestAmbiguousRefErrEnvelope` + `TestNoStrayAppAmbiguousLiterals`(AST 扫字面量,白名单=构造函数双向钉死)。
+- **微差披露**:基准站候选列 context 恒投影,现构造空列不投影(可达路径候选恒非空,仅读故障边缘少一个空键);库族候选列现传 nil(state 无按名列库原语,挂账 §4)。
+
+### IMPL-ARCH-M(ef41b64)记录虚报守卫:活跃 impl 档 TestXxx 存在性扫描(裁决四)
+
+- **裁决**:按建议方案 a——只扫活跃波次,防误报优先(误报的代价是守卫被禁用)。
+- **修法**:`TestActiveImplDocsReferenceExistingTests`(纯测试零生产改动):活跃判据=最新日期档锚回看 3 自然日窗(锚定目录状态不随日历空转;波次超窗滚出=有意漏报,注释写明);五条机械跳过规则(族形通配/-run 模式位/勘误除名披露行/外仓票据小节/围栏代码块)+防空转 Fatalf+白名单双向保鲜(「合法缺席」语义非豁免一切)。
+- **首功**:上岗即抓到三处真坏引用——F1(22915fa)删除 TestRegisteredCountByKind 后,T1-4/T2-1/T2-2 实施记录仍以现行守卫口吻引用=③类记录虚报,就地加勘误标注(未入白名单);342 原始引用/跳过 104/现行主张 238 逐一核验全实存。
+- **守卫自净预告**:活跃波次收口、新档超窗后当前档案滚出,白名单条目会被保鲜检查点名清除(机制设计使然)。
+
 ## 3. 守卫清单与验收句
 
 | 守卫 | 层 | 验收句(下一个同类问题在哪被拦) |
@@ -104,6 +127,9 @@
 | TestEngineToolsTableConsistency | 测试(表一致性) | 新引擎条目缺件/幻影 → 表测试红 |
 | TestStoreErrTable* 等六守卫 | 测试(表投影) | 映射行状态码/注册码改错 → 既有 handler 测试+表测试同时红 |
 | TestPollStreamSharedSkeletonServesBothFamilies | 测试(共路) | task sink 误接 ring/循环分叉 → 共路测试红 |
+| registration_test 三条 + auth_scope_words_test 三条 | 静态(AST/反射/源码扫描) | 表外 Register* 引用/装配键错名/词表漏行 → 提交期红 |
+| TestNoStrayAppAmbiguousLiterals | 静态(AST) | E_APP_AMBIGUOUS 字面量逃出构造函数 → CI 红 |
+| TestActiveImplDocsReferenceExistingTests | 测试(docs 扫描) | 实施记录引用不存在的测试名 → 提交期红(首日即抓到 F1 删除残留三处) |
 
 共同效果:把「穷尽性」从提交者记性与评审者记忆搬进 CI 枚举守卫——同类问题从验收期(如 F1 于整线验收发现)前移到提交期。
 
@@ -111,16 +137,18 @@
 
 | 候选/项 | 内容 | 状态 |
 |---|---|---|
-| 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 已落,拆两票:I=服务登记表(f6ffef9,2026-09-28);J=scope 登记面搬家至 proto option(§2c IMPL-ARCH-J,rbac-teams 红线随票修订) |
-| 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 仓内侧已落(§2d IMPL-ARCH-K:require v0.1.0 + WaitBuild/BuildTerminal 收编 SDK、CLI 消费);余 tag push + torchwood 改 import 删 vendored + 根 go.mod sdk/go pin 择机升 v0.1.0 |
+| 9 外发 | tag push(genproto/v0.1.0、sdk/go/v0.1.0,本地已建)+ torchwood 改 import 删 vendored + 根 go.mod 对 sdk/go 旧伪版本 pin 择机升 | 待用户执行/跨仓 pass |
 | E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 挂账,需跨包 helper 形态裁决 |
 | F 尾 | eventcode 头注计数叙事停在 95、实注册 105(既有注释漂移) | 挂账,随下次事件增补重算 |
 | F 尾 | database/move.go:67 手工复述三段限定形,疑似查询值与写入值不同形 | 挂账,需独立小票核查 |
 | G 尾 | ErrTaskNotFound 无 handler 级查无 404 直打(仅表测试钉住) | 挂账,小票补测 |
-| G 尾 | E_APP_AMBIGUOUS 族 6 站文案三形统一 | 挂账,需产品裁决 |
 | H 尾 | evictStaleStreamState 误收 task 游标(app="" 不在 active 集,幂等无害) | 挂账,小票豁免 |
-| ③类守卫 | docs 守卫表 TestXxx 名存在性扫描(限活跃 impl 档,防腐化需白名单) | 挂账 |
+| I 尾 | ownership.go:480 reachableScopeList 自持 scope 序清单 | 挂账,小票收编进 scopeWords 派生(注意是可达面子集,需过滤语义) |
+| K 尾 | deploy.go 的部署等待环与旧 build wait 同构 | 挂账,可同样收编 SDK(另开小票) |
+| L 尾 | 库族 E_APP_AMBIGUOUS 无候选列(state 无按名列库实例原语;errcode Suggestion 声称候选列在 error context) | 挂账,加 state 原语后一处接入 |
+| L 尾 | resolveAppRefForMove/resolveDatabaseRefForMove 限定形解析同构 + resolveDatabaseRef 注释表述漂移 | 挂账,另票收编 |
+| M 尾 | impldocscan 跳过规则是约定驱动:档案演化出新「非现行主张」写法需同步扩规则;勘误行上新幻影名会被放过(有意漏报,已声明) | 机制注记,非待办 |
 
 ## 5. 验证
 
-九道验收门均为一手取证:`go test ./... -count=1` 32 包全绿(每阶段独立跑);每张守卫/映射测试红态演示(白名单外注入/改错映射行/误接 sink → 红 → 撤除 → 绿);新测试独立 `-count=1` 重跑;diff 范围核对;全局一致性检查(applyDesired W2-S3 决策未动 / GC 分支未动 / 导出签名零改动 / F1 既有守卫全绿 / 事件码零变化 / 文案逐字保持)。
+十四道验收门均为一手取证:`go test ./... -count=1` 32 包全绿(每阶段独立跑);每张守卫/映射测试红态演示(白名单外注入/改错映射行/误接 sink/注入幻影测试名 → 红 → 撤除 → 绿);新测试独立 `-count=1` 重跑;diff 范围核对;全局一致性检查(applyDesired W2-S3 决策未动 / GC 分支未动 / 导出签名零改动 / F1 既有守卫全绿 / 事件码与 scope 词零变化 / 信封文案逐字保持 / methodScopes 运行时行为零变化=鉴权矩阵全绿)。
