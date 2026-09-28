@@ -25,6 +25,11 @@ type Event struct {
 	Name string
 	// Summary 一句话语义（注册表内说明）。
 	Summary string
+	// Source 是该事件的文档出处锚：定义该事件的设计文档章节引用（如
+	// "release-semantics §2.7"）、实现期票据注记或设计线引用。出处随名
+	// 内联在注册表一处（原 eventcode_test 手抄 docEvents 清单已删除——
+	// 注册表是唯一真源，出处是事件名的知识的一部分）。
+	Source string
 }
 
 // Registry 是事件名注册表（只增）。
@@ -111,13 +116,15 @@ func Names() []string               { return defaultRegistry.Names() }
 func All() []Event                  { return defaultRegistry.All() }
 
 // Snapshot 返回注册表的规范化文本快照（golden 测试用）：每行
-// name \t summary，按 Name 字典序。
+// name \t summary \t source，按 Name 字典序。
 func (r *Registry) Snapshot() string {
 	var b strings.Builder
 	for _, e := range r.All() {
 		b.WriteString(e.Name)
 		b.WriteByte('\t')
 		b.WriteString(e.Summary)
+		b.WriteByte('\t')
+		b.WriteString(e.Source)
 		b.WriteByte('\n')
 	}
 	return b.String()

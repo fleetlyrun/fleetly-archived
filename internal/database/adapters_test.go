@@ -194,6 +194,68 @@ func TestEngineDispatchUnknownEngineAndMissingMajorFailLoud(t *testing.T) {
 	}
 }
 
+// TestEngineToolsTableConsistency 表一致性（IMPL-ARCH-F F-3）：遍历
+// engineToolsTable——①表 ⇆ 注册表引擎双向覆盖（表内无幻影条目、注册表
+// 引擎无缺条目——新增模板漏适配即红，与 TestEngineDispatchCoversEveryRegistry-
+// Template 的测试侧枚举互为独立守卫）；②每引擎四件套非空且脚本可生成；
+// ③rotate 为 nil 当且仅当 Redis（新引擎静默无动作即红——nil 是「无引擎侧
+// 动作」的显式契约，不是缺省）。
+func TestEngineToolsTableConsistency(t *testing.T) {
+	registryEngines := map[dbtemplate.Engine]bool{}
+	for _, tpl := range dbtemplate.List() {
+		registryEngines[tpl.Engine] = true
+	}
+	tableEngines := map[dbtemplate.Engine]bool{}
+	for engine := range engineToolsTable {
+		tableEngines[engine] = true
+	}
+	for engine := range tableEngines {
+		if !registryEngines[engine] {
+			t.Errorf("tool table engine %q has no registry template (phantom entry)", engine)
+		}
+	}
+	for engine := range registryEngines {
+		if !tableEngines[engine] {
+			t.Errorf("registry engine %q has no tool table entry (add one before registering templates)", engine)
+		}
+	}
+	for engine, tools := range engineToolsTable {
+		if tools.backupFilename == "" {
+			t.Errorf("engine %s: empty backupFilename", engine)
+		}
+		if tools.backupExport == nil || tools.verifyScript == nil || tools.restoreScript == nil {
+			t.Errorf("engine %s: incomplete tool set (backupExport/verifyScript/restoreScript must all be set)", engine)
+		}
+		wantRotate := engine != dbtemplate.EngineRedis
+		if (tools.rotate != nil) != wantRotate {
+			t.Errorf("engine %s: rotate set = %v, want %v (nil rotate iff Redis — the only engine without an engine-side action)", engine, tools.rotate != nil, wantRotate)
+		}
+	}
+	for _, tpl := range dbtemplate.List() {
+		t.Run(tpl.ID, func(t *testing.T) {
+			tools, err := engineToolsFor(tpl)
+			if err != nil {
+				t.Fatalf("engineToolsFor(%s): %v", tpl.ID, err)
+			}
+			backupIn := dbtemplate.BackupInput{Instance: "dbx", TemplateID: tpl.ID}
+			if _, err := backupJobScript(tpl, backupIn); err != nil {
+				t.Fatalf("backupJobScript(%s): %v", tpl.ID, err)
+			}
+			outcome := dbtemplate.BackupOutcome{Instance: "dbx", TemplateID: tpl.ID, SnapshotID: "snap-x"}
+			if _, err := verifyJobScript(tpl, outcome); err != nil {
+				t.Fatalf("verifyJobScript(%s): %v", tpl.ID, err)
+			}
+			if _, err := pruneJobScript(tpl, outcome, 7); err != nil {
+				t.Fatalf("pruneJobScript(%s): %v", tpl.ID, err)
+			}
+			restoreIn := dbtemplate.RestoreInput{Instance: "dbx", TemplateID: tpl.ID, VolumeTarget: tpl.VolumeMountPath, SnapshotID: "snap-x"}
+			if _, err := tools.restoreScript(tpl, restoreIn); err != nil {
+				t.Fatalf("restoreScript(%s): %v", tpl.ID, err)
+			}
+		})
+	}
+}
+
 // mustTemplate 取注册表条目（测试夹具；失败即 Fatal）。
 func mustTemplate(t *testing.T, id string) dbtemplate.Template {
 	t.Helper()

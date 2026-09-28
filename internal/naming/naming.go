@@ -549,7 +549,8 @@ const dbJobNamePrefix = namePrefix + "dbjob-"
 
 // DBJobName 返回库一次性 job 的 Swarm 服务名
 // `fleetly-dbjob-<instance>-<purpose>-<ulid8>`（purpose = backup/verify/
-// restore/prune 语义段；ulid8 = run ULID 前 8 位）。
+// restore/prune/rotate 语义段——rotate 为 IMPL-ARCH-F F-2 起凭据轮换 job
+// 的归宿，此前误落 fleetly-db- 库服务族；ulid8 = run ULID 前 8 位）。
 func DBJobName(instance, purpose, runID string) (string, error) {
 	if err := validateComponent("instance", instance); err != nil {
 		return "", err

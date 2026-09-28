@@ -107,6 +107,77 @@ const (
 	mongoBackupFilename = "db.archive" // mongodump --archive --gzip 归档
 )
 
+// engineTools 是每引擎的工具面适配条目（备份文件名/备份导出命令/回读校验/
+// 原地恢复/引擎侧轮换——managed-databases §2.6 每引擎行为的代码承载点）。
+// IMPL-ARCH-F F-3（2026-09-28 架构评审候选 10）：散布的引擎 switch 税收拢
+// 为每引擎一个具体条目的查表——分派知识单点化，新引擎接入 = 注册表目录
+// 条目 + 本表一个条目（「发行版不新增适配器」的结构前提由
+// TestEngineToolsTableConsistency 双向覆盖钉死）。字段按实际 switch 职责
+// 定：纯引擎键控的职责才入表；发行版 × major 的 PG 工具面选择（pgToolDir）
+// 是条目内部实现细节，不进分派轴。
+type engineTools struct {
+	// backupFilename 是 repo 内导出文件名（repo 路径 = db/<instance>/<文件>）。
+	backupFilename string
+	// backupExport 拼装备份导出命令（流式段，管道入 restic backup --stdin）。
+	backupExport func(tpl dbtemplate.Template, in dbtemplate.BackupInput) (string, error)
+	// verifyScript 拼装回读校验管道（restic dump 快照 + 引擎级校验；
+	// repoPath = 已拼好的 db/<instance>/<文件>）。
+	verifyScript func(tpl dbtemplate.Template, in dbtemplate.BackupOutcome, repoPath string) ([]string, error)
+	// restoreScript 拼装原地恢复命令（停库重放、挂卷 rw；Redis = 无引擎参
+	// 与的取回脚本——同一槽位的引擎内实现细节）。
+	restoreScript func(tpl dbtemplate.Template, in dbtemplate.RestoreInput) ([]string, error)
+	// rotate 是引擎侧热轮换原语（rotate.go 的一次性容器 job 实现）。
+	// nil = 引擎无引擎侧动作（Redis：凭据 = spec 启动参数，收敛 duty 按
+	// desired-hash 差异重建承载）——测试钉死 nil 当且仅当 Redis（新引擎
+	// 不得静默无动作）。
+	rotate func(m *Manager, ctx context.Context, inst *state.DatabaseInstance, image, old, new string) error
+}
+
+// engineToolsTable 是引擎 → 工具面的唯一分派表（四引擎各一条目）。init
+// 期填充：表条目引用的 restore 脚本体经 backupFilename 反向依赖本表，包级
+// 字面量初始化会成环（initialization cycle），init 体无此约束。
+var engineToolsTable = map[dbtemplate.Engine]engineTools{}
+
+func init() {
+	engineToolsTable[dbtemplate.EnginePostgres] = engineTools{
+		backupFilename: pgBackupFilename,
+		backupExport:   postgresBackupExport,
+		verifyScript:   postgresVerifyScript,
+		restoreScript:  restorePostgresJobScript,
+		rotate:         (*Manager).rotatePostgresCredential,
+	}
+	engineToolsTable[dbtemplate.EngineRedis] = engineTools{
+		backupFilename: redisBackupFilename,
+		backupExport:   redisBackupExport,
+		verifyScript:   redisVerifyScript,
+		restoreScript:  restoreRedisFetchScript,
+		rotate:         nil, // 无引擎侧动作（rotate.go 编排承载；nil 当且仅当 Redis）
+	}
+	engineToolsTable[dbtemplate.EngineMySQL] = engineTools{
+		backupFilename: mysqlBackupFilename,
+		backupExport:   mysqlBackupExport,
+		verifyScript:   mysqlVerifyScript,
+		restoreScript:  restoreMySQLJobScript,
+		rotate:         (*Manager).rotateMySQLCredential,
+	}
+	engineToolsTable[dbtemplate.EngineMongo] = engineTools{
+		backupFilename: mongoBackupFilename,
+		backupExport:   mongoBackupExport,
+		verifyScript:   mongoVerifyScript,
+		restoreScript:  restoreMongoJobScript,
+		rotate:         (*Manager).rotateMongoCredential,
+	}
+}
+
+// engineToolsFor 查表取引擎工具面（未知引擎诚实报错——不静默回落）。
+func engineToolsFor(tpl dbtemplate.Template) (engineTools, error) {
+	tools, ok := engineToolsTable[tpl.Engine]
+	if !ok {
+		return engineTools{}, fmt.Errorf("database: template %q has no engine adapter (engine %q is missing from the tool table)", tpl.ID, tpl.Engine)
+	}
+	return tools, nil
+}
+
 // pgToolDir 返回模板对应 PG 工具面二进制目录（dbtools 镜像契约；**按发行版
 // 与 major 双维选择**——IMPL-DB-1 起）：
 //   - vanilla（官方镜像/Debian pgdg 布局）：/usr/lib/postgresql/<major>/bin
@@ -149,20 +220,13 @@ func pgToolDir(tpl dbtemplate.Template) (string, error) {
 }
 
 // backupFilename 取模板对应的导出文件名（repo 内路径 = db/<instance>/<文件>）。
-// 分派轴 = 引擎族（同族发行版/大版本共享——IMPL-DB-0）。
+// 分派轴 = 引擎族（同族发行版/大版本共享——IMPL-DB-0）；查 engineTools 表。
 func backupFilename(tpl dbtemplate.Template) (string, error) {
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		return pgBackupFilename, nil
-	case dbtemplate.EngineRedis:
-		return redisBackupFilename, nil
-	case dbtemplate.EngineMySQL:
-		return mysqlBackupFilename, nil
-	case dbtemplate.EngineMongo:
-		return mongoBackupFilename, nil
-	default:
-		return "", fmt.Errorf("database: template %q has no backup adapter", tpl.ID)
+	tools, err := engineToolsFor(tpl)
+	if err != nil {
+		return "", err
 	}
+	return tools.backupFilename, nil
 }
 
 // resticCmd 是带寻址形态的 restic 命令前缀（path-style → 扩展选项
@@ -195,40 +259,56 @@ func resticCmd(pathStyle bool) string {
 // 展开与本仓 Redis 健康门 env 引用同暴露类——mongodump 无原生凭据 env，
 // 该形态是命令词表零明文的唯一解）。
 func backupJobScript(tpl dbtemplate.Template, in dbtemplate.BackupInput) ([]string, error) {
-	filename, err := backupFilename(tpl)
+	tools, err := engineToolsFor(tpl)
 	if err != nil {
 		return nil, err
 	}
-	repoPath := "db/" + in.Instance + "/" + filename
-	var export string
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		dir, err := pgToolDir(tpl)
-		if err != nil {
-			return nil, err
-		}
-		export = fmt.Sprintf("%s/pg_dump -h %s -U fleetly -d %s -Fc",
-			dir, in.Instance, dbtemplate.DatabaseName(in.Instance))
-	case dbtemplate.EngineRedis:
-		export = fmt.Sprintf("redis-cli -h %s --no-auth-warning --rdb /dev/stdout", in.Instance)
-	case dbtemplate.EngineMySQL:
-		// --databases：导出自带 CREATE DATABASE + USE——恢复重放前置 DROP
-		// DATABASE 后裸重放必须有库名锚（W4-S2 容器内实证抓出）。不带
-		// --source-data=2（特权不符+管道掩蔽假快照，W4-S4 真机裁撤——见
-		// backupJobScript 头注）。
-		export = fmt.Sprintf("mysqldump -h %s -u fleetly --single-transaction --databases %s",
-			in.Instance, dbtemplate.DatabaseName(in.Instance))
-	case dbtemplate.EngineMongo:
-		// authSource=admin：官方入口把 initdb root 恒建于 admin 库（设计
-		// managed-databases §8.1 实现注记）——URI 认证库名随其固定。
-		export = fmt.Sprintf(`mongodump --uri "mongodb://fleetly:${MONGO_PASSWORD}@%s:27017/%s?authSource=admin" --archive --gzip`,
-			in.Instance, dbtemplate.DatabaseName(in.Instance))
-	default:
-		return nil, fmt.Errorf("database: template %q has no backup adapter", tpl.ID)
+	repoPath := "db/" + in.Instance + "/" + tools.backupFilename
+	export, err := tools.backupExport(tpl, in)
+	if err != nil {
+		return nil, err
 	}
 	return []string{"sh", "-c",
 		fmt.Sprintf("%s | %s backup --stdin --stdin-filename %s --json",
 			export, resticCmd(in.S3PathStyle), repoPath)}, nil
+}
+
+// postgresBackupExport 是 PG 的备份导出段：pg_dump -Fc（逻辑备份，运行中
+// 一致性；工具面按模板 major/发行版显式绝对路径选取——pgToolDir 纪律）。
+func postgresBackupExport(tpl dbtemplate.Template, in dbtemplate.BackupInput) (string, error) {
+	dir, err := pgToolDir(tpl)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/pg_dump -h %s -U fleetly -d %s -Fc",
+		dir, in.Instance, dbtemplate.DatabaseName(in.Instance)), nil
+}
+
+// redisBackupExport 是 Redis 的备份导出段：redis-cli --rdb /dev/stdout
+// （RDB 流式）。/dev/stdout 而非字面 "-"：redis-cli 的 --rdb 接收**文件名**
+// 参数，设备文件是管道流的可靠形态（alpine 容器内恒存在）。
+func redisBackupExport(tpl dbtemplate.Template, in dbtemplate.BackupInput) (string, error) {
+	return fmt.Sprintf("redis-cli -h %s --no-auth-warning --rdb /dev/stdout", in.Instance), nil
+}
+
+// mysqlBackupExport 是 MySQL 的备份导出段：mysqldump --single-transaction
+// --databases（InnoDB 一致性快照，D-W4-3）。--databases：导出自带
+// CREATE DATABASE + USE——恢复重放前置 DROP DATABASE 后裸重放必须有库名锚
+// （W4-S2 容器内实证抓出）。不带 --source-data=2（特权不符+管道掩蔽假快照，
+// W4-S4 真机裁撤——见 backupJobScript 头注；坐标平台不消费）。
+func mysqlBackupExport(tpl dbtemplate.Template, in dbtemplate.BackupInput) (string, error) {
+	return fmt.Sprintf("mysqldump -h %s -u fleetly --single-transaction --databases %s",
+		in.Instance, dbtemplate.DatabaseName(in.Instance)), nil
+}
+
+// mongoBackupExport 是 MongoDB 的备份导出段：mongodump --archive --gzip
+// （归档流，D-W4-3）。authSource=admin：官方入口把 initdb root 恒建于
+// admin 库（设计 managed-databases §8.1 实现注记）——URI 认证库名随其
+// 固定。明文纪律：URI 以 ${MONGO_PASSWORD} 引用展开（字面量不进 job spec；
+// mongodump 无原生凭据 env，该形态是命令词表零明文的唯一解）。
+func mongoBackupExport(tpl dbtemplate.Template, in dbtemplate.BackupInput) (string, error) {
+	return fmt.Sprintf(`mongodump --uri "mongodb://fleetly:${MONGO_PASSWORD}@%s:27017/%s?authSource=admin" --archive --gzip`,
+		in.Instance, dbtemplate.DatabaseName(in.Instance)), nil
 }
 
 // verifyJobScript 拼装回读校验命令（§2.6 Verify 契约——「备份假成功」零
@@ -240,41 +320,52 @@ func backupJobScript(tpl dbtemplate.Template, in dbtemplate.BackupInput) ([]stri
 //	MySQL  restic dump | head -c 32 含 "MySQL dump"（mysqldump 文件头魔术串）
 //	Mongo  restic dump | head -c 2 == gzip magic 1f 8b（--gzip 归档流头）
 func verifyJobScript(tpl dbtemplate.Template, in dbtemplate.BackupOutcome) ([]string, error) {
-	filename, err := backupFilename(tpl)
+	tools, err := engineToolsFor(tpl)
 	if err != nil {
 		return nil, err
 	}
-	repoPath := "db/" + in.Instance + "/" + filename
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		dir, err := pgToolDir(tpl)
-		if err != nil {
-			return nil, err
-		}
-		return []string{"sh", "-c",
-			fmt.Sprintf("%s dump %s %s > /tmp/v.dump && %s/pg_restore --list /tmp/v.dump > /dev/null",
-				resticCmd(in.S3PathStyle), in.SnapshotID, repoPath, dir)}, nil
-	case dbtemplate.EngineRedis:
-		return []string{"sh", "-c",
-			fmt.Sprintf("%s dump %s %s | head -c 5 | grep -q REDIS",
-				resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
-	case dbtemplate.EngineMySQL:
-		// 双门：文件头魔术串 + **CREATE DATABASE 在场**——W4-S4 真机实证
-		// 「仅头部假快照」（mysqldump 失败被管道掩蔽）能过头部门，恢复
-		// 重放空内容即删库；内容门让假快照在 verify 期显性失败（防御纵深
-		// ——根因已在备份词表修复，此处是检测面兜底）。
-		return []string{"sh", "-c",
-			fmt.Sprintf(`%s dump %s %s > /tmp/v.dump && head -c 32 /tmp/v.dump | grep -q "MySQL dump" && grep -q "CREATE DATABASE" /tmp/v.dump`,
-				resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
-	case dbtemplate.EngineMongo:
-		// gzip 头两字节 0x1f 0x8b：od 十六进制化后比对（busybox/coreutils
-		// 双兼容形态，dbtools 内 od 恒在）。
-		return []string{"sh", "-c",
-			fmt.Sprintf(`%s dump %s %s | head -c 2 | od -An -tx1 | tr -d ' \n' | grep -q 1f8b`,
-				resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
-	default:
-		return nil, fmt.Errorf("database: template %q has no verify adapter", tpl.ID)
+	repoPath := "db/" + in.Instance + "/" + tools.backupFilename
+	return tools.verifyScript(tpl, in, repoPath)
+}
+
+// postgresVerifyScript 是 PG 的回读校验段：restic dump > /tmp/v.dump &&
+// pg_restore --list（exit 0 = 归档有效；工具面按模板 major/发行版显式绝对
+// 路径选取）。
+func postgresVerifyScript(tpl dbtemplate.Template, in dbtemplate.BackupOutcome, repoPath string) ([]string, error) {
+	dir, err := pgToolDir(tpl)
+	if err != nil {
+		return nil, err
 	}
+	return []string{"sh", "-c",
+		fmt.Sprintf("%s dump %s %s > /tmp/v.dump && %s/pg_restore --list /tmp/v.dump > /dev/null",
+			resticCmd(in.S3PathStyle), in.SnapshotID, repoPath, dir)}, nil
+}
+
+// redisVerifyScript 是 Redis 的回读校验段：restic dump | head -c 5 ==
+// "REDIS"（RDB magic）。
+func redisVerifyScript(tpl dbtemplate.Template, in dbtemplate.BackupOutcome, repoPath string) ([]string, error) {
+	return []string{"sh", "-c",
+		fmt.Sprintf("%s dump %s %s | head -c 5 | grep -q REDIS",
+			resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
+}
+
+// mysqlVerifyScript 是 MySQL 的回读校验段：双门——文件头魔术串 +
+// **CREATE DATABASE 在场**。W4-S4 真机实证「仅头部假快照」（mysqldump 失败
+// 被管道掩蔽）能过头部门，恢复重放空内容即删库；内容门让假快照在 verify
+// 期显性失败（防御纵深——根因已在备份词表修复，此处是检测面兜底）。
+func mysqlVerifyScript(tpl dbtemplate.Template, in dbtemplate.BackupOutcome, repoPath string) ([]string, error) {
+	return []string{"sh", "-c",
+		fmt.Sprintf(`%s dump %s %s > /tmp/v.dump && head -c 32 /tmp/v.dump | grep -q "MySQL dump" && grep -q "CREATE DATABASE" /tmp/v.dump`,
+			resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
+}
+
+// mongoVerifyScript 是 MongoDB 的回读校验段：gzip 头两字节 0x1f 0x8b（
+// --gzip 归档流头）；od 十六进制化后比对（busybox/coreutils 双兼容形态，
+// dbtools 内 od 恒在）。
+func mongoVerifyScript(tpl dbtemplate.Template, in dbtemplate.BackupOutcome, repoPath string) ([]string, error) {
+	return []string{"sh", "-c",
+		fmt.Sprintf(`%s dump %s %s | head -c 2 | od -An -tx1 | tr -d ' \n' | grep -q 1f8b`,
+			resticCmd(in.S3PathStyle), in.SnapshotID, repoPath)}, nil
 }
 
 // restoreJobScript 拼装原地恢复命令（停库重放；实例服务已 scale 0、job 钉
@@ -458,6 +549,10 @@ func (m *Manager) Restore(ctx context.Context, in dbtemplate.RestoreInput) error
 	if err != nil {
 		return fmt.Errorf("database: template %q has no restore adapter: %w", in.TemplateID, err)
 	}
+	tools, err := engineToolsFor(tpl)
+	if err != nil {
+		return err
+	}
 	net, err := naming.DBNetworkName(in.TeamSlug, in.PrjSlug, in.Instance)
 	if err != nil {
 		return err
@@ -465,23 +560,11 @@ func (m *Manager) Restore(ctx context.Context, in dbtemplate.RestoreInput) error
 	materials := toolsJobEnv("", in.Repository, in.ResticPassword, in.S3AccessKeyID, in.S3SecretKey, in.S3Region)
 	mounts := []JobMount{{VolumeName: in.VolumeName, Target: in.VolumeTarget, ReadOnly: false}}
 	nets := jobNetworks(in.AttachRustfsNetwork, net)
-	var script []string
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		script, err = restorePostgresJobScript(tpl, in)
-	case dbtemplate.EngineRedis:
-		// Redis：fetch 即重放完成（RDB 落卷 + AOF 目录清除在 fetch script
-		// 的卷内收尾——dbtools 与 redis 引擎镜像同为 glibc 可执行面）。
-		script, err = restoreRedisFetchScript(tpl, in)
-	case dbtemplate.EngineMySQL:
-		// MySQL：临时 mysqld 起于数据卷重放（D-W4-3，restoreMySQLJobScript）。
-		script, err = restoreMySQLJobScript(tpl, in)
-	case dbtemplate.EngineMongo:
-		// MongoDB：临时 mongod 起于数据卷重放（D-W4-3，restoreMongoJobScript）。
-		script, err = restoreMongoJobScript(tpl, in)
-	default:
-		return fmt.Errorf("database: template %q has no restore adapter", in.TemplateID)
-	}
+	// 恢复脚本查表分派（IMPL-ARCH-F F-3）：PG/MySQL/Mongo = 各自的临时
+	// 实例重放脚本；Redis = fetch 即重放完成（RDB 落卷 + AOF 目录清除在
+	// fetch script 的卷内收尾——dbtools 与 redis 引擎镜像同为 glibc 可执行
+	// 面）。脚本职责明细见各条目函数注。
+	script, err := tools.restoreScript(tpl, in)
 	if err != nil {
 		return err
 	}
@@ -643,18 +726,14 @@ func (m *Manager) RotateCredential(ctx context.Context, in dbtemplate.RotateInpu
 	if err != nil {
 		return err
 	}
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		return m.rotatePostgresCredential(ctx, &inst, tpl.Image, old, in.NewPassword)
-	case dbtemplate.EngineMySQL:
-		return m.rotateMySQLCredential(ctx, &inst, tpl.Image, old, in.NewPassword)
-	case dbtemplate.EngineMongo:
-		return m.rotateMongoCredential(ctx, &inst, tpl.Image, old, in.NewPassword)
-	case dbtemplate.EngineRedis:
-		return nil // 无引擎侧动作（凭据 = spec 启动参数，rotate.go 编排承载）
-	default:
-		return fmt.Errorf("database: template %q has no rotation adapter", inst.Template)
+	tools, err := engineToolsFor(tpl)
+	if err != nil {
+		return err
 	}
+	if tools.rotate == nil {
+		return nil // 无引擎侧动作（Redis：凭据 = spec 启动参数，rotate.go 编排承载）
+	}
+	return tools.rotate(m, ctx, &inst, tpl.Image, old, in.NewPassword)
 }
 
 // ── job 载荷归一 ─────────────────────────────────────────────────────────────
@@ -724,8 +803,14 @@ func (m *Manager) runToolsJob(ctx context.Context, in toolsJobInput) (JobRunOutc
 			Constraints: []string{"node.labels." + state.LabelNodeID + " == " + in.bindNode},
 			Labels: map[string]string{
 				state.LabelManaged: state.ManagedLabelValue,
-				// 归属锚 = 三段限定形（跨项目同名实例不互撞；v0.3 流标签口径）。
-				state.LabelDatabase: qualifiedOf(in.teamSlug, in.prjSlug, in.instance),
+				// 归属锚 = 三段限定形（跨项目同名实例不互撞；v0.3 流标签口
+				// 径）。公式唯一真源 = state.DatabaseInstance.QualifiedName
+				//（IMPL-ARCH-F F-2 删除本地复述 qualifiedOf）。
+				state.LabelDatabase: state.DatabaseInstance{
+					TeamSlug:    in.teamSlug,
+					ProjectSlug: in.prjSlug,
+					Name:        in.instance,
+				}.QualifiedName(),
 			},
 		})
 	}
@@ -806,12 +891,6 @@ func (m *Manager) outcomeContext(in dbtemplate.BackupInput, snap string, size in
 		S3PathStyle:         in.S3PathStyle,
 		AttachRustfsNetwork: in.AttachRustfsNetwork,
 	}
-}
-
-// qualifiedOf 是库实例三段限定形的本地出口（state.DatabaseInstance.
-// QualifiedName 同式——adapters 层的 tools job 载荷只有 slug 散字段）。
-func qualifiedOf(team, prj, instance string) string {
-	return team + "/" + prj + "/" + instance
 }
 
 // jobFailureText 归一 job 失败诊断（任务 Err + 退出码 + 尾部输出摘要——

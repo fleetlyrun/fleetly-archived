@@ -186,7 +186,9 @@ func (o JobRunOutcome) Success() bool { return o.State == "complete" }
 // ContainerRunInput 是一次性容器的运行参数（轮换 job 的最小面：库共享
 // 网络内以服务名可达实例；镜像 = 实例模板钉定镜像——工具随引擎镜像）。
 type ContainerRunInput struct {
-	// Name 是容器名（fleetly-db-<instance>-rotate-<id8>——managed 面可识别）。
+	// Name 是容器名（fleetly-dbjob-<instance>-rotate-<ulid8>——naming.DBJobName
+	// 产物，dbjob 前缀族可识别；IMPL-ARCH-F F-2 起不再误落 fleetly-db- 库
+	// 服务族）。
 	Name string
 	// Image 是钉定镜像引用。
 	Image string
@@ -472,7 +474,7 @@ const jobPollInterval = time.Second
 const jobLogCap = 1 << 20
 
 // JobRun 一次性 Swarm job 执行体（端口契约见 dockerPort.JobRun）：建服务
-//（replicated-job TotalCompletions=1 + restart none + 放置约束 + 卷挂载）
+// （replicated-job TotalCompletions=1 + restart none + 放置约束 + 卷挂载）
 // → 轮询任务终态 → 有界采集终态任务日志 → 删服务。凭据材料零落日志：
 // 本函数不打印 spec/env，采集输出由命令词表保证（见 JobRunOutcome.Stdout）。
 func (c *realDockerClient) JobRun(ctx context.Context, in JobRunInput) (JobRunOutcome, error) {
@@ -480,7 +482,7 @@ func (c *realDockerClient) JobRun(ctx context.Context, in JobRunInput) (JobRunOu
 		Annotations: swarm.Annotations{Name: in.Name, Labels: in.Labels},
 		TaskTemplate: swarm.TaskSpec{
 			ContainerSpec: &swarm.ContainerSpec{
-				Image:  in.Image,
+				Image: in.Image,
 				// 本 API 代的 ContainerSpec 拆分 Command（可执行）与 Args
 				//（参数）——["sh","-c",script] 形态按首元素/余量切分；镜像
 				// ENTRYPOINT（dbtools = 官方 postgres 入口脚本）对非 postgres

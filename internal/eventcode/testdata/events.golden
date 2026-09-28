@@ -1,105 +1,105 @@
-app.degraded	app entered degraded (observe window failure / post-window instability / W_DEPLOY_INSTABILITY)
-app.deleted	app deletion completed (tombstone second beat: managed services removed, name enters retention hold)
-app.instability_detected	instability detected at runtime
-app.recovered	app left degraded, back to running
-app.substrate_missing	app claimed running but its managed service(s) are absent from the substrate (external removal); view corrected to down
-app.webhook_fetch_failed	async source fetch failed after webhook acceptance (retry manually via redeliver on the same delivery)
-backup.upload_failed	remote state backup upload failed (local snapshot unaffected; payload carries the backup id and a redacted error summary, never credentials)
-backup.upload_recovered	remote state backup upload recovered (previous upload had failed; payload carries the backup id)
-build.stale_nonterminal	build stayed queued/building past 2x the build timeout budget (surfaces state-machine bugs; no self-healing)
-cron.failed	cron run failed (task failed/rejected; no retry — restart-condition=none; job service removed)
-cron.skipped	cron trigger skipped (overlap / node unavailable / missed during downtime / interrupted by restart); no catch-up run
-cron.succeeded	cron run completed (task complete; job service removed)
-cron.timed_out	cron run exceeded its watchdog budget (default 10m, fleetly.cron.timeout label overrides; job service removed)
-cron.triggered	cron schedule fired: one-shot swarm job created (payload carries app/service/run id/job service; scheduled_at is the hit cron point)
-db.backup_failed	database backup failed (failure summary in payload, never credentials)
-db.backup_succeeded	database backup succeeded (ledger row written; verify pending)
-db.credentials_rotated	database credentials rotated (manual two-phase confirm; referencing apps auto-redeploy follows)
-db.degraded	database in service turned unhealthy (health probe failing / task crash loop; swarm self-healing observed)
-db.delete_started	database deletion accepted (reference guard passed; tombstone first beat)
-db.deleted	database deletion completed (managed objects reaped; name enters retention hold; volumes orphaned by default)
-db.provision_failed	database convergence failed (health gate timeout / image unavailable / engine error; scene preserved, explicit retry required)
-db.provision_started	database provisioning/convergence started (create, resume or retry acceptance; state -> provisioning)
-db.ready	database passed the health gate (provisioning -> ready)
-db.recovered	database recovered (health probe passing again; degraded -> ready)
-db.restore_completed	database restore completed in place (confirm-gated destructive operation)
-db.restore_failed	database restore failed (critical alert; in-place replay interrupted)
-db.resumed	database resume accepted (paused -> provisioning reconvergence)
-db.suspended	database suspended (scale 0, services and volumes retained)
-db.upgrade_available	newer template image digest available for the database template (opt-in upgrade advertised)
-db.upgrade_failed	database upgrade failed (digest rolled back to the previous value; state degraded)
-db.upgrade_finished	database upgrade finished (new digest converged and healthy)
-db.upgrade_started	database upgrade started (pre_upgrade backup gate begins; controlled rebuild)
-deployment.cancelled	deploy cancelled (replays the prior state first, then lands cancelled)
-deployment.failed	deploy failed (terminal state; reason=error code)
-deployment.healthy	new revision passed the health gate
-deployment.observe_started	observe window started (default 60s)
-deployment.queued	deploy queued (per-app mutually exclusive queueing)
-deployment.recovery_blocked	recovery blocked (e.g. bound node unavailable)
-deployment.recovery_scheduled	recovery from systemic failure queued (automatic retry action)
-deployment.release_started	release started (build/update kicking off)
-deployment.rollback_failed	rollback failed
-deployment.rollback_finished	rollback finished
-deployment.rollback_started	rollback started (single-layer replay of the revision)
-deployment.substrate_halted	substrate failure halted the deploy (Swarm/node unavailable)
-deployment.succeeded	deploy succeeded (terminal state)
-deployment.superseded	deploy superseded by a newer target (stale terminal state)
-deployment.switched	traffic switch completed
-deployment.warning	deploy warning (W_ code; observe window alert-only semantics)
-engine.stale_nonterminal	deploy stayed non-terminal past 2x the (deploy watchdog + observe window) budget (surfaces state-machine bugs; no self-healing)
-git.hostkey_changed	the git SSH host key changed since the previous load (file rebuilt or key replaced; payload carries the old and new SHA256 fingerprints — public key material only, the private key never appears)
-invite.accepted	a one-time team invite was accepted (payload carries team_id/user_id/role; the plaintext token never appears anywhere)
-logs.backend_updated	log backend setting changed (payload carries the backend value; switch triggers the duty to deploy or remove VictoriaLogs, the data volume is retained)
-logs.ingest_degraded	log ingestion to VictoriaLogs degraded (backend unreachable; live tail unaffected; payload carries dropped_total and a single-line error summary)
-logs.ingest_recovered	log ingestion to VictoriaLogs recovered (degradation streak exited)
-logs.victorialogs_deployed	managed VictoriaLogs deployed or converged to the desired spec (payload carries service/image/reason)
-logs.victorialogs_removed	managed VictoriaLogs removed after logs.backend left victorialogs (data volume retained; payload carries volume_retained=true)
-metrics.mode_updated	metrics mode setting changed (payload carries the mode value; switching on deploys the managed VictoriaMetrics/cAdvisor/node-exporter stack, switching off removes the services — the data volume is retained)
-metrics.stack_deployed	managed metrics stack service deployed or converged to the desired spec (payload carries service/image/reason)
-metrics.stack_removed	managed metrics stack removed after metrics.mode left on (data volume retained; payload carries volume_retained=true)
-network.missing	an expected project network is absent from the substrate (external removal); disclosed only — the next attach or member deploy re-ensures it
-network.orphaned	a platform-managed fleetly- network exists that no state fact attributes to a live resource (unattributed leak; disclosed only — never deleted silently)
-node.availability_changed	node availability changed (active/drain/pause transition; drain maintenance-window narrative; payload carries old/new)
-node.down	node judged DOWN (Swarm loss-of-contact verdict)
-node.joined	node joined the cluster (observed)
-node.removed	node removed (observed docker node rm)
-node.up	node back to ready
-placement.blocked	bound node unavailable/removed; app blocked
-placement.bound	app node binding completed (including automatic pinning)
-placement.changed	binding changed (via the explicitly confirmed migration path)
-placement.recovered	bound node recovered; binding re-established automatically
-placement.unresolved	binding undecidable after DR; explicit placement required (no guessing)
-project.created	a project was created (payload carries team_id/slug; W1 source = the default project provisioned atomically with registration, W2-S1 source = ProjectsService.CreateProject)
-project.deleted	an empty project was deleted (non-empty guard passed; payload carries team_id/slug)
-project.member_changed	a project role override was set or removed (payload carries change/user_id and role on override_set; no row means the team role applies again)
-project.network_changed	an app was attached to or detached from its project network (payload carries change/app/app_id/project_id; participation is an explicit opt-in and defaults off)
-reconcile.drift_detected	drift detected between desired and actual state (including manual docker operations); convergence is per-app opt-in
-registry.updated	platform registry credentials changed (payload carries the host and the password fingerprint, never credentials)
-release.job_failed	release-time init job failed (task failed/rejected/shut down; the deployment fails — no retry, restart-condition=none; job service removed)
-release.job_timed_out	release-time init job exceeded its watchdog budget (default 10m, fleetly.job.timeout label overrides; the deployment fails and the job service is removed)
-restore.completed	control plane restore completed (after exiting read-only observation)
-route.label_ignored	compose fleetly.domains label declarations were ignored because state domain rows exist (labels are bootstrap-only; payload carries the declared/state counts)
-route.publish_failed	app ingress route publish failed (deploy unaffected; alerts separately)
-route.published	app ingress routes published (after the health gate passed, all dynamic config converged)
-s3.rustfs_deployed	managed RustFS deployed or converged to the desired spec (payload carries service/image/reason, never credentials)
-s3.rustfs_removed	managed RustFS removed after s3.mode left rustfs (data volume retained; payload carries volume_retained=true)
-s3.updated	object storage settings changed (payload carries the mode and toggles, never credentials)
-scaling.adjusted	autoscaler adjusted a service's replica count (payload carries the triggering dimension, before/after replicas and measured utilization)
-scaling.dormant	a scaling policy is dormant because metrics.mode is not on (one-time disclosure per policy; re-armed when metrics turns on)
-scaling.no_data	a scaling policy had no metric series for its target dimension — no action, honest no-data (one-time disclosure per policy)
-task.created	dynamic task accepted (owner token recorded; the engine converges the substrate service next; payload carries image/scope/network/ttl, never env values)
-task.deleted	dynamic task ledger row removed (substrate service already removed)
-task.expired	dynamic task TTL elapsed: the janitor reclaims the substrate service and lands the task stopped
-task.failed	dynamic task failed (substrate convergence failure, image unavailable, or the container task failed/rejected — restart-condition none means the platform does not self-heal it; payload carries a bounded error summary)
-task.orphaned	a platform-managed task service has no non-terminal state row (leftover or externally created): disclosed and reclaimed (the platform owns the object; label attribution)
-task.started	dynamic task converged: the substrate service is in place and resolvable by its stable DNS name inside the scope network
-task.stopped	dynamic task stopped and its substrate service removed (payload carries reason: owner | expired | exited)
-team.created	a team was created (payload carries slug/name; W1 source = the personal team provisioned atomically with registration, W2-S1 source = TeamsService.CreateTeam)
-team.member_changed	team membership changed — a member added, role changed or removed (payload carries change/user_id/role or from/to; removal carries the purged project-override count)
-terminal.closed	web terminal session closed (payload carries duration, close code and reason; metadata only, never session content)
-terminal.opened	web terminal session opened (payload carries app/service/container/node/token metadata only, never session content)
-user.registered	a user completed self-registration (payload carries email/is_platform_admin/team_id/team_slug, never credentials; first user is platform admin with a personal team + default project)
-volume.created	volume registered (data birthplace; pins the hosting node)
-volume.detached	volume detached (volume declaration removed; data is not deleted with the declaration)
-volume.discarded	volume explicitly discarded (admin+confirm+audited)
-volume.orphaned	volume orphaned (old volume kept by default after app deletion / after --discard)
+app.degraded	app entered degraded (observe window failure / post-window instability / W_DEPLOY_INSTABILITY)	release-semantics §2.7
+app.deleted	app deletion completed (tombstone second beat: managed services removed, name enters retention hold)	B6/H10 added during implementation (MG-3; app deletion second-beat terminal event)
+app.instability_detected	instability detected at runtime	release-semantics §2.7
+app.recovered	app left degraded, back to running	release-semantics §2.7
+app.substrate_missing	app claimed running but its managed service(s) are absent from the substrate (external removal); view corrected to down	T0-V2.2 added during implementation (R2; runtime existence reconciliation: running app whose substrate service vanished — disclosed and the derived view corrected)
+app.webhook_fetch_failed	async source fetch failed after webhook acceptance (retry manually via redeliver on the same delivery)	S17-D1 added during implementation (review class D; disclosure of webhook async source-fetch failure)
+backup.upload_failed	remote state backup upload failed (local snapshot unaffected; payload carries the backup id and a redacted error summary, never credentials)	E3 object-storage §2.3/D-S3-4 added during implementation (W3-S2 upload track; local snapshot unaffected, payload carries backup id + redacted error summary)
+backup.upload_recovered	remote state backup upload recovered (previous upload had failed; payload carries the backup id)	E3 object-storage §2.3/D-S3-4 added during implementation (W3-S2 upload track; red-to-green closure after a failed upload)
+build.stale_nonterminal	build stayed queued/building past 2x the build timeout budget (surfaces state-machine bugs; no self-healing)	S18-A10 added during implementation (review class A; over-age alert for non-terminal builds)
+cron.failed	cron run failed (task failed/rejected; no retry — restart-condition=none; job service removed)	E5 Cron added during implementation (object-storage §8; W3-S5; run failed, no retry)
+cron.skipped	cron trigger skipped (overlap / node unavailable / missed during downtime / interrupted by restart); no catch-up run	architecture §4.3
+cron.succeeded	cron run completed (task complete; job service removed)	E5 Cron added during implementation (object-storage §8; W3-S5; run completed, job service removed)
+cron.timed_out	cron run exceeded its watchdog budget (default 10m, fleetly.cron.timeout label overrides; job service removed)	E5 Cron added during implementation (object-storage §8; FZ-4 pinned name; watchdog budget exceeded, job service removed)
+cron.triggered	cron schedule fired: one-shot swarm job created (payload carries app/service/run id/job service; scheduled_at is the hit cron point)	E5 Cron added during implementation (object-storage §8; W3-S5; one-shot job created on schedule or manual trigger)
+db.backup_failed	database backup failed (failure summary in payload, never credentials)	E4 managed-databases §5.3 (operation event; never credentials in payload)
+db.backup_succeeded	database backup succeeded (ledger row written; verify pending)	E4 managed-databases §5.3 (operation event; ledger row written)
+db.credentials_rotated	database credentials rotated (manual two-phase confirm; referencing apps auto-redeploy follows)	E4 managed-databases §5.3 (operation event; referencing apps auto-redeploy follows)
+db.degraded	database in service turned unhealthy (health probe failing / task crash loop; swarm self-healing observed)	E4 managed-databases §5.3 (transition event; in-service unhealthy)
+db.delete_started	database deletion accepted (reference guard passed; tombstone first beat)	E4 managed-databases §5.3 (transition event; reference guard passed, tombstone first beat)
+db.deleted	database deletion completed (managed objects reaped; name enters retention hold; volumes orphaned by default)	E4 managed-databases §5.3 (transition event; reap completed, name enters retention hold)
+db.provision_failed	database convergence failed (health gate timeout / image unavailable / engine error; scene preserved, explicit retry required)	E4 managed-databases §5.3 (transition event; convergence failed, scene preserved)
+db.provision_started	database provisioning/convergence started (create, resume or retry acceptance; state -> provisioning)	E4 managed-databases §5.3 (transition event; provisioning acceptance for create/resume/retry)
+db.ready	database passed the health gate (provisioning -> ready)	E4 managed-databases §5.3 (transition event; health gate passed)
+db.recovered	database recovered (health probe passing again; degraded -> ready)	E4 managed-databases §5.3 (transition event; degraded -> ready)
+db.restore_completed	database restore completed in place (confirm-gated destructive operation)	E4 managed-databases §5.3 (operation event; in-place restore finished)
+db.restore_failed	database restore failed (critical alert; in-place replay interrupted)	E4 managed-databases §5.3 (operation event; interrupted in-place restore alerts critically)
+db.resumed	database resume accepted (paused -> provisioning reconvergence)	E4 managed-databases §5.3 (transition event; paused -> provisioning)
+db.suspended	database suspended (scale 0, services and volumes retained)	E4 managed-databases §5.3 (transition event; ready/degraded -> paused)
+db.upgrade_available	newer template image digest available for the database template (opt-in upgrade advertised)	E4 managed-databases §5.3 (operation event; opt-in upgrade advertised)
+db.upgrade_failed	database upgrade failed (digest rolled back to the previous value; state degraded)	E4 managed-databases §5.3 (operation event; digest rolled back, state degraded)
+db.upgrade_finished	database upgrade finished (new digest converged and healthy)	E4 managed-databases §5.3 (operation event; upgrade converged and healthy)
+db.upgrade_started	database upgrade started (pre_upgrade backup gate begins; controlled rebuild)	E4 managed-databases §5.3 (operation event; controlled rebuild with backup gate)
+deployment.cancelled	deploy cancelled (replays the prior state first, then lands cancelled)	release-semantics §2.7
+deployment.failed	deploy failed (terminal state; reason=error code)	release-semantics §2.7
+deployment.healthy	new revision passed the health gate	release-semantics §2.7
+deployment.observe_started	observe window started (default 60s)	release-semantics §2.7
+deployment.queued	deploy queued (per-app mutually exclusive queueing)	release-semantics §2.7
+deployment.recovery_blocked	recovery blocked (e.g. bound node unavailable)	release-semantics §2.7
+deployment.recovery_scheduled	recovery from systemic failure queued (automatic retry action)	release-semantics §2.7
+deployment.release_started	release started (build/update kicking off)	release-semantics §2.7
+deployment.rollback_failed	rollback failed	release-semantics §2.7
+deployment.rollback_finished	rollback finished	release-semantics §2.7
+deployment.rollback_started	rollback started (single-layer replay of the revision)	release-semantics §2.7
+deployment.substrate_halted	substrate failure halted the deploy (Swarm/node unavailable)	release-semantics §2.7
+deployment.succeeded	deploy succeeded (terminal state)	release-semantics §2.7
+deployment.superseded	deploy superseded by a newer target (stale terminal state)	release-semantics §2.7
+deployment.switched	traffic switch completed	release-semantics §2.7
+deployment.warning	deploy warning (W_ code; observe window alert-only semantics)	release-semantics §2.7
+engine.stale_nonterminal	deploy stayed non-terminal past 2x the (deploy watchdog + observe window) budget (surfaces state-machine bugs; no self-healing)	S18-A10 added during implementation (review class A; over-age alert for non-terminal deploys)
+git.hostkey_changed	the git SSH host key changed since the previous load (file rebuilt or key replaced; payload carries the old and new SHA256 fingerprints — public key material only, the private key never appears)	v0.3 W3-S2 rbac-teams §6 D-W0-8 (host key startup load vs fingerprint ledger; state hostkeysettings.go, same transaction; public key material only)
+invite.accepted	a one-time team invite was accepted (payload carries team_id/user_id/role; the plaintext token never appears anywhere)	v0.3 W2-S1 rbac-teams §6 (one-time invite consumed; state teams.go ConsumeInvite, same transaction)
+logs.backend_updated	log backend setting changed (payload carries the backend value; switch triggers the duty to deploy or remove VictoriaLogs, the data volume is retained)	E6 observability §2.2 (settings save transaction; switch triggers the duty deploy/remove)
+logs.ingest_degraded	log ingestion to VictoriaLogs degraded (backend unreachable; live tail unaffected; payload carries dropped_total and a single-line error summary)	E6 observability §2.3 (ingest streak enter edge, debounced; live tail unaffected)
+logs.ingest_recovered	log ingestion to VictoriaLogs recovered (degradation streak exited)	E6 observability §2.3 (ingest streak exit edge, debounced)
+logs.victorialogs_deployed	managed VictoriaLogs deployed or converged to the desired spec (payload carries service/image/reason)	E6 observability §2.1 (duty converge diff; payload carries service/image/reason)
+logs.victorialogs_removed	managed VictoriaLogs removed after logs.backend left victorialogs (data volume retained; payload carries volume_retained=true)	E6 observability §2.2 (backend left victorialogs; data volume retained)
+metrics.mode_updated	metrics mode setting changed (payload carries the mode value; switching on deploys the managed VictoriaMetrics/cAdvisor/node-exporter stack, switching off removes the services — the data volume is retained)	E6 observability §4.1 (settings save transaction; opt-in switch deploys or removes the managed stack, volume retained)
+metrics.stack_deployed	managed metrics stack service deployed or converged to the desired spec (payload carries service/image/reason)	E6 observability §4.1 (duty converge diff; payload carries service/image/reason)
+metrics.stack_removed	managed metrics stack removed after metrics.mode left on (data volume retained; payload carries volume_retained=true)	E6 observability §4.1 (mode left on; data volume retained)
+network.missing	an expected project network is absent from the substrate (external removal); disclosed only — the next attach or member deploy re-ensures it	T-line OT-1/IMPL-T15-1 DT-5 recon guard (expected project network absent from the substrate; re-ensured by attach/deploy, never auto-recreated by recon)
+network.orphaned	a platform-managed fleetly- network exists that no state fact attributes to a live resource (unattributed leak; disclosed only — never deleted silently)	T-line OT-1/IMPL-T15-1 DT-5 recon guard (platform-managed fleetly- network with no state attribution; disclosed only, never deleted silently)
+node.availability_changed	node availability changed (active/drain/pause transition; drain maintenance-window narrative; payload carries old/new)	multi-node §2.7/§5.3 (v0.2: active/drain/pause transition, drain maintenance-window narrative)
+node.down	node judged DOWN (Swarm loss-of-contact verdict)	stateful-placement §2.8
+node.joined	node joined the cluster (observed)	stateful-placement §2.8
+node.removed	node removed (observed docker node rm)	stateful-placement §2.8
+node.up	node back to ready	stateful-placement §2.8
+placement.blocked	bound node unavailable/removed; app blocked	stateful-placement §2.8
+placement.bound	app node binding completed (including automatic pinning)	stateful-placement §2.8
+placement.changed	binding changed (via the explicitly confirmed migration path)	stateful-placement §2.8
+placement.recovered	bound node recovered; binding re-established automatically	stateful-placement §2.8
+placement.unresolved	binding undecidable after DR; explicit placement required (no guessing)	stateful-placement §2.8
+project.created	a project was created (payload carries team_id/slug; W1 source = the default project provisioned atomically with registration, W2-S1 source = ProjectsService.CreateProject)	v0.3 W1 rbac-teams §6 (registration composite transaction: default project; W2-S1 also emits it from ProjectsService.CreateProject; metadata-only)
+project.deleted	an empty project was deleted (non-empty guard passed; payload carries team_id/slug)	v0.3 W2-S1 rbac-teams §6 (empty-project deletion; state projects.go DeleteProject, same transaction)
+project.member_changed	a project role override was set or removed (payload carries change/user_id and role on override_set; no row means the team role applies again)	v0.3 W2-S1 rbac-teams §6 (project role override set/removed; state projects.go, same transaction)
+project.network_changed	an app was attached to or detached from its project network (payload carries change/app/app_id/project_id; participation is an explicit opt-in and defaults off)	T-line OT-1/IMPL-T15-1 (explicit opt-in attach/detach of an app to its project network; state projectnetworks.go, same transaction; defaults off)
+reconcile.drift_detected	drift detected between desired and actual state (including manual docker operations); convergence is per-app opt-in	state-model §2.9
+registry.updated	platform registry credentials changed (payload carries the host and the password fingerprint, never credentials)	IMPL-T1-2 added during implementation (DT-2 platform registry credentials change; payload carries the host and the password fingerprint, never credentials)
+release.job_failed	release-time init job failed (task failed/rejected/shut down; the deployment fails — no retry, restart-condition=none; job service removed)	DT-4 added during implementation (torchwood line: release-time init job failed; the deployment fails, job service removed)
+release.job_timed_out	release-time init job exceeded its watchdog budget (default 10m, fleetly.job.timeout label overrides; the deployment fails and the job service is removed)	DT-4 added during implementation (torchwood line: release-time init job watchdog budget exceeded; fleetly.job.timeout overrides the 10m default)
+restore.completed	control plane restore completed (after exiting read-only observation)	state-model §2.7
+route.label_ignored	compose fleetly.domains label declarations were ignored because state domain rows exist (labels are bootstrap-only; payload carries the declared/state counts)	IMPL-T1-1 added during implementation (OT-2 single-writer arbitration: labels are bootstrap-only once state domain rows exist)
+route.publish_failed	app ingress route publish failed (deploy unaffected; alerts separately)	T2.15 added during implementation (architecture §2.5 route failure alerts separately; pending T0.5 freeze confirmation)
+route.published	app ingress routes published (after the health gate passed, all dynamic config converged)	T2.15 added during implementation (architecture §2.5 route publish timing; pending T0.5 freeze confirmation)
+s3.rustfs_deployed	managed RustFS deployed or converged to the desired spec (payload carries service/image/reason, never credentials)	E3 object-storage §5.3 added during implementation (W3-S3 rustfs duty converge diff; payload carries service/image/reason, never credentials)
+s3.rustfs_removed	managed RustFS removed after s3.mode left rustfs (data volume retained; payload carries volume_retained=true)	E3 object-storage §5.3 added during implementation (W3-S3 rustfs duty converge diff; data volume retained)
+s3.updated	object storage settings changed (payload carries the mode and toggles, never credentials)	E3 object-storage §5.3 added during implementation (settings change; payload carries mode/toggles, never credentials)
+scaling.adjusted	autoscaler adjusted a service's replica count (payload carries the triggering dimension, before/after replicas and measured utilization)	B-line W5 §1 D-V3W5-2 (autoscaler adjusted a service's replica count; engine autoscaling duty; payload carries dimension/before-after replicas/utilization)
+scaling.dormant	a scaling policy is dormant because metrics.mode is not on (one-time disclosure per policy; re-armed when metrics turns on)	B-line W5 §1 D-V3W5-2 (policy dormant while metrics.mode is off; one-time disclosure per policy, re-armed when metrics turns on)
+scaling.no_data	a scaling policy had no metric series for its target dimension — no action, honest no-data (one-time disclosure per policy)	B-line W5 §1 D-V3W5-2 (no metric series for the target dimension — no action, honest no-data; one-time disclosure per policy)
+task.created	dynamic task accepted (owner token recorded; the engine converges the substrate service next; payload carries image/scope/network/ttl, never env values)	T-line DT-5/IMPL-T2-1 dynamic tasks (task accepted; state tasks.go, same transaction; payload carries image/scope/network/ttl, never env values)
+task.deleted	dynamic task ledger row removed (substrate service already removed)	T-line DT-5/IMPL-T2-1 dynamic tasks (ledger row removed after the substrate service was removed; state tasks.go DeleteTaskRow)
+task.expired	dynamic task TTL elapsed: the janitor reclaims the substrate service and lands the task stopped	T-line DT-5/IMPL-T2-1 dynamic tasks (TTL elapsed; the janitor reclaims the substrate service; state tasks.go RequestTaskStop reason=expired)
+task.failed	dynamic task failed (substrate convergence failure, image unavailable, or the container task failed/rejected — restart-condition none means the platform does not self-heal it; payload carries a bounded error summary)	T-line DT-5/IMPL-T2-1 dynamic tasks (convergence failure or container task failed/rejected; restart-condition none — no self-healing; bounded error summary)
+task.orphaned	a platform-managed task service has no non-terminal state row (leftover or externally created): disclosed and reclaimed (the platform owns the object; label attribution)	T-line DT-5/IMPL-T2-1 DT-5 recon guard (platform-managed task service with no non-terminal state row; disclosed and reclaimed — label attribution)
+task.started	dynamic task converged: the substrate service is in place and resolvable by its stable DNS name inside the scope network	T-line DT-5/IMPL-T2-1 dynamic tasks (substrate service converged and resolvable by its stable DNS name; engine tasks.go)
+task.stopped	dynamic task stopped and its substrate service removed (payload carries reason: owner | expired | exited)	T-line DT-5/IMPL-T2-1 dynamic tasks (task stopped and the substrate service removed; payload carries reason owner|expired|exited)
+team.created	a team was created (payload carries slug/name; W1 source = the personal team provisioned atomically with registration, W2-S1 source = TeamsService.CreateTeam)	v0.3 W1 rbac-teams §6 (registration composite transaction: personal team; W2-S1 also emits it from TeamsService.CreateTeam; metadata-only)
+team.member_changed	team membership changed — a member added, role changed or removed (payload carries change/user_id/role or from/to; removal carries the purged project-override count)	v0.3 W2-S1 rbac-teams §6 (member add/role-change/remove converge on one event, change field discriminates; state teams.go, same transaction)
+terminal.closed	web terminal session closed (payload carries duration, close code and reason; metadata only, never session content)	E7 web-terminal §2.4 (hub session close, same-transaction with the audit row; duration/reason metadata, never session content)
+terminal.opened	web terminal session opened (payload carries app/service/container/node/token metadata only, never session content)	E7 web-terminal §2.4 (hub session acceptance, same-transaction with the audit row; metadata only, never session content)
+user.registered	a user completed self-registration (payload carries email/is_platform_admin/team_id/team_slug, never credentials; first user is platform admin with a personal team + default project)	v0.3 W1 rbac-teams §6 (registration composite transaction; metadata-only, never credentials)
+volume.created	volume registered (data birthplace; pins the hosting node)	stateful-placement §2.8
+volume.detached	volume detached (volume declaration removed; data is not deleted with the declaration)	stateful-placement §2.8
+volume.discarded	volume explicitly discarded (admin+confirm+audited)	stateful-placement §2.8
+volume.orphaned	volume orphaned (old volume kept by default after app deletion / after --discard)	stateful-placement §2.8

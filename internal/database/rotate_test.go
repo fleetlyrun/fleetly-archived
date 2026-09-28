@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
+	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
 )
@@ -122,8 +123,15 @@ func TestRotatePostgresReady(t *testing.T) {
 	if run.Image != inst.ImageDigest {
 		t.Errorf("job image = %q, want the pinned template image", run.Image)
 	}
-	if !strings.HasPrefix(run.Name, "fleetly-db-pg1-rotate-") {
-		t.Errorf("job name = %q, want the recognizable rotate family", run.Name)
+	// 轮换作业是一次性瞬时对象，名必须落 dbjob 前缀族（IMPL-ARCH-F F-2）：
+	// ∈ IsDBJobName 且 ∉ IsDbServiceName——fleetly-db-* 是库长驻服务族
+	//（IsDbServiceName 识别面），瞬时作业误落该族会被库服务消费面
+	//（豁免/清扫/采集）当作长驻库服务。
+	if !naming.IsDBJobName(run.Name) {
+		t.Errorf("job name = %q, want the dbjob prefix family (transient rotation job must be name-recognizable)", run.Name)
+	}
+	if naming.IsDbServiceName(run.Name) {
+		t.Errorf("job name = %q must not fall in the db service prefix family", run.Name)
 	}
 	joined := strings.Join(run.Cmd, " ")
 	if !strings.Contains(joined, "ALTER USER fleetly WITH PASSWORD '") {

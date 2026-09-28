@@ -40,6 +40,11 @@ type Code struct {
 	// Suggestion 默认修复建议（ErrorResponse.suggestion 的默认占位文案，
 	// 业务侧可覆盖；措辞冻结前可调整）。
 	Suggestion string
+	// Source 是该码的文档出处锚：定义该码的设计文档章节引用（如
+	// "release-semantics §2.7"）、实现期票据注记或设计线引用。出处随码
+	// 内联在注册表一处（原 errcode_test 手抄 docCodes 清单已删除——注册表
+	// 是唯一真源，出处是码的知识的一部分）。
+	Source string
 }
 
 // Docs 返回该码的文档锚点 URL（DocsURLPrefix + ID）。
@@ -149,7 +154,7 @@ func HTTPStatus(id string) int {
 }
 
 // Snapshot 返回注册表的规范化文本快照（golden 测试用）：每行
-// ID \t HTTP \t docs \t summary \t suggestion，按 ID 字典序。
+// ID \t HTTP \t docs \t summary \t suggestion \t source，按 ID 字典序。
 func (r *Registry) Snapshot() string {
 	var b strings.Builder
 	for _, c := range r.All() {
@@ -162,6 +167,8 @@ func (r *Registry) Snapshot() string {
 		b.WriteString(c.Summary)
 		b.WriteByte('\t')
 		b.WriteString(c.Suggestion)
+		b.WriteByte('\t')
+		b.WriteString(c.Source)
 		b.WriteByte('\n')
 	}
 	return b.String()

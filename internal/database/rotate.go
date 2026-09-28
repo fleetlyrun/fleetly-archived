@@ -136,40 +136,25 @@ func (m *Manager) RotateCredentials(ctx context.Context, name string) ([]string,
 		return nil, &RotationStageError{Stage: "encrypt", Err: err}
 	}
 
-	// ── 引擎侧（按引擎族分派——IMPL-DB-0 起轴 = tpl.Engine，同族发行版/
-	// 大版本共享）——成功后权威态才切换 ──
-	switch tpl.Engine {
-	case dbtemplate.EnginePostgres:
-		// PG 暂停拒绝（引擎级边界，见文件头）：诚实 409 族，不受理假轮换。
+	// ── 引擎侧（查 engineTools 表分派——IMPL-DB-0 起轴 = tpl.Engine，同族
+	// 发行版/大版本共享；IMPL-ARCH-F F-3 起 switch 收拢为表）──
+	tools, err := engineToolsFor(tpl)
+	if err != nil {
+		return nil, &RotationStageError{Stage: "template", Err: err}
+	}
+	// 暂停拒绝（引擎级边界，§2.3 操作表「paused 合法前置态」的引擎级限定）：
+	// 引擎侧改密语句（ALTER USER / updateUser）需要运行中实例——三个有引擎
+	// 侧动作的引擎（PG/MySQL/Mongo）同谓词拒绝（initdb 只在首启读
+	// POSTGRES_PASSWORD_FILE / mysqld 停摆 / mongod 停摆，机理见各自 rotate
+	// 实现），诚实 409 族提示先 resume，不受理假轮换。Redis 无引擎侧动作
+	//（rotate 为 nil），暂停期轮换合法（密文落库，resume 时以新密码重建）。
+	if tools.rotate != nil {
 		if inst.State == state.DatabasePaused {
 			return nil, ErrPGRotationPaused
 		}
-		if err := m.rotatePostgresCredential(ctx, &inst, tpl.Image, old, new); err != nil {
+		if err := tools.rotate(m, ctx, &inst, tpl.Image, old, new); err != nil {
 			return nil, &RotationStageError{Stage: "engine", Err: err}
 		}
-	case dbtemplate.EngineMySQL:
-		// MySQL 暂停拒绝（PG 同款引擎级边界，v0.3 W4）：mysqld 停摆时
-		// ALTER USER 无从执行——如实拒绝提示先 resume，不受理假轮换。
-		if inst.State == state.DatabasePaused {
-			return nil, ErrPGRotationPaused
-		}
-		if err := m.rotateMySQLCredential(ctx, &inst, tpl.Image, old, new); err != nil {
-			return nil, &RotationStageError{Stage: "engine", Err: err}
-		}
-	case dbtemplate.EngineMongo:
-		// MongoDB 暂停拒绝（PG 同款引擎级边界，v0.3 W4）：mongod 停摆时
-		// updateUser 无从执行——如实拒绝提示先 resume，不受理假轮换。
-		if inst.State == state.DatabasePaused {
-			return nil, ErrPGRotationPaused
-		}
-		if err := m.rotateMongoCredential(ctx, &inst, tpl.Image, old, new); err != nil {
-			return nil, &RotationStageError{Stage: "engine", Err: err}
-		}
-	case dbtemplate.EngineRedis:
-		// Redis 无引擎侧动作（凭据 = spec 启动参数；收敛 duty 按 hash 差异
-		// 重建任务）——落库即引擎侧完成。
-	default:
-		return nil, &RotationStageError{Stage: "template", Err: fmt.Errorf("template %q has no rotation adapter", inst.Template)}
 	}
 
 	// ── 权威态切换（CAS on credential_updated_at——并发轮换第二笔落败）──
@@ -224,7 +209,14 @@ func (m *Manager) rotatePostgresCredential(ctx context.Context, inst *state.Data
 	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
-	jobName := "fleetly-db-" + inst.Name + "-rotate-" + ulid.Make().String()[:8]
+	// 作业名走 dbjob 前缀族（fleetly-dbjob-<instance>-rotate-<ulid8>，
+	// IMPL-ARCH-F F-2）：轮换是一次性瞬时容器，名必须可按族识别——误落
+	// fleetly-db-* 库服务族会被库服务消费面（IsDbServiceName 识别面）当
+	// 长驻服务（今天是一次性 container 无事；明天做成 service 即被误清）。
+	jobName, err := naming.DBJobName(inst.Name, "rotate", ulid.Make().String())
+	if err != nil {
+		return err
+	}
 	exit, err := m.docker.ContainerRun(ctx, ContainerRunInput{
 		Name: jobName,
 		// 容器名不含凭据材料；env 只带旧密码（认证面），新密码进命令字面量
@@ -261,7 +253,10 @@ func (m *Manager) rotateMySQLCredential(ctx context.Context, inst *state.Databas
 	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
-	jobName := "fleetly-db-" + inst.Name + "-rotate-" + ulid.Make().String()[:8]
+	jobName, err := naming.DBJobName(inst.Name, "rotate", ulid.Make().String())
+	if err != nil {
+		return err
+	}
 	exit, err := m.docker.ContainerRun(ctx, ContainerRunInput{
 		Name:  jobName,
 		Image: image,
@@ -296,7 +291,10 @@ func (m *Manager) rotateMongoCredential(ctx context.Context, inst *state.Databas
 	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
-	jobName := "fleetly-db-" + inst.Name + "-rotate-" + ulid.Make().String()[:8]
+	jobName, err := naming.DBJobName(inst.Name, "rotate", ulid.Make().String())
+	if err != nil {
+		return err
+	}
 	cmd := `mongosh "mongodb://fleetly:${MONGO_PASSWORD}@` + inst.Name + `:27017/admin" --quiet --eval "db.getSiblingDB('admin').updateUser('fleetly', {pwd: '` + new + `'})"`
 	exit, err := m.docker.ContainerRun(ctx, ContainerRunInput{
 		Name:  jobName,
