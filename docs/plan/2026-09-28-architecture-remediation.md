@@ -81,6 +81,16 @@
 - **修法**:27 个 server proto 的 154 个方法逐条迁注解(一次性迁移工具 + descriptor 全集 ⇆ 旧表零 diff 校验,值零变化后工具即删);scope.go 手工表删除,init 期从 protoregistry 生成同形态 map,注解词 ∉ scopeWords 词表即 panic fail-fast(启动期爆,不静默成永不可达端点)。
 - **守卫**:scope_completeness_test.go 四向适配——缺注解红 / 注解词词表外红 / authExemptMethods 幻影红 / 测试豁免清单 ≡ 生产豁免表双向;红态两方向演示过(摘注解点名方法;改词表外值先 init panic 再测试方向红)。rbac-teams 红线表述随票修订。
 
+## 2d. 候选 9 收官(K,2026-09-28;跨仓票的仓内侧)
+
+### IMPL-ARCH-K(候选 9)genproto/sdk 发布为版本化模块 + WaitBuild 收进 SDK
+
+- **裁决**:用户批准。**模块发布面**:sdk/go/go.mod 对 genproto 的 require 从零伪版本(`v0.0.0-00010101000000-000000000000`,proxy 上不存在)改为真实版本号 `v0.1.0`;replace 行保留(GOWORK=off 场景的仓内密闭构建兜底,replace 仅主模块生效、对外无害)——零伪版本 + replace 被外部消费者忽略即 T2-3(torchwood)被迫 vendored fork 的机械根因。版本号在 tag push(`git tag genproto/v0.1.0` 与 `git tag sdk/go/v0.1.0`,子目录模块 tag 必带目录前缀)后对外可解析;仓内构建全走 go.work workspace,不依赖 tag 存在。
+- **WaitBuild 收编**(候选 9 后半):SDK 新增 `Client.WaitBuild(ctx, buildIDs, ...WaitOption)`(轮询 GetBuild 至全部终态;`WithWaitTimeout/WithWaitPollInterval/WithWaitOnTerminal`;超时返回 `*WaitTimeoutError`(哨兵 `ErrWaitTimeout`,Pending 快照携带各构建最后已知状态))+ 终态谓词单点 `BuildTerminal(status string)`(queued/building 非终态,succeeded/failed 终态,词表外按终态——与收编前 CLI 环一致);错误语义:终态前 GetBuild 报错即中止原样上抛、终态后不再轮询、ctx 结束返回 `ctx.Err()` 本尊。CLI build 命令的等待环收编消费(既有逐构建行输出经终态回调保持、超时两分提示措辞逐字不变)。
+- **服务端不共用**(裁决留痕):BuildFromUpload 的服务端等待(internal/api/builds.go `waitUploadBuild`)占 gRPC 流、直读 state.Store(非 gRPC GetBuild)、谓词消费类型化常量——机制不同构;且 internal 包不可反向 import 公共 SDK(依赖方向倒置)。SDK 侧 wait.go 注释指认此取舍;两侧词表同源 proto BuildView.status,漂移由 proto 契约面兜底。
+- **根 go.mod 记录**(保持原样):对 genproto 同款 replace + 零伪版本(无外部消费者,离线 replace 兜底足够);对 sdk/go 挂真实伪版本 `v0.0.0-20260920151618-0ea0ebf6cf4a` 且**无 replace**(workspace 构建不受影响;GOWORK=off 场景仅 go generate 不解析导入,现状可用)——tag push 后可择机升 `v0.1.0`,挂账见 §4。
+- **跨仓待办**(不属本仓改动):tag push 后 torchwood 侧改 import `github.com/fleetlyrun/fleetly/sdk/go@v0.1.0` 并删除 vendored fork;CI 核查结论:pr.yml 全部 Go job 为 workspace 形态或 sdk/go 目录内 GOWORK=off(replace 生效),无 `go mod tidy -diff` 门,本变更零 CI 风险。
+
 ## 3. 守卫清单与验收句
 
 | 守卫 | 层 | 验收句(下一个同类问题在哪被拦) |
@@ -102,7 +112,7 @@
 | 候选/项 | 内容 | 状态 |
 |---|---|---|
 | 6b | 服务登记表收敛(scope proto option + ServiceRegistration 表) | 已落,拆两票:I=服务登记表(f6ffef9,2026-09-28);J=scope 登记面搬家至 proto option(§2c IMPL-ARCH-J,rbac-teams 红线随票修订) |
-| 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 挂账,跨仓决策,值得 ADR |
+| 9 | genproto/sdk/go 发布为版本化模块 + WaitBuild(torchwood vendored fork 收编) | 仓内侧已落(§2d IMPL-ARCH-K:require v0.1.0 + WaitBuild/BuildTerminal 收编 SDK、CLI 消费);余 tag push + torchwood 改 import 删 vendored + 根 go.mod sdk/go pin 择机升 v0.1.0 |
 | E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 挂账,需跨包 helper 形态裁决 |
 | F 尾 | eventcode 头注计数叙事停在 95、实注册 105(既有注释漂移) | 挂账,随下次事件增补重算 |
 | F 尾 | database/move.go:67 手工复述三段限定形,疑似查询值与写入值不同形 | 挂账,需独立小票核查 |

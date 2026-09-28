@@ -12,6 +12,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,9 +25,12 @@ import (
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/compose"
+	"github.com/fleetlyrun/fleetly/sdk/go/fleetly"
 )
 
-// buildPollInterval 是 CLI 轮询构建行的周期。
+// buildPollInterval 是 build 等待的轮询周期（IMPL-ARCH-K 起经
+// WithWaitPollInterval 传入 SDK WaitBuild——收编前是 CLI 自持环的周期，
+// 值不变）。
 const buildPollInterval = time.Second
 
 // defaultBuildTimeout 是 build 等待缺省上限（冷构建受外网主导、方差极大
@@ -124,59 +128,60 @@ type passthroughService struct {
 	Image   string `json:"image"`
 }
 
-// wait 轮询至全部构建到终态或超时。超时区分「仍 queued」（daemon 未运行）
-// 与「执行中超时」（卡住的构建），给出不同提示。
+// wait 经 SDK 的 WaitBuild 等待全部构建到终态或超时（IMPL-ARCH-K：轮询环
+// 与终态谓词收编进 SDK，与外部消费者单点共用；CLI 只保留两件事——逐构建
+// 终态行的既有流式输出（终态回调承载，措辞逐字不变）与超时提示的既有两分
+// 映射（「全部仍 queued」= daemon 没在跑 /「有 in-flight」= 构建卡住），
+// 快照输入由 WaitTimeoutError 携带）。
 func (c *buildCmd) wait(ctx context.Context, env *commands.Environment, cl *fleetlyClient, queued []*serverv1.BuildView, timeout time.Duration) ([]*serverv1.BuildView, error) {
 	if len(queued) == 0 {
 		return nil, nil
 	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	pending := make(map[string]bool, len(queued))
+	ids := make([]string, 0, len(queued))
 	for _, b := range queued {
-		pending[b.GetId()] = true
+		ids = append(ids, b.GetId())
 	}
-	out := make([]*serverv1.BuildView, 0, len(queued))
-	for len(pending) > 0 {
-		select {
-		case <-deadline.C:
-			n := 0
-			for id := range pending {
-				if resp, err := cl.Builds().GetBuild(ctx, &serverv1.GetBuildRequest{Id: id}); err == nil && resp.GetBuild().GetStatus() == "queued" {
-					n++
-				}
+	results, err := cl.WaitBuild(ctx, ids,
+		fleetly.WithWaitTimeout(timeout),
+		fleetly.WithWaitPollInterval(buildPollInterval),
+		fleetly.WithWaitOnTerminal(func(rec *serverv1.BuildView) error {
+			if c.jsonOut {
+				return nil
 			}
-			if n == len(pending) {
-				return out, fmt.Errorf("builds stayed queued for %s — is fleetlyd running? builds are executed by fleetlyd's build.queue service (this command only enqueues and waits)", timeout)
+			line := fmt.Sprintf("build %s (%s) %s", rec.GetId(), rec.GetService(), rec.GetStatus())
+			if rec.GetStatus() == "succeeded" {
+				line += "  " + rec.GetImageRef() + "@" + rec.GetImageDigest()
 			}
-			return out, fmt.Errorf("builds did not finish within %s (in-flight builds keep running; check 'fleetly builds list')", timeout)
-		case <-ctx.Done():
-			return out, ctx.Err()
-		case <-time.After(buildPollInterval):
-		}
-		for id := range pending {
-			resp, err := cl.Builds().GetBuild(ctx, &serverv1.GetBuildRequest{Id: id})
-			if err != nil {
-				return out, err
-			}
-			rec := resp.GetBuild()
-			if rec.GetStatus() == "queued" || rec.GetStatus() == "building" {
-				continue
-			}
-			delete(pending, id)
-			out = append(out, rec)
-			if !c.jsonOut {
-				line := fmt.Sprintf("build %s (%s) %s", rec.GetId(), rec.GetService(), rec.GetStatus())
-				if rec.GetStatus() == "succeeded" {
-					line += "  " + rec.GetImageRef() + "@" + rec.GetImageDigest()
-				}
-				if _, err := fmt.Fprintln(env.Stdout, line); err != nil {
-					return out, err
-				}
-			}
+			_, err := fmt.Fprintln(env.Stdout, line)
+			return err
+		}),
+	)
+	if err == nil {
+		return results, nil
+	}
+	var timeoutErr *fleetly.WaitTimeoutError
+	if errors.As(err, &timeoutErr) {
+		return results, buildTimeoutError(timeout, timeoutErr.Pending)
+	}
+	return results, err
+}
+
+// buildTimeoutError 把 SDK 等待超时映射为 CLI 既有的可行动提示（两形态措
+// 辞与收编前 CLI 自持环逐字一致）：全部仍 queued = 执行侧（fleetlyd 的
+// build.queue 服务）没在跑；否则 = in-flight 超时（构建继续执行、台账可
+// 查）。分支判据 = WaitTimeoutError 快照的各构建最后已知状态。
+func buildTimeoutError(timeout time.Duration, pending map[string]string) error {
+	stayedQueued := true
+	for _, status := range pending {
+		if status != "queued" {
+			stayedQueued = false
+			break
 		}
 	}
-	return out, nil
+	if stayedQueued {
+		return fmt.Errorf("builds stayed queued for %s — is fleetlyd running? builds are executed by fleetlyd's build.queue service (this command only enqueues and waits)", timeout)
+	}
+	return fmt.Errorf("builds did not finish within %s (in-flight builds keep running; check 'fleetly builds list')", timeout)
 }
 
 // buildResultJSON 是 build --json 输出形态。

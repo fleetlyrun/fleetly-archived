@@ -2,10 +2,17 @@ module github.com/fleetlyrun/fleetly/sdk/go
 
 go 1.26.6
 
+// 对 genproto 的消费形态（IMPL-ARCH-K）：require 挂真实版本号
+// genproto/v0.1.0——外部消费者（torchwood 等）import 本模块时只读
+// require、忽略 replace，零伪版本在 proxy 上不存在（T2-3 被迫 vendored
+// fork 的机械根因）。版本在 tag push（git tag genproto/v0.1.0）后对外可
+// 解析；仓内构建全走 go.work workspace（版本被 use 覆盖，不联网解析），
+// GOWORK=off 场景（license 扫描等）由下方 replace 兜底——replace 仅在本
+// 模块为主模块时生效，对外无害，故保留。
 replace github.com/fleetlyrun/fleetly/genproto => ../../genproto
 
 require (
-	github.com/fleetlyrun/fleetly/genproto v0.0.0-00010101000000-000000000000
+	github.com/fleetlyrun/fleetly/genproto v0.1.0
 	google.golang.org/grpc v1.83.2
 )
 
