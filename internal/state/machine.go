@@ -1,9 +1,12 @@
 package state
 
-// 发布状态机转移表（release-semantics §2.3 的行驱动权威真源；S16-C5 自
-// internal/engine/machine.go 下沉——state 是部署行的权威状态层，写路径
-// （UpdateDeployment 的 CAS 分支）在此校验 from→to 合法性，非法转移拒写；
-// engine/machine.go 保留 Phase 词表与同名兼容导出、委托本表，表不两份）。
+// 状态机转移表（行驱动权威真源；S16-C5 自 internal/engine/machine.go 下沉
+// ——state 是台账行的权威状态层，写路径在此校验 from→to 合法性，非法转移
+// 拒写）：
+//   - 部署（release-semantics §2.3；engine/machine.go 保留 Phase 词表与同名
+//     兼容导出、委托本表，表不两份）；
+//   - 任务（T 线 DT-5；IMPL-ARCH-C2 自 tasks.go 六个手搓 CAS 块显式化——
+//     图与既有 WHERE 谓词逐条对应，不是重新设计，见 taskTransitions 注）。
 //
 // 转移纪律：
 //   - 终态（succeeded/failed/cancelled）不可逆（表内无出边）；
@@ -19,7 +22,10 @@ package state
 // 通过）、非终态→failed（失败分流/兜底）、queued/preparing/building/releasing
 // →cancelled（取消语义按切流与否分流）。
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrIllegalTransition 表示按转移表判定的非法状态迁移（from→to 无边——
 // 确定性编码错误）。它是 ErrDeploymentStateTransition 的特化（包装链）：
@@ -71,4 +77,65 @@ func LegalDeploymentTransitions(from DeploymentStatus) []DeploymentStatus {
 func AllDeploymentStatuses() []DeploymentStatus {
 	return []DeploymentStatus{DeployQueued, DeployPreparing, DeployBuilding, DeployReleasing,
 		DeployObserving, DeploySucceeded, DeployFailed, DeployCancelled}
+}
+
+// ErrIllegalTaskTransition 表示按任务转移表判定的非法状态迁移（from→to
+// 无边——确定性编码错误）。与部署侧 ErrIllegalTransition 同纪律：任务状态
+// 单写点（updateTask）在 CAS 前按表校验，表外组合拒写——即使当前行恰为
+// from 也不落库。它不服务「竞争落败」：任务线六个意图原语的既有幂等语义
+// （n==0 零变更成功返回）不受影响，表校验针对的是编码错误。
+var ErrIllegalTaskTransition = errors.New("task transition illegal per the transition table")
+
+// taskTransitions 是任务合法转移表（穷举定义；表外全部非法）。行 = from，
+// 列集合 = 允许的 to。图自 T2-1 六个写点原语的既有 WHERE 谓词忠实提取
+// （IMPL-ARCH-C2 显式化，语义逐条对应）：
+//
+//	MarkTaskRunning    queued → running（旧谓词 AND status = queued）
+//	RequestTaskStop    queued/running → stopping（旧幂等跳过集 = stopping/终态/deleting）
+//	RequestTaskDelete  queued/running/stopping/stopped/failed → deleting（任意非 deleting——终态行也进删除墓碑）
+//	MarkTaskStopped    stopping → stopped（旧谓词 AND status = stopping）
+//	MarkTaskFailed     queued/running/stopping → failed（旧谓词 NOT IN 终态+deleting）
+//
+// 终态（stopped/failed）除 → deleting（删除墓碑受理任何非 deleting 行）
+// 外无出边；deleting（墓碑）无出边——墓碑的出口是 DeleteTaskRow 的行删除
+// （DELETE ... AND status = deleting），不是状态转移，不入本表。
+var taskTransitions = map[TaskStatus][]TaskStatus{
+	TaskQueued:   {TaskRunning, TaskStopping, TaskFailed, TaskDeleting},
+	TaskRunning:  {TaskStopping, TaskFailed, TaskDeleting},
+	TaskStopping: {TaskStopped, TaskFailed, TaskDeleting},
+	TaskStopped:  {TaskDeleting},
+	TaskFailed:   {TaskDeleting},
+	// 删除墓碑（deleting）无出边。
+}
+
+// CanTransitionTask 报告 from → to 是否合法转移（未知状态、墓碑出边、表外
+// 组合一律非法；终态保留 → deleting 的墓碑受理边，其余出边全无）。
+func CanTransitionTask(from, to TaskStatus) bool {
+	if !from.Valid() || !to.Valid() {
+		return false
+	}
+	if from == TaskDeleting {
+		return false
+	}
+	for _, t := range taskTransitions[from] {
+		if t == to {
+			return true
+		}
+	}
+	return false
+}
+
+// LegalTaskTransitions 返回 from 的合法目标集合（穷举测试断言用；from 为
+// 墓碑或未知状态返回空）。
+func LegalTaskTransitions(from TaskStatus) []TaskStatus {
+	out := make([]TaskStatus, 0, len(taskTransitions[from]))
+	if !from.Valid() || from == TaskDeleting {
+		return out
+	}
+	return append(out, taskTransitions[from]...)
+}
+
+// AllTaskStatuses 返回任务状态全词表（穷举测试遍历用）。
+func AllTaskStatuses() []TaskStatus {
+	return []TaskStatus{TaskQueued, TaskRunning, TaskStopping, TaskStopped, TaskFailed, TaskDeleting}
 }

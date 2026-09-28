@@ -7,6 +7,9 @@ package state
 // 纪律：
 //   - 本表是任务状态机的唯一写点（API 受理/停止/删除 + 引擎 tick duty 收敛
 //     全部经本文件原语）；每次转移与审计/事件同事务 fail-closed（Outbox）；
+//     状态写经单点内核 updateTask——必须携带 PrevStatus（裸状态写结构性拒
+//     绝），CAS 前按 machine.go taskTransitions 校验（IMPL-ARCH-C2，纪律
+//     与 deployments.go 的 updateDeployment 同构）；
 //   - env 值以 envelope 密文入行（env_cipher；明文只存活于「API 解密 →
 //     底座 spec」内存链，值不进事件/审计/日志——app env 同纪律）；
 //   - 配额核对在 CreateTask 的同一事务内（非终态行并发数 + CPU/内存合计），
@@ -48,6 +51,16 @@ const (
 
 // Terminal 报告是否为终态（配额清点与列表面过滤的判据）。
 func (s TaskStatus) Terminal() bool { return s == TaskStopped || s == TaskFailed }
+
+// Valid 报告是否为状态机词表内的状态（穷举；单写点对词表外目标拒写——
+// 转移表见 machine.go taskTransitions）。
+func (s TaskStatus) Valid() bool {
+	switch s {
+	case TaskQueued, TaskRunning, TaskStopping, TaskStopped, TaskFailed, TaskDeleting:
+		return true
+	}
+	return false
+}
 
 // Task 是一条任务台账行（只读投影；env 明文不在本结构——密文列由
 // 调用方按需解密）。
@@ -339,22 +352,88 @@ func (s *Store) listTasksWhere(ctx context.Context, tail string, args ...any) ([
 	return out, nil
 }
 
+// TaskPatch 是一次任务行状态写的伴随字段集（经单点内核 updateTask 落库；
+// 与 Status/CAS 同一 UPDATE 原子生效——无「状态先行、字段后补」的重放窗）。
+type TaskPatch struct {
+	// Status 是目标状态（必填；词表外拒写）。
+	Status TaskStatus
+	// PrevStatus 是 CAS from 谓词（必填——单写点纪律 M3-2：裸状态写绕过
+	// 转移表校验与竞争保护，结构性拒绝，见 updateDeployment 同款约束）。
+	PrevStatus TaskStatus
+	// StopReason 携带时写 stop_reason（RequestTaskStop 的停止/到期原因）。
+	StopReason *string
+	// Error 携带时写 error（MarkTaskFailed 的有界化失败原因）。
+	Error *string
+	// DeleteRequested 置位时写 delete_requested = 1（删除墓碑标记）。
+	DeleteRequested bool
+	// StartedAt 置位时写 started_at = 写点墙钟（收敛到 running 的锚；时刻
+	// 由写点在事务内取 nowNano——与既有行为一致，不由调用方传入）。
+	StartedAt bool
+	// StoppedAt 置位时写 stopped_at = 写点墙钟（终态时刻锚）。
+	StoppedAt bool
+}
+
+// updateTask 是任务行状态写的单点内核（tasks.go 的意图原语共享；纪律与
+// deployments.go 的 updateDeployment 同构——M3-2/S16-C5）：Status 写必须
+// 携带 PrevStatus（缺即拒），CAS 前按 taskTransitions 校验 from→to（表外
+// 组合拒写并返回 ErrIllegalTaskTransition——即使当前行恰为 from 也不落库）。
+// 返回 hit = CAS 是否命中（false = 行不在/竞争落败；任务线既有语义是幂等
+// 零变更成功，调用方裁决，内核不报错）。
+func updateTask(ctx context.Context, db execer, id string, p TaskPatch) (bool, error) {
+	if !p.Status.Valid() {
+		return false, fmt.Errorf("state: update task %s: unknown status %q", id, p.Status)
+	}
+	if p.PrevStatus == "" {
+		return false, fmt.Errorf("state: update task %s: status writes must carry PrevStatus (single-writer discipline; a bare status write bypasses the transition table)", id)
+	}
+	if !CanTransitionTask(p.PrevStatus, p.Status) {
+		return false, fmt.Errorf("%w: tasks %s: %s -> %s", ErrIllegalTaskTransition, id, p.PrevStatus, p.Status)
+	}
+	q := `UPDATE tasks SET status = ?`
+	args := []any{string(p.Status)}
+	if p.StartedAt {
+		q += `, started_at = ?`
+		args = append(args, nowNano())
+	}
+	if p.StoppedAt {
+		q += `, stopped_at = ?`
+		args = append(args, nowNano())
+	}
+	if p.StopReason != nil {
+		q += `, stop_reason = ?`
+		args = append(args, *p.StopReason)
+	}
+	if p.Error != nil {
+		q += `, error = ?`
+		args = append(args, *p.Error)
+	}
+	if p.DeleteRequested {
+		q += `, delete_requested = ?`
+		args = append(args, 1)
+	}
+	q += ` WHERE id = ? AND status = ?`
+	args = append(args, id, string(p.PrevStatus))
+	res, err := db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return false, fmt.Errorf("state: update task %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("state: read task update count: %w", err)
+	}
+	return n > 0, nil
+}
+
 // MarkTaskRunning 把 queued 任务标为 running（CAS；changed=false = 并发
 // 已离开 queued）。事件 task.started + 审计同事务。
 func (s *Store) MarkTaskRunning(ctx context.Context, id string) (Task, bool, error) {
 	changed := false
 	err := s.InTx(ctx, func(tx *Tx) error {
-		res, err := tx.ExecContext(ctx,
-			`UPDATE tasks SET status = ?, started_at = ? WHERE id = ? AND status = ?`,
-			string(TaskRunning), nowNano(), id, string(TaskQueued))
+		hit, err := updateTask(ctx, tx.Tx, id, TaskPatch{Status: TaskRunning, PrevStatus: TaskQueued, StartedAt: true})
 		if err != nil {
 			return fmt.Errorf("state: mark task running: %w", err)
 		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("state: read task running count: %w", err)
-		}
-		if n == 0 {
+		if !hit {
 			return nil // 幂等/并发翻转：调用方按当前行判定
 		}
 		changed = true
@@ -396,17 +475,16 @@ func (s *Store) RequestTaskStop(ctx context.Context, id, reason, actorTokenID st
 			return fmt.Errorf("state: probe task stop: %w", err)
 		}
 		cur := TaskStatus(status)
-		if cur == TaskStopping || cur.Terminal() || cur == TaskDeleting {
-			return nil // 幂等：停止中/已终态/删除中零变更
+		// 幂等跳过 = 转移表无 → stopping 出边（停止中/已终态/删除中）——
+		// 与旧判定 cur == stopping || cur.Terminal() || cur == deleting 同义。
+		if !CanTransitionTask(cur, TaskStopping) {
+			return nil
 		}
-		res, err := tx.ExecContext(ctx,
-			`UPDATE tasks SET status = ?, stop_reason = ? WHERE id = ? AND status = ?`,
-			string(TaskStopping), reason, id, status)
+		hit, err := updateTask(ctx, tx.Tx, id, TaskPatch{Status: TaskStopping, PrevStatus: cur, StopReason: &reason})
 		if err != nil {
 			return fmt.Errorf("state: request task stop: %w", err)
 		}
-		n, err := res.RowsAffected()
-		if err != nil || n == 0 {
+		if !hit {
 			return nil // 并发翻转：幂等
 		}
 		changed = true
@@ -449,12 +527,18 @@ func (s *Store) RequestTaskDelete(ctx context.Context, id, actorTokenID string) 
 			}
 			return fmt.Errorf("state: probe task delete: %w", err)
 		}
-		if TaskStatus(status) == TaskDeleting {
+		cur := TaskStatus(status)
+		// 幂等跳过 = 转移表无 → deleting 出边（墓碑无自边——deleting 上
+		// 重入零变更）；其余状态全有出边（终态行也进墓碑）。
+		if !CanTransitionTask(cur, TaskDeleting) {
 			return nil
 		}
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE tasks SET status = ?, delete_requested = 1 WHERE id = ?`, string(TaskDeleting), id); err != nil {
+		hit, err := updateTask(ctx, tx.Tx, id, TaskPatch{Status: TaskDeleting, PrevStatus: cur, DeleteRequested: true})
+		if err != nil {
 			return fmt.Errorf("state: request task delete: %w", err)
+		}
+		if !hit {
+			return nil
 		}
 		changed = true
 		return tx.WriteAudit(ctx, AuditEntry{
@@ -484,14 +568,11 @@ func (s *Store) MarkTaskStopped(ctx context.Context, id string) (bool, error) {
 			}
 			return fmt.Errorf("state: probe task stopped: %w", err)
 		}
-		res, err := tx.ExecContext(ctx,
-			`UPDATE tasks SET status = ?, stopped_at = ? WHERE id = ? AND status = ?`,
-			string(TaskStopped), nowNano(), id, string(TaskStopping))
+		hit, err := updateTask(ctx, tx.Tx, id, TaskPatch{Status: TaskStopped, PrevStatus: TaskStopping, StoppedAt: true})
 		if err != nil {
 			return fmt.Errorf("state: mark task stopped: %w", err)
 		}
-		n, err := res.RowsAffected()
-		if err != nil || n == 0 {
+		if !hit {
 			return nil
 		}
 		changed = true
@@ -519,17 +600,27 @@ func (s *Store) MarkTaskFailed(ctx context.Context, id, message string) (bool, e
 	message = sanitizeTaskMessage(message)
 	changed := false
 	err := s.InTx(ctx, func(tx *Tx) error {
-		res, err := tx.ExecContext(ctx,
-			`UPDATE tasks SET status = ?, error = ?, stopped_at = ? WHERE id = ? AND status NOT IN ('stopped','failed','deleting')`,
-			string(TaskFailed), message, nowNano(), id)
+		// 旧写式无探针（NOT IN 谓词单发）；携带 PrevStatus 需知当前状态，
+		// 探针落空（行不在）与谓词落空同义——幂等零变更成功（现状 n==0 路径）。
+		row := tx.QueryRowContext(ctx, `SELECT status FROM tasks WHERE id = ?`, id)
+		var status string
+		if err := row.Scan(&status); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return fmt.Errorf("state: probe task failed: %w", err)
+		}
+		cur := TaskStatus(status)
+		// 终态粘滞 = 转移表无 → failed 出边（已终态/删除中）——与旧谓词
+		// NOT IN ('stopped','failed','deleting') 落空同义。
+		if !CanTransitionTask(cur, TaskFailed) {
+			return nil
+		}
+		hit, err := updateTask(ctx, tx.Tx, id, TaskPatch{Status: TaskFailed, PrevStatus: cur, Error: &message, StoppedAt: true})
 		if err != nil {
 			return fmt.Errorf("state: mark task failed: %w", err)
 		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("state: read task failed count: %w", err)
-		}
-		if n == 0 {
+		if !hit {
 			return nil
 		}
 		changed = true
@@ -553,6 +644,9 @@ func (s *Store) MarkTaskFailed(ctx context.Context, id, message string) (bool, e
 
 // DeleteTaskRow 删除 deleting 墓碑行（引擎已移除底座服务；事件
 // task.deleted + 审计同事务）。changed=false = 行不在 deleting（幂等）。
+//
+// 它是墓碑的出口而非状态写（DELETE 带状态 CAS，不入 updateTask 单写点，
+// 转移表亦无 deleting 出边——见 machine.go taskTransitions 注）。
 func (s *Store) DeleteTaskRow(ctx context.Context, id string) (bool, error) {
 	changed := false
 	err := s.InTx(ctx, func(tx *Tx) error {

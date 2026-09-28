@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/oklog/ulid/v2"
 )
 
 func TestTransitionMatrixExhaustive(t *testing.T) {
@@ -215,4 +217,220 @@ func eventNames(t *testing.T, st *Store) []string {
 		out = append(out, e.Name)
 	}
 	return out
+}
+
+// ─── 任务状态机（IMPL-ARCH-C2）───
+
+func TestTaskTransitionMatrixExhaustive(t *testing.T) {
+	// 合法转移全集（与 T2-1 六个写点原语的旧 WHERE 谓词一一对应：终态行
+	// 唯一出边是 → deleting 删除墓碑；deleting 无出边——出口是行删除）。
+	legal := map[TaskStatus]map[TaskStatus]bool{
+		TaskQueued:   {TaskRunning: true, TaskStopping: true, TaskFailed: true, TaskDeleting: true},
+		TaskRunning:  {TaskStopping: true, TaskFailed: true, TaskDeleting: true},
+		TaskStopping: {TaskStopped: true, TaskFailed: true, TaskDeleting: true},
+		TaskStopped:  {TaskDeleting: true},
+		TaskFailed:   {TaskDeleting: true},
+		TaskDeleting: {},
+	}
+	for _, from := range AllTaskStatuses() {
+		for _, to := range AllTaskStatuses() {
+			if got := CanTransitionTask(from, to); got != legal[from][to] {
+				t.Fatalf("CanTransitionTask(%s, %s) = %v, want %v", from, to, got, legal[from][to])
+			}
+		}
+	}
+	// 未知状态一律非法。
+	if CanTransitionTask(TaskStatus("bogus"), TaskQueued) ||
+		CanTransitionTask(TaskQueued, TaskStatus("bogus")) {
+		t.Fatal("unknown status should be illegal")
+	}
+	// 表与谓词同源自检：LegalTaskTransitions 与 CanTransitionTask 双向一致。
+	for _, from := range AllTaskStatuses() {
+		edges := map[TaskStatus]bool{}
+		for _, to := range LegalTaskTransitions(from) {
+			edges[to] = true
+			if !CanTransitionTask(from, to) {
+				t.Fatalf("LegalTaskTransitions(%s) yields %s but CanTransitionTask denies it", from, to)
+			}
+		}
+		for _, to := range AllTaskStatuses() {
+			if !edges[to] && CanTransitionTask(from, to) {
+				t.Fatalf("CanTransitionTask(%s, %s) = true but the edge is outside LegalTaskTransitions", from, to)
+			}
+		}
+	}
+}
+
+// TestTaskWritePointRejectsIllegalTransition 写点机制验收（S16-C5 任务版）：
+// updateTask 在 CAS 前按 taskTransitions 校验——表外组合（含自边缺失）即使
+// 行恰为 from 也拒写（行未动、事务回滚无事件/审计）；裸状态写（缺
+// PrevStatus）与词表外目标结构性拒绝。
+func TestTaskWritePointRejectsIllegalTransition(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "taskmachine.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	owner := seedTaskToken(t, st, "tasks")
+	id := ulid.Make().String()
+	if _, err := st.CreateTask(ctx, taskWriteFixture(owner.ID, id), DefaultTaskQuota()); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	baseline := len(eventNames(t, st)) // task.created
+
+	tryWrite := func(p TaskPatch) error {
+		t.Helper()
+		return st.InTx(ctx, func(tx *Tx) error {
+			_, err := updateTask(ctx, tx.Tx, id, p)
+			return err
+		})
+	}
+
+	// 表外组合（queued → queued：自边不存在）→ 拒写。
+	if err := tryWrite(TaskPatch{Status: TaskQueued, PrevStatus: TaskQueued}); !errors.Is(err, ErrIllegalTaskTransition) {
+		t.Fatalf("queued -> queued err = %v, want ErrIllegalTaskTransition", err)
+	}
+	// 表外组合（queued → stopped：跳过 running/stopping 的捷径）→ 拒写。
+	if err := tryWrite(TaskPatch{Status: TaskStopped, PrevStatus: TaskQueued}); !errors.Is(err, ErrIllegalTaskTransition) {
+		t.Fatalf("queued -> stopped err = %v, want ErrIllegalTaskTransition", err)
+	}
+	// 裸状态写（缺 PrevStatus）→ 结构性拒绝。
+	if err := tryWrite(TaskPatch{Status: TaskRunning}); err == nil {
+		t.Fatal("bare status write (no PrevStatus) must be rejected")
+	}
+	// 词表外目标 → 拒写。
+	if err := tryWrite(TaskPatch{Status: TaskStatus("bogus"), PrevStatus: TaskQueued}); err == nil {
+		t.Fatal("unknown target status accepted")
+	}
+	// 拒写零副作用：行仍在 queued，事件/审计未增长（事务回滚——无假信号）。
+	row, err := st.GetTask(ctx, id)
+	if err != nil || row.Status != TaskQueued {
+		t.Fatalf("row after rejections = %+v err=%v, want queued untouched", row, err)
+	}
+	if got := len(eventNames(t, st)); got != baseline {
+		t.Fatalf("events after rejections = %d, want %d (no event without a committed transition)", got, baseline)
+	}
+	auditBaseline, err := st.RecentAudits(ctx, 100)
+	if err != nil {
+		t.Fatalf("recent audits: %v", err)
+	}
+	_ = tryWrite(TaskPatch{Status: TaskQueued, PrevStatus: TaskQueued}) // 再拒一次
+	if audits, err := st.RecentAudits(ctx, 100); err != nil || len(audits) != len(auditBaseline) {
+		t.Fatalf("audits after rejections = %d, want %d (no audit without a committed transition)",
+			len(audits), len(auditBaseline))
+	}
+}
+
+// TestTaskIllegalTransitionsStayNoOps 意图原语端到端：表外组合经包装函数
+// 保持既有幂等零变更语义（行为保持硬约束——changed=false、行不动、审计/
+// 事件零增长）；n==0 幂等重入路径行为不变；行不在/越权的 ErrTaskNotFound
+// 面不变。
+func TestTaskIllegalTransitionsStayNoOps(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "tasknoop.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	owner := seedTaskToken(t, st, "tasks")
+	newTask := func() string {
+		t.Helper()
+		id := ulid.Make().String()
+		if _, err := st.CreateTask(ctx, taskWriteFixture(owner.ID, id), DefaultTaskQuota()); err != nil {
+			t.Fatalf("create task: %v", err)
+		}
+		return id
+	}
+
+	// 1. stopped 行（终态）：除 →deleting 外全部表外 → 幂等零变更。
+	stoppedID := newTask()
+	if _, changed, err := st.MarkTaskRunning(ctx, stoppedID); err != nil || !changed {
+		t.Fatalf("mark running: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := st.RequestTaskStop(ctx, stoppedID, "owner", ""); err != nil || !changed {
+		t.Fatalf("request stop: changed=%v err=%v", changed, err)
+	}
+	if changed, err := st.MarkTaskStopped(ctx, stoppedID); err != nil || !changed {
+		t.Fatalf("mark stopped: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := st.MarkTaskRunning(ctx, stoppedID); err != nil || changed {
+		t.Fatalf("running CAS miss on stopped row: changed=%v err=%v", changed, err)
+	}
+	if changed, err := st.MarkTaskFailed(ctx, stoppedID, "late failure"); err != nil || changed {
+		t.Fatalf("failed on terminal row: changed=%v err=%v (sticky, no error)", changed, err)
+	}
+	if _, changed, err := st.RequestTaskStop(ctx, stoppedID, "owner", ""); err != nil || changed {
+		t.Fatalf("stop on terminal row: changed=%v err=%v (idempotent no-change)", changed, err)
+	}
+	if row, err := st.GetTask(ctx, stoppedID); err != nil || row.Status != TaskStopped {
+		t.Fatalf("row after terminal no-ops = %+v err=%v, want stopped untouched", row, err)
+	}
+	// 终态行的唯一合法出边：→ deleting 墓碑（RequestTaskDelete）。
+	if _, changed, err := st.RequestTaskDelete(ctx, stoppedID, owner.ID); err != nil || !changed {
+		t.Fatalf("terminal row to deleting: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := st.RequestTaskDelete(ctx, stoppedID, owner.ID); err != nil || changed {
+		t.Fatalf("delete reentry (n==0 path): changed=%v err=%v", changed, err)
+	}
+	if changed, err := st.DeleteTaskRow(ctx, stoppedID); err != nil || !changed {
+		t.Fatalf("delete row: changed=%v err=%v", changed, err)
+	}
+	if changed, err := st.DeleteTaskRow(ctx, stoppedID); err != nil || changed {
+		t.Fatalf("delete row reentry: changed=%v err=%v", changed, err)
+	}
+
+	// 2. stopping 行：重入 stop/删除受理零变更；running→stopped 捷径被 CAS 拦下。
+	stoppingID := newTask()
+	if _, changed, err := st.MarkTaskRunning(ctx, stoppingID); err != nil || !changed {
+		t.Fatalf("mark running: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := st.RequestTaskStop(ctx, stoppingID, "expired", ""); err != nil || !changed {
+		t.Fatalf("request stop expired: changed=%v err=%v", changed, err)
+	}
+	if _, changed, err := st.RequestTaskStop(ctx, stoppingID, "expired", ""); err != nil || changed {
+		t.Fatalf("stop reentry (n==0 path): changed=%v err=%v", changed, err)
+	}
+	if changed, err := st.MarkTaskStopped(ctx, stoppingID); err != nil || !changed {
+		t.Fatalf("mark stopped: changed=%v err=%v", changed, err)
+	}
+
+	// 3. 行不在：可识别错误面不变（stop/delete 显式 ErrTaskNotFound；
+	// running 经事务外重读 ErrTaskNotFound；failed 幂等零变更）。
+	missing := ulid.Make().String()
+	if _, _, err := st.RequestTaskStop(ctx, missing, "owner", ""); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("stop missing row err = %v, want ErrTaskNotFound", err)
+	}
+	if _, _, err := st.RequestTaskDelete(ctx, missing, owner.ID); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("delete missing row err = %v, want ErrTaskNotFound", err)
+	}
+	if changed, err := st.MarkTaskFailed(ctx, missing, "boom"); err != nil || changed {
+		t.Fatalf("failed on missing row: changed=%v err=%v (idempotent no-row)", changed, err)
+	}
+	if _, _, err := st.MarkTaskRunning(ctx, missing); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("running missing row err = %v, want ErrTaskNotFound", err)
+	}
+
+	// 4. 事件披露面：只有真实落库的转移产生事件，幂等重入/表外组合零事件。
+	var got []string
+	events, err := st.EventsSince(ctx, 0, 100)
+	if err != nil {
+		t.Fatalf("events since: %v", err)
+	}
+	for _, e := range events {
+		got = append(got, e.Name)
+	}
+	want := map[string]int{
+		"task.created": 2, "task.started": 2, "task.expired": 1,
+		"task.stopped": 2, "task.deleted": 1,
+	}
+	counts := map[string]int{}
+	for _, name := range got {
+		counts[name]++
+	}
+	for name, n := range want {
+		if counts[name] != n {
+			t.Fatalf("event %s count = %d, want %d (all=%v)", name, counts[name], n, counts)
+		}
+	}
 }
