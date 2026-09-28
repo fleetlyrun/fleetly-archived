@@ -1881,6 +1881,8 @@ $ sh -n <提取 README+runbook 全部 bash 块> → exit 0；两文件 grep '2>/
 
 **验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认四项裁决与八项偏离：①镜像形态 = sha tag（Redeploy 重解析 = always 等价；硬冻结备选写进 README/runbook）；②宿主回环端口不再需要（T1-6 已落地，隧道兜底退 T3-1）；③Config target 逐字对齐原 bind 路径；④DT-8 数据面 = 整目录 AOF 复制（机制修正；验收会话 Redis 实验复现：RDB-only 静默空库 / 整目录数据在场）或明示清零，epoch 比对为决定性判据；及全部登记偏离（recoverprobe 支撑件、mlbridge nc 探针、sha tag、mlbridge.yaml 副本、预期失败→scale=0 窗口、base URL 占位、占位符引号化、DT-8 修正）。真机割接段待使用者窗口按 runbook 执行。
 
+**验收复验修正（2026-09-28，T2-4 复核发现）**：本票 compose 的 messageloop `command: ["--config", …]` 与平台语义冲突——fleetly 的 `command` = **覆盖镜像 ENTRYPOINT**（`internal/substrate/services.go:172` 的 `ContainerSpec.Command`；白名单示例即全命令形态 `node worker.js`），而 messageloop 镜像 ENTRYPOINT 是 `/usr/local/bin/messageloop`、`--config …` 只是 CMD；原写法会以 `--config` 为 entrypoint 启动失败。已修正为全命令形态 `["/usr/local/bin/messageloop", "--config", "/etc/messageloop/mlbridge.yaml"]`（messageloop 仓，README §2 第 10 行同步），修正后 compose 复验 `valid (spec_hash b28536643e7e)`。
+
 staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构）：
 
 - runbook §2 两阶段 bootstrap 的实机失败判定与 `env/configs/domains` 实写；
@@ -1994,7 +1996,7 @@ staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构�
 - `configs/config.yaml.template`：functions 段改 fleetly（docker host/network 删除、dispatcher 多节点键删除、execution.api_base_url 说明改成员别名）。
 - `docker/dokploy/config.yaml` + `docker-compose.yml` + `README.md`：dispatcher 服务去 docker.sock 挂载/root user/多节点 env，改 fleetly endpoint/token/app/members 注入；镜像持久化模型改映射描述；文首标注 T2-4 割接将整体改写。
 - `docs/developer/03-configuration.md`：§1.5 functions 配置参考全量改写（fleetly 段/删除键/校验表/残留键清单）。
-- `docs/developer/08-functions.md` / `13-operations.md`：文首加 IMPL-T2-3 迁移注（docker.sock/tw-func 网络/routing_mode/build_node 表述按历史形态阅读；执行面契约不变）。
+- `docs/developer/08-functions.md` / `13-operations.md`：文首加 IMPL-T2-3 迁移注（docker.sock/tw-func 网络/routing_mode/build_node 表述按历史形态阅读；执行面契约不变）；08-functions 的 Functions 配置表逐行标注删除键（`（已删除）` + 现行 fleetly 行）。
 - `.github/workflows/ci.yml`：删除 docker.sock 时代的 node:18-alpine 预拉与 `TestDockerExecutor_` 防假绿步骤、`TORCHWOOD_RUN_DOCKER_TESTS` env（无消费方）。
 - `go.mod` / `go.sum`：`go mod tidy`——docker/docker、docker/go-connections、opencontainers/image-spec、containerd/errdefs 退出直接依赖（docker 仍以 indirect 出现在 module 图：golang-migrate 的 dktest 测试依赖，生产依赖图零 docker 包，守卫②钉死）。
 
@@ -2014,17 +2016,23 @@ staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构�
 一手验证证据（原始输出摘要）：
 
 ```
-$ go test -count=1 ./...        （torchwood 仓，本地 Postgres/Redis/MinIO + 测试 env）
-（两轮全量并行跑：本票改动面全绿（dispatcher 8.6s / config / bootkit / infra/functions /
- app/functions / runtime / cmd 等）。三个与本票零文件交集的重包（internal/app/client
- 433s、internal/app/server 134-540s、internal/infra/documentdb 450s，单跑均 ok）在
- 全量并行下受本机单 Postgres/Redis + CPU 争用影响超过 go test 缺省 10m/包超时；
- 逐包单跑复验全绿（原始输出见下）；`-timeout 30m` 全量复跑见下节）
+$ go test -count=1 -p 4 -timeout 30m ./...   （torchwood 仓；本地 Postgres/Redis/MinIO + .env 同源
+                                              S3 凭据；-p 4 对齐 CI 默认并发度）
+（全库全绿 rc=0：dispatcher 10.4s / cmd/server 0.6s / cmd/worker 1.2s / internal/pkg/config 0.1s /
+ bootkit 9.8s / infra/functions 1.1s / app/functions 16.2s / documentdb 320s / app/client 410s 等；
+ 关键行：ok github.com/torchwoodcloud/torchwood/dispatcher 10.398s）
+
+（环境注记：本机 20 逻辑核，go test 缺省 -p 20 会让约 30 个集成包同挤单 Postgres/Redis/MinIO，
+ 重包触发 go test 10m/包或测试内 120s 预算超时（client/server/storage/events/documentdb，
+ 均与本票零文件交集；逐包单跑全绿：client 433s、server 134s、documentdb 450s、storage 4.9s、
+ events 2.4s、cmd/server 0.5s——cmd/server 首轮失败还叠加了缺 MinIO 凭据 env 的 readiness 拒；
+ -p 4 复跑即全绿）。故本票以 -p 4 全量绿为准，如实登记本机争用现象。）
 
 $ go vet ./...                  （零输出，rc=0）
 $ gofmt -l dispatcher internal cmd configs   （零输出）
 $ golangci-lint run ./dispatcher/... ./internal/pkg/config/... ./internal/pkg/bootkit/... ./internal/infra/functions/... ./cmd/dispatcher/...
 0 issues.
+$ go test -race -count=1 ./dispatcher/...    （ok，8.774s）
 $ buf lint（主模块）rc=0；cd third_party/fleetly && buf lint rc=0；buf breaking --against origin/main rc=0
 $ protoc config.proto 二次生成 sha256 一致（F6EB69CC…）；buf generate（vendored）二次生成 sha256 一致（667E6FC4…）
 
@@ -2104,6 +2112,123 @@ staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构�
 - **dispatcher→fleetlyd TLS**：当前明文（栈内）；TLS 化与凭证面挂后续票。
 - **函数回访平台 API（成员挂靠别名 `<app>-<service>`）**：需要真实 fleetly app + server 服务存在才能验证（T2-4 割接时按成员声明挂靠后复验）。
 - **internal 变体不可信函数端到端**：T2-1 已实证 internal 出网封死；dispatcher 侧 internal scope 路径单测覆盖（e2e 用普通变体）。
+
+### IMPL-T2-4 方案可行性审查（2026-09-28，实现会话）
+
+**结论：通过（附 4 处设计前提裁决/修正、3 处跨仓登记；不停工理由见文末）。** 票面「缺口/矛盾 → 停」的强制检查逐项执行后：全部现状锚点成立；发现**一处设计档前提被一手证据证伪**（OT-3 称「GHCR 镜像本就内含 migrations/initdb」——实测**不含**），另有托管模板编码、init job 缺序、`command` 语义三处票面未展开的机制面；四处均给出可复跑、有证据的收敛路径，且不改变 T2 出口目标与产出物形态，按纪律全部登记待用户在验收时追认/驳回。改动全部落 torchwood 仓（基线 `78ea1a4`，与 origin/main 同步、工作区干净），fleetly 仓只写本记录。
+
+#### A. 逐行核对 dokploy compose × 受控子集白名单（改写清单终态）
+
+受控面真值 = `internal/compose/validate.go`（白名单/拒绝清单）+ `testdata/whitelist.golden`；现役形态真值 = torchwood 仓 `docker/dokploy/docker-compose.yml`。逐项裁决共 31 行，终态表落在 torchwood 仓 `docker/fleetly/README.md` §2（含「承接面」列）。关键裁决点（与票面字面的差异均在此）：
+
+| # | 票面预期 | 审查实测 | 裁决 |
+|---|---|---|---|
+| 1 | `migrations/initdb` 目录「确认 GHCR 镜像内含后删除 bind」 | **不含**：`docker run --entrypoint sh ghcr.io/torchwoodcloud/torchwood:sha-78ea1a4 -c 'ls -la /app; find / -maxdepth 4 -name "*.up.sql"'` → `/app` 仅 `configs/`（且只有 `config.yaml.template`），无 `db/`、零 `.up.sql`；root Dockerfile final stage 也只 COPY `out/*` + `configs/` | 迁移源改 **`github://torchwoodcloud/torchwood/db/migrations#<commit>`**（migrate 镜像内置 github source driver，`#ref` 钉 commit 与镜像 tag 同 commit；本地对 fresh percona PG18 全量 12 版本实证通过）；**不**把目录塞 Config（OT-3 明文禁目录级文件树）；匿名 API 60 req/h/IP 的限额与 file:// 兜底写入 runbook §0.3/§9；「烘 migrations 镜像」列为建议（超出票面产出物） |
+| 2 | `migrate → fleetly.job: init`；`db-grants`/`roles-sig` 归属裁决 | 平台 init job **并行、无 depends_on**（T1-3 实现 + T2-0④ spike 结论）；三作业的镜像/职责互不兼容（migrate 二进制 / psql / torchwood CLI），无法并成一个 | **三个 init job 全保留**；`db-bootstrap`（role 创建 + grants 合并，替代 initdb 钩子 + db-grants）与 `roles-sig` 带 **5s×48 有界等待环**补序；缺账号/缺 JWT 的失败 fail-closed 点名键名 |
+| 3 | 「`bootstrap-roles.sql` → Config」 | 成立；但托管实例无 initdb 钩子，`tw_authenticator` 的创建无处安放 | 新增 **`bootstrap-runtime.sql`**（Config）：`ALTER DATABASE client_encoding` 兜底 + 幂等 `CREATE ROLE` + `ALTER ROLE PASSWORD :'auth_password'`（psql 变量注入，口令不落文件）；`bootstrap-roles.sql` 同内容副本 + 两份文件头注同步义务 |
+| 4 | compose 的 `command` 形态 | **`command` = 覆盖镜像 ENTRYPOINT**：代码链 `compose/normalize.go:244 → planner.go:355 → substrate/services.go:172（container.Command = spec.Command）`；swarm 一手实证 `docker service create --entrypoint /bin/echo postgres:18 PROBE-ENTRYPOINT-OVERRIDE` → 任务日志即 `PROBE-ENTRYPOINT-OVERRIDE` | worker/dispatcher/packer 用二进制绝对路径；silo 直接调 `/usr/bin/silo server …`（镜像无 `minio` 二进制，entrypoint 脚本才做 minio→silo 转译）；作业用 `sh -c`（`$VAR` 由容器 shell 展开，平台禁插值）；**跨票观察**：T1-5 messageloop compose 的 `command: ["--config", …]` 是同型隐患（未改 messageloop 仓，登记供该线验收时复核） |
+| 5 | 「postgres dump/restore 进托管实例的步骤与配额」 | dump 不含全局角色；恢复的 ACL 引用 `tw_owner/tw_app/tw_system/tw_authenticator` | 顺序 = 托管实例 ready → 迁移（角色）→ `bootstrap-runtime.sql`（运行账号）→ `pg_dump -Fc` → `pg_restore --clean --if-exists --no-owner`；本地全链实证（数据/ACL/版本/属主/编码设置五面断言，附录 A⑤） |
+| 6 | 函数网络受控回访 | T2-3 契约：`functions.fleetly{endpoint,token,app,network_members}`；`EnsureTaskNetwork` 把成员声明落 state、经发布管线重部署挂靠（别名 `<app>-<service>`） | compose 字面量 `APP=torchwood` / `NETWORK_MEMBERS=dispatcher,server`，回访地址 `http://torchwood-server:9080`；与 per-task 动态 attach 禁令一致（无任何 attach 入参面） |
+| 7 | redis/minio 卷「迁移或明示重置（DT-8）」 | 平台卷**无 label、按命名约定归属**（naming.go:158-162），Swarm 按名复用同名卷；migrate 阶段不预建卷 | runbook 先预建 `fleetly-torchwood-{redis_data,minio_data}-<appid8>`（`apps get --json` 输出 `id` 字段取前 8 位）再整目录复制（T1-5 先例机制）；两卷各给「回灌 / 明示清零」二选一与割接记录栏 |
+| 8 | 域名 9080 http + 9060 h2c / 机具令牌 | CLI 面核对：`domains add --service/--port/--protocol`、`tokens create --machine --scopes tasks,build`（scope 词表含 tasks/build，auth.go:235） | README §3/§4 给出命令；`TORCHWOOD_FUNCTIONS_FLEETLY_TOKEN` 经 `env set` 注入（明文只回一次） |
+| 9 | 其他前置 | ① **percona 托管模板编码缺口**：模板不带 `POSTGRES_INITDB_ARGS`，镜像 locale=POSIX → 实例 `server_encoding=SQL_ASCII`；实测 `tw_authenticator`/roles-sig 连接被 pgdriver 拒（`requires … client_encoding=UTF8`）；② DT-10 `fleetly.env.required` **未实现**（仅设计档）；③ 平台 env 是 **app 级**；④ dispatcher→fleetlyd 为明文 gRPC（T2-3 已登记），staging 控制面 TLS 形态构成割接硬前置 | ① `bootstrap-runtime.sql` 的 `ALTER DATABASE … SET client_encoding='UTF8'` 兜底（Database 级设置、不随对象恢复丢失；本地实证兜底前失败/兜底后全链通过），**建议平台模板补 `--encoding=UTF8`**（跨仓建议）；② runbook §0/§2 人工清单替代；③/④ 如实写进 README §7 与 runbook §9 |
+
+**为什么不停工**：四处发现中，#1/#4 是「票面字面载体不可行/语义需换写法」——收敛路径均为平台既有能力且已本地实证；#9① 是托管模板参数缺口——兜底不改变运行语义边界（SQL_ASCII + UTF8 客户端：零字节转换存取，已在 README/runbook 诚实标注字符函数差异）；#2/#9②③④ 是平台现状的确定性边界，登记即披露。全部裁决不影响 T2 出口目标（七常驻→六常驻 + 三 init job 的可复跑 compose/README/runbook），且未虚构真机结果。若用户驳回 #1（要求烘镜像）或 #9①（要求先修模板），改动面小且已定位到文件级。
+
+### IMPL-T2-4 实施记录（2026-09-28，实现会话）
+
+**状态：实现完成，待用户验收（未 commit）。** 改动全部落在 torchwood 仓（基线 `78ea1a4`，与 origin/main 同步）；fleetly 仓仅本文档。**本票未执行真机割接**（无 staging 凭据/访问权）：真机段在 runbook 逐处标注「待使用者执行窗口」，本地等价实证（迁移/账号/授权/roles-sig/dump-restore/卷/命令语义/compose 校验）附原始输出。
+
+变更文件清单（每文件一句）：
+
+- `docker/fleetly/docker-compose.yml`（新）：fleetly 受控子集全栈——redis/minio 留栈内（named volume + 探针）、server/worker/dispatcher/packer 六常驻（健康探针）、三个 init job（migrate / db-bootstrap / roles-sig，`fleetly.job: init` + 有界等待环）、postgres 从栈内删除（`fleetly.databases` label 接托管实例）、config/SQL 全走 Config 资源；平台 env 键名与现役 dokploy 同名（README §4 对照）。
+- `docker/fleetly/README.md`（新）：改写清单 31 行对照表（dokploy → fleetly → 承接面）、域名两条命令、机具令牌铸造与注入、env/Config 清单、镜像引用裁决（sha tag + migrate ref 成对升级）、割接步骤概要、验收探针与诚实标注、日常运维。
+- `docker/fleetly/cutover-runbook.md`（新）：§0 前置检查（控制面/托管实例/dump 配额/旧栈盘点/DNS/TTL/辅助函数）→ §2 两阶段 bootstrap（首部署预期失败）→ §3 DT-8 数据面（3.1 postgres dump/restore 全链；3.2 redis 整目录复制或明示清零；3.3 minio 整目录复制或明示清零）→ §4 正式部署 → §5 DNS/证书 → §6 验收（健康/数据面/函数端到端（部署 zip→执行→回收）/域名）→ §7 割接记录模板（数据决策三栏）→ §8 回滚（dokploy 栈未拆）→ §9 待窗口项与已知风险；附录 A 本地等价实证原始输出。
+- `docker/fleetly/config.yaml`（新）：`docker/dokploy/config.yaml` 的 fleetly 形态副本（头注：上传为平台 Config；与 dokploy 侧同改的同步义务）。
+- `docker/fleetly/bootstrap-runtime.sql`（新）：托管实例运行账号引导（`ALTER DATABASE client_encoding` 兜底 + 幂等 `CREATE ROLE tw_authenticator` + `ALTER ROLE PASSWORD :'auth_password'`）。
+- `docker/fleetly/bootstrap-roles.sql`（新）：`docker/dokploy/bootstrap-roles.sql` 同内容副本（头注：上传 Config、db-bootstrap 执行、同步义务）。
+- `docker/dokploy/README.md`：§11 文件清单加 `../fleetly/` 行；新增 §12「fleetly 部署（割接目标形态，IMPL-T2-4）」指引章（关键差异 + 托管实例编码运维注记）。
+- `docker/dokploy/config.yaml`、`docker/dokploy/bootstrap-roles.sql`：头注加「fleetly 形态副本见 docker/fleetly/…，变更两处同改」（内容零改动）。
+
+一手验证证据（原始输出摘要）：
+
+```
+$ cd D:/Codes/qiulin/fleetly && go run ./cmd/fleetly validate D:/Codes/qiulin/torchwood/docker/fleetly/docker-compose.yml
+torchwood: valid (spec_hash 1caeb553645a, 9 services, 2 volumes)          # 零告警，exit 0
+$ go run ./cmd/fleetly validate --json <同上>
+{"valid": true, "name": "torchwood",
+ "spec_hash": "1caeb553645a4c85d1b08c99a2ee5d0bdb481958eee7dc97f17d829fe6fe7e39",
+ "services": 9, "volumes": 2}
+$ go run ./cmd/fleetly validate <dokploy 现役 compose>
+E_COMPOSE_UNSUPPORTED: service "db-grants" uses an unsupported field "depends_on" …
+exit status 1                                                              # 改写必要性成立（首错）
+
+$ 镜像内含实证（ghcr 匿名可拉）：
+ghcr.io/torchwoodcloud/torchwood:sha-78ea1a4 → sha256:fe5314d776163cd5ff366914de30c13307697474959d9e800a526ab901474e78（与 latest 同 digest）
+docker run --rm --entrypoint sh ghcr.io/torchwoodcloud/torchwood:sha-78ea1a4 -c 'ls -la /app; find / -maxdepth 4 -name "*.up.sql" -print'
+→ /app 仅 configs/（config.yaml.template）；零 *.up.sql；无 /db 目录
+
+$ swarm command 语义实证（本地 Docker 29.7.2，swarm active）：
+docker service create --name probe-ep2 --entrypoint /bin/echo postgres:18 PROBE-ENTRYPOINT-OVERRIDE
+docker service logs probe-ep2 → PROBE-ENTRYPOINT-OVERRIDE      # Command 覆盖 ENTRYPOINT
+
+$ 本地等价探针（probe 网络 tw-t24-probe；percona PG18 + migrate v4.18.1 + 真实应用镜像）：
+① github://#78ea1a4 对 fresh percona 全量 up → Finished after 10.4s（12/12）；二次 up → "no change"
+② 匿名配额反例：GET api.github.com/…/db/migrations?ref=78ea1a4 → 403 rate limit exceeded（18m17s 后重置）
+③ 兜底腿：-path=/migrations（file://，仓库直挂）→ 12/12；bootstrap-runtime.sql 实际文件
+   → ALTER DATABASE / DO / ALTER ROLE 全绿；新连接 ce=UTF8|scs=on|super=false|bypass=false
+   （兜底前实证：database ping failed: pgdriver: requires … client_encoding=UTF8）
+④ 运行态账号 + roles-sig：真实 torchwood 二进制 → "roles sig key synced into public.tw_secrets
+   (current slot…)"；schema repair --dry-run 对 tw_authenticator DSN → exit 0
+⑤ dump/restore 全链：旧库（迁移 + 授权 + 数据）→ pg_dump -Fc → pg_restore --clean --if-exists
+   --no-owner 进先迁移的新库 → 断言 marker/public 数据/ACL（tw_app schema USAGE、
+   tw_authenticator 表 SELECT、DB CONNECT、角色 membership）/migr_version=12/owner=fleetly 全绿；
+   复跑（bootstrap-runtime → 再 restore）→ after_restore ce=UTF8 + marker 在场
+⑥ silo command 形态：--entrypoint /usr/bin/silo … server /data --console-address :9001
+   → API/WebUI 监听 + /dev/tcp/127.0.0.1/9000 探通
+⑦ 文档可复跑性：docker/fleetly/README.md + cutover-runbook.md 共 17 个 bash 块 sh -n 全过；
+   两文件 + compose 全文 `2>/dev/null` 零命中（dokploy README 一处既有 ssh 示例块不过
+   sh -n——本票新增内容零 bash 块，不属本票范围）
+```
+
+守卫与验收条款对应表：
+
+| 票面完成标准 | 证据 |
+|---|---|
+| compose 过 fleetly validate 零告警 | 原始输出上述（spec_hash `1caeb553645a…`，9 services / 2 volumes） |
+| 白名单逐行核对表 | 审查 §A + torchwood 仓 README §2（31 行终态表） |
+| runbook 可复跑（sh -n 全过；禁 2>/dev/null） | 17/17 块过；零命中（⑦） |
+| 函数端到端验收段（部署 zip→执行→回收）写入 runbook | runbook §6.4（`functions create` → `deployments create --code` → `executions create` → `tasks ls` 回收观测 → 清理） |
+| 真机段标注待窗口 | runbook 状态表 + §9 逐项；README 状态表 |
+| 输出变更清单/审查结论/偏离清单；不 commit | 本文档 + git status（torchwood：3 改 + `docker/fleetly/` 新目录未跟踪） |
+
+偏离清单（审查裁决 → 实施落点，均按纪律登记）：
+
+1. **迁移源 = `github://…/db/migrations#<commit>`**（票面「确认镜像内含后删 bind」前提证伪）：钉 commit 与镜像 sha tag 同 commit；runbook §0.3 配额 preflight + §3.1.2 宿主机 file:// 兜底；「烘 torchwood-migrations 镜像」列为建议（跨仓 follow-up）。
+2. **三 init job 全保留 + 有界等待环**（票面授权裁决项落为「并行无缺序 → 环补序」）：db-bootstrap 合并 role 创建与授权（替代 initdb + db-grants 两处职责），roles-sig 独立；失败 fail-closed 且点名。
+3. **postgres 割接顺序 = 先迁移/账号、后 `pg_restore --clean --no-owner`**（dump 不含角色；ACL 前提）：本地全链实证；`TORCHWOOD_DATA_DATABASE_SOURCE` 显式 env set（物化 env 的用户是 owner `fleetly`，运行态必须 `tw_authenticator`）。
+4. **redis/minio 目标卷预建**（平台卷无 label、命名约定归属；栈内零服务窗口内手术）：`appid8` 取 `apps get --json` 的 `id` 前 8 位（`naming.VolumeName` 公式实证）；两卷各留「明示清零」备选与记录栏。
+5. **percona 模板编码兜底**（跨仓缺口登记）：`client_encoding=UTF8` 数据库级兜底 + 模板补 `POSTGRES_INITDB_ARGS` 建议；诚实标注 `server_encoding=SQL_ASCII` 的字符函数差异。
+6. **`bootstrap-runtime.sql` 新文件**（票面只列 bootstrap-roles.sql）：托管实例无 initdb 钩子的最小补面；psql 变量注入口令（不落文件）。
+7. **worker 健康探针 = `pgrep -x worker`**（票面未列）：零告警要求；镜像无 HTTP 健康面，深度检查留验收探针（README §7 诚实标注）。
+8. **Config 目录自足副本**：`config.yaml` / `bootstrap-roles.sql` 在 docker/fleetly/ 留同内容副本（T1-5 先例），头注双向同步义务。
+9. **跨票观察（未改动）**：T1-5 messageloop compose 的 `command: ["--config", …]` 与平台「command 覆盖 ENTRYPOINT」语义冲突（同型隐患，登记供该线复核）。
+10. **平台 env app 级 / DT-10 未实现 / dispatcher→fleetlyd 明文端点前提**：登记为平台现状边界（README §7、runbook §9），未改平台面。
+11. **两阶段 bootstrap 的失败点前移（沿 T1-5 模式的机制差异）**：T1-5 的首失败发生在健康门（服务已创建、失败后 scale=0）；本栈首失败发生在 **preparing 的 Config 前哨**（`E_CONFIG_NOT_FOUND`，早于服务创建）——窗口形态因此是「栈内零服务」而非「scale=0」，数据搬运的目标不变且更干净（零连接、零任务）。runbook §2/§3.0 按此口径书写（不声称 scale=0）。
+
+**验收追认（2026-09-28）**：用户以「提交推送」指示验收，追认四项前提修正与十一项偏离：①迁移源 = `github://` 钉 commit（「镜像内含 migrations」证伪后的替代 + `file://` 兜底与配额 preflight）；②三 init job 全保留 + 有界等待环补序；③PG 割接顺序 = 先迁移/账号、后 `pg_restore --clean --if-exists --no-owner`；④redis/minio 预建平台命名卷 + 整目录复制（或明示清零）；及全部登记偏离（`bootstrap-runtime.sql` 新增、worker 探针、Config 副本、percona 编码兜底与跨仓模板建议、失败点前移零服务窗口、平台边界登记、T1-5 命令语义修正、Config 目录自足等）。真机割接段待使用者窗口按 runbook 执行。
+
+staging/真机待执行项（本环境无 staging 凭据/访问权，未虚构）：
+
+- runbook §0.2 托管实例创建/reveal 与 §0.4 旧栈盘点、§0.5 DNS TTL 调整；
+- §2 首部署失败判定（`E_CONFIG_NOT_FOUND`）与 env/Config/domains/token 实写；
+- §3.1 dump/restore 真机全链（本地等价实证已附；真机另需确认旧库版本一致性、磁盘空间与 `pg_restore --clean` 对存量连接的占用——§3 假定了栈内零服务窗口）；
+- §3.2/§3.3 卷复制（本地机制实证随 T1-5；真机另需确认旧容器/卷名与 minio 数据规模）；
+- §4 正式部署的 init job 实跑（尤其 GitHub 配额与等待环行为）；
+- §5 DNS 切换 + ACME HTTP-01 签发（与 T1-1⑤ 一并复验）；
+- §6.4 函数端到端与任务回收（含首次成员挂靠触发的平台重部署滚动）；§6.5 gRPC h2c 连通；
+- **窗口前硬前置**：`TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT` 的容器可达性与明文/TLS 兼容（staging 控制面 TLS 现状 vs T2-3 明文客户端）；
+- 建议窗口内同时核对：`W_ENV_PLATFORM_OVERRIDE` 对平台 env 键的呈现；`fleetly placement show` 的卷注册与 §3.2.1 预建卷名一致。
 
 
 
