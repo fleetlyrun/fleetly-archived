@@ -434,10 +434,7 @@ func resolveBuildContext(base string, svc compose.Service) (string, error) {
 func (s *BuildsService) GetBuild(ctx context.Context, req *serverv1.GetBuildRequest) (*serverv1.GetBuildResponse, error) {
 	rec, err := s.st.GetBuild(ctx, req.GetId())
 	if err != nil {
-		if errors.Is(err, state.ErrBuildNotFound) {
-			return nil, notFound("build not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.GetBuildResponse{Build: buildView(rec, s.appNameByID(ctx, rec.AppID))}, nil
 }

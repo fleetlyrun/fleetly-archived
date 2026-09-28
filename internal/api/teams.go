@@ -200,33 +200,12 @@ func teamRoleRank(role string) int {
 	return 0
 }
 
-// mapTeamErr 是 state 团队哨兵 → api 语义的唯一映射点（NotFound/Conflict
-// 走退化信封；E_TEAM_LAST_OWNER / E_INVITE_INVALID 为注册表稳定码）。
-func mapTeamErr(err error) error {
-	switch {
-	case errors.Is(err, state.ErrTeamNotFound):
-		return notFound("team not found")
-	case errors.Is(err, state.ErrTeamSlugTaken):
-		return conflict("team slug already taken")
-	case errors.Is(err, state.ErrTeamNotEmpty):
-		return conflict("team still has projects; delete the (empty) projects first")
-	case errors.Is(err, state.ErrTeamMemberExists):
-		return conflict("user is already a team member")
-	case errors.Is(err, state.ErrTeamMemberNotFound):
-		return notFound("team member not found")
-	case errors.Is(err, state.ErrTeamLastOwner):
-		return apperr.New("E_TEAM_LAST_OWNER",
-			"cannot remove or demote the last owner of the team (grant the owner role to another member first)")
-	case errors.Is(err, state.ErrInviteNotFound):
-		return notFound("invite not found")
-	case errors.Is(err, state.ErrInviteInvalid):
-		// 一次性凭据：四类不可消费形态统一同码，不泄漏具体状态（§3.1）。
-		return apperr.New("E_INVITE_INVALID", "invite is invalid, expired, or already used")
-	default:
-		return err
-	}
-}
-
+// 团队面 state 哨兵（ErrTeamNotFound/ErrTeamSlugTaken/ErrTeamNotEmpty/
+// ErrTeamMemberExists/ErrTeamMemberNotFound/ErrTeamLastOwner/ErrInviteNotFound/
+// ErrInviteInvalid）的 api 语义（退化信封 + E_TEAM_LAST_OWNER/E_INVITE_INVALID
+// 注册表稳定码）已收进 errors.go 的哨兵登记表——本文件经 mapStoreErr 消费；
+// 角色门（下方 requireTeam* 族）的 ErrTeamMemberNotFound 是「查无成员关系 →
+// 403」的调用面特例，不入表（同哨兵异语义：成员操作面 404、权限门 403）。
 // ── TeamsService RPC ─────────────────────────────────────────────────────────
 
 // CreateTeam 建队 + 建队者 owner 落位（§3.1）——组合写入走 state 单写点
@@ -248,7 +227,7 @@ func (s *TeamsService) CreateTeam(ctx context.Context, req *serverv1.CreateTeamR
 		ActorTokenID: callerTokenID(ctx),
 	})
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.CreateTeamResponse{Team: teamView(t)}, nil
 }
@@ -298,7 +277,7 @@ func (s *TeamsService) GetTeam(ctx context.Context, req *serverv1.GetTeamRequest
 	}
 	t, err := s.st.GetTeam(ctx, req.GetId())
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.GetTeamResponse{Team: teamView(t)}, nil
 }
@@ -314,7 +293,7 @@ func (s *TeamsService) UpdateTeam(ctx context.Context, req *serverv1.UpdateTeamR
 		ActorUserID: principalOf(ctx).UserID,
 	})
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.UpdateTeamResponse{Team: teamView(t)}, nil
 }
@@ -328,14 +307,14 @@ func (s *TeamsService) DeleteTeam(ctx context.Context, req *serverv1.DeleteTeamR
 	}
 	t, err := s.st.GetTeam(ctx, req.GetId())
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	if req.GetConfirm() != t.Slug {
 		return nil, statusInvalidArgument(
 			"destructive operation: pass confirm=\"" + t.Slug + "\" to accept team deletion (projects must be empty; membership and invites are removed with the team)")
 	}
 	if err := s.st.DeleteTeam(ctx, req.GetId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.DeleteTeamResponse{}, nil
 }
@@ -372,7 +351,7 @@ func (s *TeamsService) SetTeamMemberRole(ctx context.Context, req *serverv1.SetT
 	}
 	m, err := s.st.SetMemberRole(ctx, req.GetTeamId(), req.GetUserId(), req.GetRole(), p.UserID, callerTokenID(ctx))
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	u, _ := s.st.GetUser(ctx, m.UserID) // 属主行缺失按空投影（不阻塞响应）
 	return &serverv1.SetTeamMemberRoleResponse{Member: teamMemberView(m, u)}, nil
@@ -386,7 +365,7 @@ func (s *TeamsService) RemoveTeamMember(ctx context.Context, req *serverv1.Remov
 		return nil, err
 	}
 	if err := s.st.RemoveMember(ctx, req.GetTeamId(), req.GetUserId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.RemoveTeamMemberResponse{}, nil
 }
@@ -413,7 +392,7 @@ func (s *TeamsService) CreateInvite(ctx context.Context, req *serverv1.CreateInv
 		ActorTokenID: callerTokenID(ctx),
 	})
 	if err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.CreateInviteResponse{Invite: inviteView(inv), Token: token}, nil
 }
@@ -456,7 +435,7 @@ func (s *TeamsService) RevokeInvite(ctx context.Context, req *serverv1.RevokeInv
 		return nil, notFound("invite not found in team: " + req.GetInviteId())
 	}
 	if err := s.st.RevokeInvite(ctx, req.GetInviteId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, mapTeamErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.RevokeInviteResponse{}, nil
 }

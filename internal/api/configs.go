@@ -21,7 +21,6 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -129,10 +128,7 @@ func (s *ConfigsService) GetConfig(ctx context.Context, req *serverv1.GetConfigR
 	}
 	row, err := s.st.GetAppConfig(ctx, app.ID, req.GetName())
 	if err != nil {
-		if errors.Is(err, state.ErrAppConfigNotFound) {
-			return nil, notFound("config not found: " + req.GetName())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetName())
 	}
 	return &serverv1.GetConfigResponse{
 		App:       app.Name,
@@ -163,10 +159,7 @@ func (s *ConfigsService) RemoveConfig(ctx context.Context, req *serverv1.RemoveC
 			state.DiffSummary("hash8", "")))
 	})
 	if err != nil {
-		if errors.Is(err, state.ErrAppConfigNotFound) {
-			return nil, notFound("config not found: " + req.GetName())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetName())
 	}
 	return &serverv1.RemoveConfigResponse{App: app.Name, Name: req.GetName()}, nil
 }

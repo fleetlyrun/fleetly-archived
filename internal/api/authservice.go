@@ -10,7 +10,6 @@ import (
 	"time"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
-	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -84,7 +83,7 @@ func (s *AuthService) WithSessionSecurity(secure bool, ttl time.Duration) *AuthS
 // Register 自助注册（窗口规则在 state.RegisterUser 事务内原子判定）：
 // 成功 = 用户 + 个人队 + 默认项目落位（首用户另含平台管理员置位与
 // bootstrap 吊销）+ 会话下发。请求携带 invite_token 时走邀请注册通道
-//（v0.3 W3-S4，设计 §3.1「未注册→注册即自动 accept」）：有效 token 豁免
+// （v0.3 W3-S4，设计 §3.1「未注册→注册即自动 accept」）：有效 token 豁免
 // 注册窗并同事务入队（受邀角色）；无效 token → E_INVITE_INVALID。
 func (s *AuthService) Register(ctx context.Context, req *serverv1.RegisterRequest) (*serverv1.RegisterResponse, error) {
 	if !s.allowAuth(ctx, req.GetEmail()) {
@@ -97,21 +96,9 @@ func (s *AuthService) Register(ctx context.Context, req *serverv1.RegisterReques
 		InviteToken: req.GetInviteToken(),
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, state.ErrRegistrationClosed):
-			return nil, apperr.New("E_REGISTRATION_CLOSED",
-				"self-service registration is closed; ask a platform administrator to create the account").
-				WithContext("reason", "registration_closed")
-		case errors.Is(err, state.ErrInviteInvalid):
-			// 邀请注册通道：不可消费的邀请统一 E_INVITE_INVALID（rbac-teams
-			// §5 注册表稳定码，HTTP 状态由注册表承载——一次性凭据不泄漏
-			// 存在性与具体状态，与 AcceptInvite 同码同态）。
-			return nil, apperr.New("E_INVITE_INVALID", "invite is invalid, expired, or already used")
-		case errors.Is(err, state.ErrEmailTaken):
-			return nil, conflict("email already registered: " + req.GetEmail())
-		default:
-			return nil, err
-		}
+		// 注册哨兵（ErrRegistrationClosed/ErrInviteInvalid/ErrEmailTaken）
+		// 的信封投影在 errors.go 哨兵登记表；表外错误原样透传。
+		return nil, mapStoreErr(err)
 	}
 	if _, err := s.createSession(ctx, rr.User.ID); err != nil {
 		return nil, err
@@ -135,7 +122,8 @@ func (s *AuthService) Login(ctx context.Context, req *serverv1.LoginRequest) (*s
 				"error", "email:"+loginTargetEmail(req.GetEmail())); auditErr != nil {
 				return nil, auditErr
 			}
-			return nil, statusEnvelope(codes.Unauthenticated, "invalid email or password")
+			// 审计先行后按登记表投影（ErrInvalidCredentials → 401 退化信封）。
+			return nil, mapStoreErr(err)
 		}
 		return nil, err
 	}
@@ -195,7 +183,8 @@ func (s *AuthService) Me(ctx context.Context, _ *serverv1.MeRequest) (*serverv1.
 	if err != nil {
 		if errors.Is(err, state.ErrUserNotFound) {
 			// 属主行缺失（理论不可达：state 无用户物理删除原语）按凭据失效
-			// 处理——fail-closed。
+			// 处理——fail-closed。登记表外特例：同哨兵在 users 面是 404，
+			// 此处是身份面 401（不回流 404 泄漏「用户曾存在」）。
 			return nil, statusEnvelope(codes.Unauthenticated, "invalid credential")
 		}
 		return nil, err
@@ -258,10 +247,10 @@ func (s *AuthService) AcceptInvite(ctx context.Context, req *serverv1.AcceptInvi
 	}
 	inv, err := s.st.ConsumeInvite(ctx, req.GetToken(), p.UserID, p.UserID, callerTokenID(ctx))
 	if err != nil {
-		if errors.Is(err, state.ErrInviteInvalid) {
-			return nil, apperr.New("E_INVITE_INVALID", "invite is invalid, expired, or already used")
-		}
-		return nil, err
+		// 不可消费（查无此 token/已接受/已吊销/已过期）统一 E_INVITE_INVALID
+		// （rbac-teams §5 注册表稳定码，409——一次性凭据不泄漏具体状态，与
+		// 注册通道同码同态）；投影在 errors.go 哨兵登记表。
+		return nil, mapStoreErr(err)
 	}
 	t, err := s.st.GetTeam(ctx, inv.TeamID)
 	if err != nil {

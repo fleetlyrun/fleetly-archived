@@ -55,7 +55,7 @@ func (s *AlertingService) CreateAlertRule(ctx context.Context, req *serverv1.Cre
 		ActorTokenID:       callerTokenID(ctx),
 	})
 	if err != nil {
-		return nil, mapAlertRuleErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.CreateAlertRuleResponse{Rule: alertRuleView(r)}, nil
 }
@@ -97,7 +97,7 @@ func (s *AlertingService) UpdateAlertRule(ctx context.Context, req *serverv1.Upd
 	}
 	r, err := s.st.UpdateAlertRule(ctx, req.GetId(), u)
 	if err != nil {
-		return nil, mapAlertRuleErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.UpdateAlertRuleResponse{Rule: alertRuleView(r)}, nil
 }
@@ -108,7 +108,7 @@ func (s *AlertingService) DeleteAlertRule(ctx context.Context, req *serverv1.Del
 		return nil, err
 	}
 	if err := s.st.DeleteAlertRule(ctx, req.GetId(), "human", callerTokenID(ctx)); err != nil {
-		return nil, mapAlertRuleErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.DeleteAlertRuleResponse{}, nil
 }
@@ -224,18 +224,8 @@ func alertRuleView(r state.AlertRule) *serverv1.AlertRuleView {
 	}
 }
 
-// mapAlertRuleErr 把 state 层哨兵/校验错误投影为信封（404/409/422——注册
-// 码族见 errcode codes.go 告警面注记）。
-func mapAlertRuleErr(err error) error {
-	switch {
-	case errors.Is(err, state.ErrAlertRuleNotFound):
-		return apperr.New("E_ALERT_RULE_NOT_FOUND", "%s", "alert rule not found")
-	case errors.Is(err, state.ErrAlertRuleNameConflict):
-		return apperr.New("E_ALERT_RULE_NAME_CONFLICT", "%s",
-			"an alert rule with the same name already exists (rule names are unique platform-wide)")
-	default:
-		return err
-	}
-}
-
+// state 层哨兵（ErrAlertRuleNotFound/ErrAlertRuleNameConflict）→ 信封的
+// 投影已收进 errors.go 的哨兵登记表（E_ALERT_RULE_NOT_FOUND 404 /
+// E_ALERT_RULE_NAME_CONFLICT 409 注册码族见 errcode codes.go 告警面注记）
+// ——本文件经 mapStoreErr 消费。
 var _ serverv1.AlertingServiceServer = (*AlertingService)(nil)

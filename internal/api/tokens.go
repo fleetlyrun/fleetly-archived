@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
-	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"google.golang.org/grpc/codes"
 )
@@ -47,7 +46,7 @@ func NewTokensService(st *state.Store) *TokensService {
 const tokenPrefix = "flt_"
 
 // CreateToken 生成并落库新 token：明文仅本次响应可见。语义分支见类型注释
-//（用户自服务 PAT / 平台级机具令牌两态）。
+// （用户自服务 PAT / 平台级机具令牌两态）。
 func (s *TokensService) CreateToken(ctx context.Context, req *serverv1.CreateTokenRequest) (*serverv1.CreateTokenResponse, error) {
 	plaintext, err := generateToken()
 	if err != nil {
@@ -144,7 +143,7 @@ func (s *TokensService) ListTokens(ctx context.Context, _ *serverv1.ListTokensRe
 // 不泄漏存在性。M4-6 最后管理员守卫：吊销后平台必须仍存在 ≥1 枚未吊销
 // admin token——依次吊销全部 admin 会使平台锁死（重启也不补种 bootstrap：
 // HasAnyToken 已见 token 行，一次性语义），最后一枚的吊销被守卫拒绝
-//（E_TOKEN_LAST_ADMIN 409，提示先创建新 token）。守卫判定与吊销在 state
+// （E_TOKEN_LAST_ADMIN 409，提示先创建新 token）。守卫判定与吊销在 state
 // 层同一事务内闭合（RevokeTokenGuardLastAdmin）。
 func (s *TokensService) RevokeToken(ctx context.Context, req *serverv1.RevokeTokenRequest) (*serverv1.RevokeTokenResponse, error) {
 	p, ok := PrincipalFromContext(ctx)
@@ -153,10 +152,7 @@ func (s *TokensService) RevokeToken(ctx context.Context, req *serverv1.RevokeTok
 	}
 	target, err := s.st.GetToken(ctx, req.GetId())
 	if err != nil {
-		if errors.Is(err, state.ErrTokenNotFound) {
-			return nil, notFound("token not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	switch {
 	case p.UserID == "":
@@ -177,18 +173,9 @@ func (s *TokensService) RevokeToken(ctx context.Context, req *serverv1.RevokeTok
 		return containsScope(scopes, ScopeAdmin)
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, state.ErrTokenNotFound):
-			return nil, notFound("token not found: " + req.GetId())
-		case errors.Is(err, state.ErrTokenLastAdmin):
-			return nil, apperr.New("E_TOKEN_LAST_ADMIN",
-				"token %s is the last non-revoked admin token; revoking it would leave the platform unmanageable (a restart does not re-seed the bootstrap token)",
-				req.GetId()).
-				WithContext("token", req.GetId()).
-				WithContext("reason", "last_admin")
-		default:
-			return nil, err
-		}
+		// ErrTokenNotFound → 404、ErrTokenLastAdmin → E_TOKEN_LAST_ADMIN
+		// 409（errors.go 哨兵登记表）；表外错误原样透传。
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.RevokeTokenResponse{Id: req.GetId(), RevokedAt: "revoked"}, nil
 }

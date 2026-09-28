@@ -217,10 +217,7 @@ func (s *RevisionsService) GetRevisionSpec(ctx context.Context, req *serverv1.Ge
 	}
 	rev, err := s.st.GetAppRevision(ctx, app.ID, req.GetRevisionId())
 	if err != nil {
-		if errors.Is(err, state.ErrRevisionNotFound) {
-			return nil, notFound("revision not found: " + req.GetRevisionId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetRevisionId())
 	}
 	return &serverv1.GetRevisionSpecResponse{
 		RevisionId: rev.ID,
@@ -327,10 +324,7 @@ func (s *DomainsService) UpdateAppDomain(ctx context.Context, req *serverv1.Upda
 	}
 	current, err := s.st.GetAppDomain(ctx, app.ID, domain)
 	if err != nil {
-		if errors.Is(err, state.ErrDomainNotFound) {
-			return nil, notFound("domain not found: " + domain)
-		}
-		return nil, err
+		return nil, mapStoreErr(err, domain)
 	}
 	input, err := domainInputOf(req.GetService(), req.GetPort(), req.GetProtocol(), req.GetCertMode(), domain, current)
 	if err != nil {
@@ -363,16 +357,10 @@ func (s *DomainsService) RemoveAppDomain(ctx context.Context, req *serverv1.Remo
 	}
 	current, err := s.st.GetAppDomain(ctx, app.ID, domain)
 	if err != nil {
-		if errors.Is(err, state.ErrDomainNotFound) {
-			return nil, notFound("domain not found: " + domain)
-		}
-		return nil, err
+		return nil, mapStoreErr(err, domain)
 	}
 	if err := s.st.RemoveAppDomain(ctx, app.ID, domain); err != nil {
-		if errors.Is(err, state.ErrDomainNotFound) {
-			return nil, notFound("domain not found: " + domain)
-		}
-		return nil, err
+		return nil, mapStoreErr(err, domain)
 	}
 	if err := s.writeDomainAudit(ctx, "domain.removed", app, current, "ok", ""); err != nil {
 		return nil, err
@@ -460,16 +448,14 @@ func validateDomainPort(port string) error {
 	return nil
 }
 
-// domainWriteError 把 state 写面错误映射为 API 语义（守卫④的 4xx 点名：
-// host 冲突 409 E_DOMAIN_CONFLICT、超限 400 E_DOMAIN_UNSUPPORTED）。
+// domainWriteError 把 state 写面错误映射为 API 语义。哨兵行
+// （ErrDomainConflict → E_DOMAIN_CONFLICT 409、ErrDomainNotFound → 404）
+// 在 errors.go 哨兵登记表；DomainLimitError 是携带 count/limit 载荷的
+// 类型化投影（E_DOMAIN_UNSUPPORTED 400）——登记表外的调用面特例（类型化
+// 载荷无法以哨兵行表达）。
 func domainWriteError(err error, domain string) error {
 	var limitErr *state.DomainLimitError
-	switch {
-	case errors.Is(err, state.ErrDomainConflict):
-		return apperr.New("E_DOMAIN_CONFLICT",
-			"domain %q is already used by another service or app (a host belongs to exactly one service)", domain).
-			WithContext("domain", domain)
-	case errors.As(err, &limitErr):
+	if errors.As(err, &limitErr) {
 		scope := "app"
 		if limitErr.Scope == "service" {
 			scope = "service"
@@ -477,11 +463,8 @@ func domainWriteError(err error, domain string) error {
 		return apperr.New("E_DOMAIN_UNSUPPORTED",
 			"domain limit reached (%s scope: %d domains already declared, limit %d)", scope, limitErr.Count, limitErr.Limit).
 			WithContext("reason", "per_"+scope+"_limit")
-	case errors.Is(err, state.ErrDomainNotFound):
-		return notFound("domain not found: " + domain)
-	default:
-		return err
 	}
+	return mapStoreErr(err, domain)
 }
 
 // writeDomainAudit 写域名资源审计行（动作 domain.created/updated/removed；

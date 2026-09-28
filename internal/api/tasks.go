@@ -213,10 +213,7 @@ func (s *TasksService) StopTask(ctx context.Context, req *serverv1.StopTaskReque
 	}
 	updated, _, err := s.st.RequestTaskStop(ctx, task.ID, "owner", callerTokenID(ctx))
 	if err != nil {
-		if errors.Is(err, state.ErrTaskNotFound) {
-			return nil, notFound("task not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.StopTaskResponse{Task: taskView(updated)}, nil
 }
@@ -228,10 +225,7 @@ func (s *TasksService) DeleteTask(ctx context.Context, req *serverv1.DeleteTaskR
 		return nil, err
 	}
 	if _, _, err := s.st.RequestTaskDelete(ctx, task.ID, callerTokenID(ctx)); err != nil {
-		if errors.Is(err, state.ErrTaskNotFound) {
-			return nil, notFound("task not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.DeleteTaskResponse{Id: task.ID}, nil
 }
@@ -244,10 +238,7 @@ func (s *TasksService) ownedTask(ctx context.Context, id string) (state.Task, er
 	}
 	task, err := s.st.GetTask(ctx, strings.TrimSpace(id))
 	if err != nil {
-		if errors.Is(err, state.ErrTaskNotFound) {
-			return state.Task{}, notFound("task not found: " + id)
-		}
-		return state.Task{}, err
+		return state.Task{}, mapStoreErr(err, id)
 	}
 	if task.OwnerTokenID != callerTokenID(ctx) {
 		return state.Task{}, notFound("task not found: " + id)

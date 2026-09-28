@@ -212,7 +212,7 @@ func callerIsGlobal(ctx context.Context, st *state.Store) bool {
 // resolveApp 按引用取应用行（api 面统一入口；v0.3 W2-S4 起可见域感知——
 // 裸名解析域 = 调用方可见项目集，机具令牌/平台管理员 = 全库）。限定形
 // team/prj/app 恒可解析（寻址）；26 字符 ULID 按 id 精确解析（Console
-// 详情导航面，头注 ID 形态）；NotFound 语义归一（mapAppErr）。
+// 详情导航面，头注 ID 形态）；NotFound 语义归一（errors.go 哨兵登记表）。
 func resolveApp(ctx context.Context, st *state.Store, ref string) (state.App, error) {
 	ref = strings.TrimSpace(ref)
 	if teamSlug, rest, found := strings.Cut(ref, "/"); found {
@@ -225,7 +225,7 @@ func resolveApp(ctx context.Context, st *state.Store, ref string) (state.App, er
 	if _, perr := ulid.ParseStrict(ref); perr == nil {
 		app, err := st.GetAppByID(ctx, ref)
 		if err != nil {
-			return state.App{}, mapAppErr(err, ref)
+			return state.App{}, mapStoreErr(err, ref)
 		}
 		return app, nil
 	}
@@ -236,7 +236,7 @@ func resolveApp(ctx context.Context, st *state.Store, ref string) (state.App, er
 			if errors.Is(err, state.ErrAppAmbiguous) {
 				return state.App{}, appAmbiguousErr(ctx, st, ref)
 			}
-			return state.App{}, mapAppErr(err, ref)
+			return state.App{}, mapStoreErr(err, ref)
 		}
 		return app, nil
 	}
@@ -251,7 +251,7 @@ func resolveQualifiedApp(ctx context.Context, st *state.Store, teamSlug, prjSlug
 	}
 	app, aerr := st.GetAppByNameInProject(ctx, proj.ID, appName)
 	if aerr != nil {
-		return state.App{}, mapAppErr(aerr, teamSlug+"/"+prjSlug+"/"+appName)
+		return state.App{}, mapStoreErr(aerr, teamSlug+"/"+prjSlug+"/"+appName)
 	}
 	return app, nil
 }
@@ -270,7 +270,7 @@ func resolveAppInVisibleProjects(ctx context.Context, st *state.Store, name stri
 			continue
 		}
 		if aerr != nil {
-			return state.App{}, mapAppErr(aerr, name)
+			return state.App{}, mapStoreErr(aerr, name)
 		}
 		hits = append(hits, app)
 	}
@@ -321,7 +321,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 			}
 			inst, ierr := st.GetDatabaseInstanceByNameInProject(ctx, proj.ID, dbName)
 			if ierr != nil {
-				return state.DatabaseInstance{}, mapDatabaseErr(ierr)
+				return state.DatabaseInstance{}, mapStoreErr(ierr)
 			}
 			return inst, nil
 		}
@@ -330,7 +330,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 	if _, perr := ulid.ParseStrict(ref); perr == nil {
 		inst, err := st.GetDatabaseInstanceByID(ctx, ref)
 		if err != nil {
-			return state.DatabaseInstance{}, mapDatabaseErr(err)
+			return state.DatabaseInstance{}, mapStoreErr(err)
 		}
 		return inst, nil
 	}
@@ -342,7 +342,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 					"database %q resolves to multiple rows across projects; use the team/prj/db qualified form", ref).
 					WithContext("database", ref)
 			}
-			return state.DatabaseInstance{}, mapDatabaseErr(err)
+			return state.DatabaseInstance{}, mapStoreErr(err)
 		}
 		return inst, nil
 	}
@@ -358,7 +358,7 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 			continue
 		}
 		if ierr != nil {
-			return state.DatabaseInstance{}, mapDatabaseErr(ierr)
+			return state.DatabaseInstance{}, mapStoreErr(ierr)
 		}
 		hits = append(hits, inst)
 	}
@@ -558,11 +558,7 @@ func resolveProjectRef(ctx context.Context, st *state.Store, ref string) (state.
 func defaultProjectForUser(ctx context.Context, st *state.Store, userID string) (state.Project, error) {
 	proj, err := st.ResolveUserDefaultProject(ctx, userID)
 	if err != nil {
-		if errors.Is(err, state.ErrDefaultProjectUnresolved) {
-			return state.Project{}, statusInvalidArgument(
-				"no default project resolvable for your account: pass project \"team/project\" explicitly")
-		}
-		return state.Project{}, err
+		return state.Project{}, mapStoreErr(err)
 	}
 	return proj, nil
 }

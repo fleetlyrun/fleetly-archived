@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -83,10 +82,7 @@ func (s *EnvService) GetEnv(ctx context.Context, req *serverv1.GetEnvRequest) (*
 	}
 	row, err := s.st.GetAppEnv(ctx, app.ID, req.GetKey())
 	if err != nil {
-		if errors.Is(err, state.ErrEnvNotFound) {
-			return nil, notFound("env var not found: " + req.GetKey())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetKey())
 	}
 	plaintext, err := s.box.Decrypt([]byte(row.Value))
 	if err != nil {
@@ -141,10 +137,7 @@ func (s *EnvService) RemoveEnv(ctx context.Context, req *serverv1.RemoveEnvReque
 		return nil, err
 	}
 	if err := s.st.DeleteAppEnv(ctx, app.ID, req.GetKey()); err != nil {
-		if errors.Is(err, state.ErrEnvNotFound) {
-			return nil, notFound("env var not found: " + req.GetKey())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetKey())
 	}
 	// H9：删除同样改变值集（旧值不应继续被脱敏之外的语义影响——值集按
 	// 当前 state 重建）→ 即时失效。

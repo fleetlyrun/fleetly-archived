@@ -44,7 +44,7 @@ func (s *DriftService) ShowDrift(ctx context.Context, req *serverv1.ShowDriftReq
 	}
 	report, err := s.eng.DriftShow(ctx, app.QualifiedName())
 	if err != nil {
-		return nil, mapAppErr(err, req.GetApp())
+		return nil, mapStoreErr(err, req.GetApp())
 	}
 	out := &serverv1.ShowDriftResponse{
 		App:               report.App,
@@ -81,7 +81,7 @@ func (s *DriftService) ConvergeDrift(ctx context.Context, req *serverv1.Converge
 	}
 	rec, err := s.eng.ConvergeApp(ctx, app.QualifiedName(), "human")
 	if err != nil {
-		return nil, mapAppErr(err, req.GetApp())
+		return nil, mapStoreErr(err, req.GetApp())
 	}
 	return &serverv1.ConvergeDriftResponse{
 		App:          req.GetApp(),
@@ -101,7 +101,7 @@ func (s *DriftService) SetDriftConverge(ctx context.Context, req *serverv1.SetDr
 		return nil, err
 	}
 	if err := s.eng.SetDriftConverge(ctx, app.QualifiedName(), req.GetEnabled(), "human"); err != nil {
-		return nil, mapAppErr(err, req.GetApp())
+		return nil, mapStoreErr(err, req.GetApp())
 	}
 	return &serverv1.SetDriftConvergeResponse{
 		App: req.GetApp(), Enabled: req.GetEnabled(),

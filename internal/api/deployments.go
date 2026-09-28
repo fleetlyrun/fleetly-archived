@@ -82,10 +82,7 @@ func (s *DeploymentsService) ListDeployments(ctx context.Context, req *serverv1.
 func (s *DeploymentsService) GetDeployment(ctx context.Context, req *serverv1.GetDeploymentRequest) (*serverv1.GetDeploymentResponse, error) {
 	rec, err := s.st.GetDeployment(ctx, req.GetId())
 	if err != nil {
-		if errors.Is(err, state.ErrDeploymentNotFound) {
-			return nil, notFound("deployment not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.GetDeploymentResponse{Deployment: deploymentView(rec)}, nil
 }
@@ -337,10 +334,7 @@ func gitSHAValid(sha string) bool {
 func (s *DeploymentsService) CancelDeployment(ctx context.Context, req *serverv1.CancelDeploymentRequest) (*serverv1.CancelDeploymentResponse, error) {
 	rec, err := s.st.GetDeployment(ctx, req.GetId())
 	if err != nil {
-		if errors.Is(err, state.ErrDeploymentNotFound) {
-			return nil, notFound("deployment not found: " + req.GetId())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	if !rec.FirstHealthyAt.IsZero() || rec.Status == state.DeployObserving || rec.Status.Terminal() {
 		return nil, apperrConflict(rec)
@@ -415,7 +409,7 @@ func ensureApp(ctx context.Context, st *state.Store, name string, proj state.Pro
 		return app, nil
 	}
 	if !errors.Is(err, state.ErrAppNotFound) {
-		return state.App{}, mapAppErr(err, name)
+		return state.App{}, mapStoreErr(err, name)
 	}
 	created, err := st.CreateApp(ctx, "", name, proj.ID, proj.TeamID)
 	if err != nil {

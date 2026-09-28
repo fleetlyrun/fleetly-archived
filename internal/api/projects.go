@@ -80,25 +80,11 @@ func requireProjectOverrideManager(ctx context.Context, st *state.Store, teamID 
 	return p, nil
 }
 
-// mapProjectErr 是 state 项目哨兵 → api 语义的唯一映射点。
-func mapProjectErr(err error) error {
-	switch {
-	case errors.Is(err, state.ErrProjectNotFound):
-		return notFound("project not found")
-	case errors.Is(err, state.ErrProjectSlugTaken):
-		return conflict("project slug already taken in team")
-	case errors.Is(err, state.ErrProjectNotEmpty):
-		return conflict("project still has live resources (apps/databases); move or delete them first")
-	case errors.Is(err, state.ErrProjectMemberNotFound):
-		return notFound("project member override not found")
-	case errors.Is(err, state.ErrProjectOwnerOverride):
-		return conflict("team owners cannot have a project role override (owners hold owner rights in every project)")
-	case errors.Is(err, state.ErrNotTeamMember):
-		return conflict("target user is not a member of the owning team (project overrides are limited to team members)")
-	default:
-		return err
-	}
-}
+// state 项目哨兵（ErrProjectNotFound/ErrProjectSlugTaken/ErrProjectNotEmpty/
+// ErrProjectMemberNotFound/ErrProjectOwnerOverride/ErrNotTeamMember）的 api
+// 语义已收进 errors.go 的哨兵登记表（退化信封）——本文件经 mapStoreErr 消费；
+// 改派面的 ErrMoveSameTarget（conflict(err.Error())——裹链原文）与
+// ErrDatabaseExists（改派面异文案）是登记表外的调用面特例。
 
 // getProjectForRead 取项目行并过读面门（归属团队成员或平台管理员）。
 func (s *ProjectsService) getProjectForRead(ctx context.Context, id string) (state.Project, error) {
@@ -107,7 +93,7 @@ func (s *ProjectsService) getProjectForRead(ctx context.Context, id string) (sta
 	}
 	p, err := s.st.GetProject(ctx, id)
 	if err != nil {
-		return state.Project{}, mapProjectErr(err)
+		return state.Project{}, mapStoreErr(err)
 	}
 	if err := requireTeamReadAccess(ctx, s.st, p.TeamID); err != nil {
 		return state.Project{}, err
@@ -135,7 +121,7 @@ func (s *ProjectsService) CreateProject(ctx context.Context, req *serverv1.Creat
 		ActorTokenID: callerTokenID(ctx),
 	})
 	if err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	view, err := s.projectView(ctx, proj, nil)
 	if err != nil {
@@ -222,7 +208,7 @@ func (s *ProjectsService) UpdateProject(ctx context.Context, req *serverv1.Updat
 		ActorUserID: principalOf(ctx).UserID,
 	})
 	if err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	view, err := s.projectView(ctx, updated, nil)
 	if err != nil {
@@ -243,7 +229,7 @@ func (s *ProjectsService) DeleteProject(ctx context.Context, req *serverv1.Delet
 		return nil, err
 	}
 	if err := s.st.DeleteProject(ctx, req.GetId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.DeleteProjectResponse{}, nil
 }
@@ -283,7 +269,7 @@ func (s *ProjectsService) SetProjectMemberRole(ctx context.Context, req *serverv
 	}
 	m, err := s.st.SetProjectMemberRole(ctx, proj.ID, req.GetUserId(), req.GetRole(), p.UserID, callerTokenID(ctx))
 	if err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	u, _ := s.st.GetUser(ctx, m.UserID) // 属主行缺失按空投影（不阻塞响应）
 	return &serverv1.SetProjectMemberRoleResponse{Member: projectMemberView(m, u)}, nil
@@ -300,7 +286,7 @@ func (s *ProjectsService) RemoveProjectMember(ctx context.Context, req *serverv1
 		return nil, err
 	}
 	if err := s.st.RemoveProjectMember(ctx, proj.ID, req.GetUserId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.RemoveProjectMemberResponse{}, nil
 }
@@ -340,7 +326,7 @@ func (s *ProjectsService) resolveAppRefForMove(ctx context.Context, ref string) 
 		}
 		app, err := s.st.GetAppByNameInProject(ctx, proj.ID, appName)
 		if err != nil {
-			return state.App{}, mapAppErr(err, ref)
+			return state.App{}, mapStoreErr(err, ref)
 		}
 		return app, nil
 	}
@@ -358,7 +344,7 @@ func (s *ProjectsService) resolveAppRefForMove(ctx context.Context, ref string) 
 				"app %q resolves to multiple rows across projects; use the team/prj/app qualified form or the platform id", ref).
 				WithContext("app", ref)
 		}
-		return state.App{}, mapAppErr(err, ref)
+		return state.App{}, mapStoreErr(err, ref)
 	}
 	return row, nil
 }
@@ -395,7 +381,7 @@ func (s *ProjectsService) MoveApp(ctx context.Context, req *serverv1.MoveAppRequ
 	}
 	toProj, err := s.st.GetProject(ctx, req.GetToProjectId())
 	if err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	// ① 旧上下文捕获（行上 slug 是旧归属——MoveApp 原语落库前的快照）。
 	from := app
@@ -403,12 +389,12 @@ func (s *ProjectsService) MoveApp(ctx context.Context, req *serverv1.MoveAppRequ
 	moved, err := s.st.MoveApp(ctx, app.ID, toProj.ID, p.UserID, callerTokenID(ctx))
 	if err != nil {
 		if errors.Is(err, state.ErrMoveSameTarget) {
+			// 裹链原文进 conflict 信封（message = err.Error()，非固定文案
+			// ——登记表外特例）。
 			return nil, conflict(err.Error())
 		}
-		if errors.Is(err, state.ErrAppExists) {
-			return nil, conflict(fmt.Sprintf("app %q already exists in the target project (names are unique per project); choose another target or rename first", app.Name))
-		}
-		return nil, err
+		// ErrAppExists 走登记行（跨项目名字占用 409）；其余原样透传。
+		return nil, mapStoreErr(err, app.Name)
 	}
 	resp := &serverv1.MoveAppResponse{
 		App:           moved.Name,
@@ -502,7 +488,7 @@ func (s *ProjectsService) MoveDatabase(ctx context.Context, req *serverv1.MoveDa
 	}
 	toProj, err := s.st.GetProject(ctx, req.GetToProjectId())
 	if err != nil {
-		return nil, mapProjectErr(err)
+		return nil, mapStoreErr(err)
 	}
 	from := inst
 	moved, err := s.st.MoveDatabase(ctx, inst.ID, toProj.ID, p.UserID, callerTokenID(ctx))

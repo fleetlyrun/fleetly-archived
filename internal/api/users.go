@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -16,7 +15,7 @@ import (
 // 双门（设计 §4.2 第 3 条）：
 //  1. scope 门（拦截器，scope.go 登记整体 admin）——机具令牌（user NULL）
 //     沿此门全权（平台级凭据的设计语义，§2.3）；
-// 2. 平台面门（本文件 requirePlatformAdmin）——用户 principal（会话或
+//  2. 平台面门（本文件 requirePlatformAdmin）——用户 principal（会话或
 //     用户 PAT）要求 is_platform_admin 且属主在册，否则 403（信封退化
 //     形态，与鉴权 403 同口径——无专用稳定码）。
 //
@@ -69,10 +68,7 @@ func (s *UsersService) CreateUser(ctx context.Context, req *serverv1.CreateUserR
 		ActorTokenID: callerTokenID(ctx),
 	})
 	if err != nil {
-		if errors.Is(err, state.ErrEmailTaken) {
-			return nil, conflict("email already registered: " + req.GetEmail())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetEmail())
 	}
 	return &serverv1.CreateUserResponse{User: userView(u), TemporaryPassword: tempPassword}, nil
 }
@@ -84,7 +80,7 @@ func (s *UsersService) DisableUser(ctx context.Context, req *serverv1.DisableUse
 	}
 	p := principalOf(ctx)
 	if err := s.st.DisableUser(ctx, req.GetId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, s.mapUserErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.DisableUserResponse{User: s.mustUserView(ctx, req.GetId())}, nil
 }
@@ -96,7 +92,7 @@ func (s *UsersService) EnableUser(ctx context.Context, req *serverv1.EnableUserR
 	}
 	p := principalOf(ctx)
 	if err := s.st.EnableUser(ctx, req.GetId(), p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, s.mapUserErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.EnableUserResponse{User: s.mustUserView(ctx, req.GetId())}, nil
 }
@@ -113,7 +109,7 @@ func (s *UsersService) ResetUserPassword(ctx context.Context, req *serverv1.Rese
 	}
 	p := principalOf(ctx)
 	if err := s.st.ResetPassword(ctx, req.GetId(), tempPassword, p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, s.mapUserErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.ResetUserPasswordResponse{Id: req.GetId(), TemporaryPassword: tempPassword}, nil
 }
@@ -125,7 +121,7 @@ func (s *UsersService) GrantPlatformAdmin(ctx context.Context, req *serverv1.Gra
 	}
 	p := principalOf(ctx)
 	if err := s.st.SetPlatformAdmin(ctx, req.GetId(), true, p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, s.mapUserErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.GrantPlatformAdminResponse{User: s.mustUserView(ctx, req.GetId())}, nil
 }
@@ -139,7 +135,7 @@ func (s *UsersService) RevokePlatformAdmin(ctx context.Context, req *serverv1.Re
 	}
 	p := principalOf(ctx)
 	if err := s.st.SetPlatformAdmin(ctx, req.GetId(), false, p.UserID, callerTokenID(ctx)); err != nil {
-		return nil, s.mapUserErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.RevokePlatformAdminResponse{User: s.mustUserView(ctx, req.GetId())}, nil
 }
@@ -170,7 +166,7 @@ func (s *UsersService) SetRegistration(ctx context.Context, req *serverv1.SetReg
 
 // GetAuditRetention 审计留存设置只读投影（v0.3 W3-S3，rbac-teams §6
 // D-W0-6 收口）：set=false 时 days/updated_at 不输出——生效值回落链
-//（config > 缺省 90）由消费方裁决，本层不投影缺省数值（state 层语义）。
+// （config > 缺省 90）由消费方裁决，本层不投影缺省数值（state 层语义）。
 func (s *UsersService) GetAuditRetention(ctx context.Context, _ *serverv1.GetAuditRetentionRequest) (*serverv1.GetAuditRetentionResponse, error) {
 	if err := s.requirePlatformAdmin(ctx); err != nil {
 		return nil, err
@@ -218,7 +214,7 @@ func (s *UsersService) SetAuditRetention(ctx context.Context, req *serverv1.SetA
 
 // requirePlatformAdminPrincipal 是平台面判定的共享单点（设计 §4.2 第 3 条
 // ——UsersService 与 AuditService（W3-S1 D-W0-6 审计读面）同门）：机具令牌
-//（UserID 空）沿 scope 门放行（拦截器已强制 admin）；用户 principal 要求
+// （UserID 空）沿 scope 门放行（拦截器已强制 admin）；用户 principal 要求
 // 属主在册且 is_platform_admin。任何读取故障按拒绝处理（fail-closed）。
 func requirePlatformAdminPrincipal(ctx context.Context, st UserLookupStore) error {
 	p, ok := PrincipalFromContext(ctx)
@@ -256,13 +252,9 @@ func principalOf(ctx context.Context) Principal {
 	return p
 }
 
-// mapUserErr 是 state 用户哨兵 → api 语义的唯一映射点（404 退化信封）。
-func (s *UsersService) mapUserErr(err error, id string) error {
-	if errors.Is(err, state.ErrUserNotFound) {
-		return notFound("user not found: " + id)
-	}
-	return err
-}
+// state 用户哨兵（ErrUserNotFound）→ 404 退化信封的映射已收进 errors.go 的
+// 哨兵登记表——本文件经 mapStoreErr 消费（authservice.Me 的同哨兵 401 特例
+// 见彼处注记）。
 
 // mustUserView 取用户行投影（写路径成功后的回读；行消失属理论不可达，
 // fail-closed 返回 404 退化信封）。

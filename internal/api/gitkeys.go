@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +15,7 @@ import (
 // GitKeysService 实现 server.v1.GitKeysService（T2.19）：git 公钥（SSH
 // push 认证）。公钥指纹入库（SHA256，ssh-keygen -lf 同格式）；私钥永不
 // 经过平台。生命周期动作审计在 state 层与业务写同事务 fail-closed
-//（gitkey.add / gitkey.remove）。
+// （gitkey.add / gitkey.remove）。
 //
 // v0.3 W2 用户化迁移（rbac-teams 设计 §2.3）：
 //   - AddGitKey = 登录用户自服务（user principal 必需——机具令牌 403，
@@ -77,10 +76,7 @@ func (s *GitKeysService) AddGitKey(ctx context.Context, req *serverv1.AddGitKeyR
 		ActorUserID:  p.UserID,
 	})
 	if err != nil {
-		if errors.Is(err, state.ErrGitKeyExists) {
-			return nil, conflict("git key already registered (same fingerprint)")
-		}
-		return nil, err
+		return nil, mapStoreErr(err)
 	}
 	return &serverv1.AddGitKeyResponse{
 		Id:          key.ID,
@@ -135,10 +131,7 @@ func (s *GitKeysService) RemoveGitKey(ctx context.Context, req *serverv1.RemoveG
 	}
 	target, err := s.st.GetGitKey(ctx, req.GetId())
 	if err != nil {
-		if errors.Is(err, state.ErrGitKeyNotFound) {
-			return nil, notFound(fmt.Sprintf("git key not found: %s", req.GetId()))
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	actorUserID := p.UserID
 	switch {
@@ -156,10 +149,7 @@ func (s *GitKeysService) RemoveGitKey(ctx context.Context, req *serverv1.RemoveG
 		}
 	}
 	if err := s.st.RemoveGitKey(ctx, req.GetId(), actorUserID, callerTokenID(ctx)); err != nil {
-		if errors.Is(err, state.ErrGitKeyNotFound) {
-			return nil, notFound(fmt.Sprintf("git key not found: %s", req.GetId()))
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.RemoveGitKeyResponse{Id: req.GetId()}, nil
 }

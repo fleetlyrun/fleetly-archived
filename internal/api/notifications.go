@@ -62,7 +62,7 @@ func (s *NotificationsService) ListWebhookEndpoints(ctx context.Context, _ *serv
 func (s *NotificationsService) GetWebhookEndpoint(ctx context.Context, req *serverv1.GetWebhookEndpointRequest) (*serverv1.GetWebhookEndpointResponse, error) {
 	e, err := s.st.GetWebhookEndpoint(ctx, req.GetId())
 	if err != nil {
-		return nil, mapWebhookErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.GetWebhookEndpointResponse{Endpoint: webhookEndpointView(e)}, nil
 }
@@ -107,7 +107,7 @@ func (s *NotificationsService) CreateWebhookEndpoint(ctx context.Context, req *s
 		ActorTokenID:      callerTokenID(ctx),
 	})
 	if err != nil {
-		return nil, mapWebhookErr(err, req.GetName())
+		return nil, mapStoreErr(err, req.GetName())
 	}
 	return &serverv1.CreateWebhookEndpointResponse{
 		Endpoint: webhookEndpointView(e),
@@ -136,7 +136,7 @@ func (s *NotificationsService) UpdateWebhookEndpoint(ctx context.Context, req *s
 	if req.Type != nil || req.Url != nil || req.Target != nil {
 		prev, err := s.st.GetWebhookEndpoint(ctx, req.GetId())
 		if err != nil {
-			return nil, mapWebhookErr(err, req.GetId())
+			return nil, mapStoreErr(err, req.GetId())
 		}
 		finalType, finalURL, finalTarget := prev.Type, prev.URL, prev.Target
 		if req.Type != nil {
@@ -173,7 +173,7 @@ func (s *NotificationsService) UpdateWebhookEndpoint(ctx context.Context, req *s
 	}
 	e, err := s.st.UpdateWebhookEndpoint(ctx, req.GetId(), u)
 	if err != nil {
-		return nil, mapWebhookErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.UpdateWebhookEndpointResponse{Endpoint: webhookEndpointView(e)}, nil
 }
@@ -185,7 +185,7 @@ func (s *NotificationsService) DeleteWebhookEndpoint(ctx context.Context, req *s
 		return nil, err
 	}
 	if err := s.st.DeleteWebhookEndpoint(ctx, req.GetId(), "human", callerTokenID(ctx)); err != nil {
-		return nil, mapWebhookErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.DeleteWebhookEndpointResponse{Id: req.GetId()}, nil
 }
@@ -211,7 +211,7 @@ func (s *NotificationsService) RotateWebhookSecret(ctx context.Context, req *ser
 		SecretFingerprint: &fp,
 		ActorTokenID:      callerTokenID(ctx),
 	}); err != nil {
-		return nil, mapWebhookErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	return &serverv1.RotateWebhookSecretResponse{Secret: plaintext, SecretFingerprint: fp}, nil
 }
@@ -228,7 +228,7 @@ func (s *NotificationsService) TestWebhook(ctx context.Context, req *serverv1.Te
 	}
 	e, err := s.st.GetWebhookEndpoint(ctx, req.GetId())
 	if err != nil {
-		return nil, mapWebhookErr(err, req.GetId())
+		return nil, mapStoreErr(err, req.GetId())
 	}
 	ep := notify.Endpoint{Type: e.Type, URL: e.URL, Target: e.Target}
 	var smtpCfg *notify.SmtpConfig
@@ -446,22 +446,10 @@ func webhookEndpointView(e state.WebhookEndpoint) *serverv1.WebhookEndpointView 
 	}
 }
 
-// mapWebhookErr 把 state 哨兵映射为注册表码信封（NotFound 404 /
-// NameConflict 409；E_WEBHOOK_PATTERN_INVALID apperr 原样透传）。
-func mapWebhookErr(err error, ref string) error {
-	switch {
-	case errors.Is(err, state.ErrWebhookNotFound):
-		return apperr.New("E_WEBHOOK_NOT_FOUND",
-			"webhook endpoint not found: %s", ref).
-			WithContext("endpoint", ref)
-	case errors.Is(err, state.ErrWebhookNameConflict):
-		return apperr.New("E_WEBHOOK_NAME_CONFLICT",
-			"a webhook endpoint named %q already exists (names are unique)", ref).
-			WithContext("name", ref)
-	default:
-		return err
-	}
-}
+// state 哨兵（ErrWebhookNotFound/ErrWebhookNameConflict）→ 注册表码信封的
+// 映射（E_WEBHOOK_NOT_FOUND 404 / E_WEBHOOK_NAME_CONFLICT 409）已收进
+// errors.go 的哨兵登记表——本文件经 mapStoreErr 消费；E_WEBHOOK_PATTERN_INVALID
+// apperr 原样透传（不在表内）。
 
 // shapeWebhookName / shapeChannel 是 400 形状门（state 层白名单是防御性
 // 第二道闸——本面先拦，形状违约走退化信封不走注册表码）。

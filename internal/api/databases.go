@@ -171,12 +171,9 @@ func (s *DatabaseService) CreateDatabase(ctx context.Context, req *serverv1.Crea
 		return tx.WriteAudit(ctx, databaseAudit(ctx, "db.create", "database:"+row.ID,
 			state.DiffSummary("template", row.Template)))
 	})
-	switch {
-	case err == nil:
-	case errors.Is(err, state.ErrDatabaseExists):
-		return nil, conflict(fmt.Sprintf("database instance name %q is already registered (names stay reserved across the lifecycle)", req.GetName()))
-	default:
-		return nil, err
+	if err != nil {
+		// ErrDatabaseExists 走登记行（名字占用 409）；其余原样透传。
+		return nil, mapStoreErr(err, req.GetName())
 	}
 	s.kickOnce()
 	view, err := s.databaseView(ctx, created)
@@ -295,7 +292,7 @@ func (s *DatabaseService) DeleteDatabase(ctx context.Context, req *serverv1.Dele
 			state.DiffSummary("from", string(inst.State), "delete_volumes", req.GetDeleteVolumes())))
 	})
 	if err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	s.kickOnce()
 	return &serverv1.DeleteDatabaseResponse{Name: inst.Name, Status: string(state.DatabaseDeleting)}, nil
@@ -322,7 +319,7 @@ func (s *DatabaseService) SuspendDatabase(ctx context.Context, req *serverv1.Sus
 			databaseLifecycleEvent("db.suspended", inst))
 	})
 	if err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	s.kickOnce()
 	view, err := s.viewAfter(ctx, inst.ID)
@@ -347,7 +344,7 @@ func (s *DatabaseService) ResumeDatabase(ctx context.Context, req *serverv1.Resu
 			state.DiffSummary("from", string(inst.State))))
 	})
 	if err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	s.kickOnce()
 	view, err := s.viewAfter(ctx, inst.ID)
@@ -373,7 +370,7 @@ func (s *DatabaseService) RetryDatabase(ctx context.Context, req *serverv1.Retry
 			state.DiffSummary("from", string(inst.State))))
 	})
 	if err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	s.kickOnce()
 	view, err := s.viewAfter(ctx, inst.ID)
@@ -393,7 +390,7 @@ func (s *DatabaseService) UpdateDatabaseSettings(ctx context.Context, req *serve
 	}
 	settings := databaseSettingsOf(req.GetLimits(), req.GetBackupPlan())
 	if err := s.st.UpdateDatabaseSettings(ctx, inst.ID, settings); err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	// 设置变更不在设计审计词表（§5.3）——走方法级 action（api.DatabaseService.
 	// UpdateDatabaseSettings，拦截器注入的同款通用词根）。
@@ -456,7 +453,7 @@ func (s *DatabaseService) mapRotationErr(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, state.ErrDatabaseNotFound):
-		return mapDatabaseErr(err)
+		return mapStoreErr(err)
 	case errors.Is(err, database.ErrPGRotationPaused):
 		return apperr.New("E_STATE_VERSION_CONFLICT",
 			"%s (resume the database first, then rotate)", err.Error()).
@@ -665,7 +662,7 @@ func (s *DatabaseService) mapOperationErr(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, state.ErrDatabaseNotFound):
-		return mapDatabaseErr(err)
+		return mapStoreErr(err)
 	case errors.Is(err, database.ErrBackupS3NotConfigured):
 		return apperr.New("E_S3_NOT_CONFIGURED", "%s (configure object storage with 'fleetly s3 set' or the Console S3 settings card, then retry)", err.Error()).
 			WithContext("reason", "s3.mode=unset")
@@ -715,7 +712,7 @@ func (s *DatabaseService) getMutableInstance(ctx context.Context, name string) (
 func (s *DatabaseService) viewAfter(ctx context.Context, id string) (*serverv1.DatabaseView, error) {
 	inst, err := s.st.GetDatabaseInstance(ctx, id)
 	if err != nil {
-		return nil, mapDatabaseErr(err)
+		return nil, mapStoreErr(err)
 	}
 	return s.databaseView(ctx, inst)
 }
@@ -739,26 +736,14 @@ func (s *DatabaseService) referencedErr(ctx context.Context, inst state.Database
 		WithContext("count", fmt.Sprint(len(refs)))
 }
 
-// mapDatabaseErr 是状态层哨兵 → api 语义的统一映射（D-DB-8）。
-func mapDatabaseErr(err error) error {
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, state.ErrDatabaseNotFound):
-		return databaseNotFound("", "")
-	case errors.Is(err, state.ErrDatabaseStateConflict), errors.Is(err, state.ErrDatabaseIllegalTransition):
-		return apperr.New("E_STATE_VERSION_CONFLICT",
-			"database changed concurrently (CAS mismatch) — re-read the current state and retry with a legal prestate").
-			WithContext("conflict", err.Error())
-	case errors.Is(err, state.ErrDatabaseTerminal):
-		return databaseNotFound("", "terminal state")
-	default:
-		return err
-	}
-}
+// 状态层哨兵（ErrDatabaseNotFound/ErrDatabaseTerminal/ErrDatabaseStateConflict/
+// ErrDatabaseIllegalTransition）→ api 语义的映射（D-DB-8：E_DB_NOT_FOUND 404
+// / E_STATE_VERSION_CONFLICT 409 注册码投影）已收进 errors.go 的哨兵登记表
+// ——本文件经 mapStoreErr 消费。
 
 // databaseNotFound 构造 E_DB_NOT_FOUND（404；细节进 message 与 context——可行动
-// 面设计 §5.2「附候选清单」口径）。
+// 面设计 §5.2「附候选清单」口径）。带 name/detail 载荷的富投影是登记表外
+// 的调用面特例（0 命中路径没有哨兵错误可映射）。
 func databaseNotFound(name, detail string) error {
 	msg := "database instance not found"
 	if name != "" {

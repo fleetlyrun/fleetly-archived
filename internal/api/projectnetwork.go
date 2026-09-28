@@ -95,7 +95,7 @@ func (s *ProjectsService) setAppProjectNetwork(ctx context.Context, appRef strin
 	}
 	updated, changed, err := s.st.SetAppProjectNetworkAttached(ctx, app.ID, attached, principalOf(ctx).UserID, callerTokenID(ctx))
 	if err != nil {
-		return nil, mapAppErr(err, appRef)
+		return nil, mapStoreErr(err, appRef)
 	}
 	network, err := naming.ProjectNetworkName(updated.ProjectID)
 	if err != nil {

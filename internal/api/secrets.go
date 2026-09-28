@@ -14,7 +14,6 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -136,10 +135,7 @@ func (s *SecretsService) RemoveSecret(ctx context.Context, req *serverv1.RemoveS
 			state.DiffSummary("hash8", "")))
 	})
 	if err != nil {
-		if errors.Is(err, state.ErrAppSecretNotFound) {
-			return nil, notFound("secret not found: " + req.GetName())
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetName())
 	}
 	return &serverv1.RemoveSecretResponse{App: app.Name, Name: req.GetName()}, nil
 }

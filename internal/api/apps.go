@@ -181,12 +181,8 @@ func (s *AppsService) DeleteApp(ctx context.Context, req *serverv1.DeleteAppRequ
 		return tx.WriteAudit(ctx, auditEntry(ctx, "app:"+app.ID, state.DiffSummary("lifecycle", "deleting"))) // B4：构造器替换手拼 JSON
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, state.ErrInvalidLifecycleTransition):
-			return nil, conflict("app not deletable from current lifecycle: " + app.Name)
-		default:
-			return nil, err
-		}
+		// ErrInvalidLifecycleTransition → 409 冲突信封（errors.go 哨兵登记表）。
+		return nil, mapStoreErr(err, app.Name)
 	}
 	// 路由撤销（同步清理，不引入新异步机制）：失败不回滚 lifecycle
 	// （deleting 已提交、DeleteApp 不可重入），落失败审计 + 错误返回披露
@@ -348,10 +344,7 @@ func (s *AppsService) GetScalingPolicy(ctx context.Context, req *serverv1.GetSca
 	}
 	p, err := s.st.GetScalingPolicy(ctx, app.ID, req.GetService())
 	if err != nil {
-		if errors.Is(err, state.ErrScalingPolicyNotFound) {
-			return nil, notFound(fmt.Sprintf("no scaling policy for service %q of app %q", req.GetService(), app.Name))
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetService(), app.Name)
 	}
 	return scalingPolicyView(app.Name, p), nil
 }
@@ -413,10 +406,7 @@ func (s *AppsService) RemoveScalingPolicy(ctx context.Context, req *serverv1.Rem
 		Actor:        "human",
 		ActorTokenID: callerTokenID(ctx),
 	}); err != nil {
-		if errors.Is(err, state.ErrScalingPolicyNotFound) {
-			return nil, notFound(fmt.Sprintf("no scaling policy for service %q of app %q", req.GetService(), app.Name))
-		}
-		return nil, err
+		return nil, mapStoreErr(err, req.GetService(), app.Name)
 	}
 	return &serverv1.RemoveScalingPolicyResponse{Name: app.Name, Service: req.GetService(), Removed: true}, nil
 }
