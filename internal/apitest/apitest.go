@@ -5,7 +5,10 @@
 // internal/state 等装配依赖——装配知识集中在本包，测试侧只拿连接与
 // token。
 //
-// 注意：本包是测试支持设施，不是产品代码；随服务面扩展同步登记注册。
+// 注意：本包是测试支持设施，不是产品代码。服务登记已收编 internal/runtime
+// 的 ServiceRegistrations 唯一登记表（IMPL-ARCH-I）：装配集 ⇆ 登记表双向
+// 对账，服务面扩展漏装配在首次测试即红——「随服务面扩展同步登记注册」
+// 的纪律由结构兜底，不再靠人肉对单。
 package apitest
 
 import (
@@ -26,13 +29,14 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/api"
 	"github.com/fleetlyrun/fleetly/internal/build"
 	"github.com/fleetlyrun/fleetly/internal/compose"
 	"github.com/fleetlyrun/fleetly/internal/engine"
+	"github.com/fleetlyrun/fleetly/internal/execrelay"
 	"github.com/fleetlyrun/fleetly/internal/logs"
 	"github.com/fleetlyrun/fleetly/internal/naming"
+	"github.com/fleetlyrun/fleetly/internal/runtime"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/substrate"
@@ -235,10 +239,6 @@ func start(t *testing.T, opts startOptions) *Env {
 	if opts.joinPort != nil {
 		systemSvc = systemSvc.WithJoinGuide(opts.joinBaseDomain, opts.joinPort)
 	}
-	serverv1.RegisterSystemServiceServer(srv, systemSvc)
-	serverv1.RegisterAppsServiceServer(srv, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
-	serverv1.RegisterDeploymentsServiceServer(srv, api.NewDeploymentsService(st, nil))
-	serverv1.RegisterRevisionsServiceServer(srv, api.NewRevisionsService(st))
 	// 构建面：默认纯入队形态（queue nil）；StartWithBuildQueue 装配真实
 	// 队列 + 确定性假执行器 + 上传会话根（IMPL-T2-2 的 CLI 端到端形态）。
 	uploads := build.UploadConfig{}
@@ -253,55 +253,74 @@ func start(t *testing.T, opts startOptions) *Env {
 			WithUploadsRoot(uploads.Root)
 		go func() { _ = buildQueue.Run(runCtx) }()
 	}
-	serverv1.RegisterBuildsServiceServer(srv, api.NewBuildsService(st, buildQueue, uploads))
-	serverv1.RegisterDriftServiceServer(srv, api.NewDriftService(st, eng))
-	serverv1.RegisterDomainsServiceServer(srv, api.NewDomainsService(st, nil))
-	serverv1.RegisterEnvServiceServer(srv, api.NewEnvService(st, box))
-	serverv1.RegisterLogsServiceServer(srv, api.NewLogsService(st, mgr))
-	serverv1.RegisterEventsServiceServer(srv, api.NewEventsService(st))
-	// 放置面：nil resolver = 只读降级形态（apitest 只装配读面；写面 RPC
-	// 如实报不可用——生产装配在 internal/runtime/provides.go）。
-	serverv1.RegisterPlacementServiceServer(srv, api.NewPlacementService(st, nil))
-	serverv1.RegisterTokensServiceServer(srv, api.NewTokensService(st))
-	serverv1.RegisterGitKeysServiceServer(srv, api.NewGitKeysService(st))
-	// 库实例面（E4 W4-S2）：CLI golden/冒烟测试同路径消费（受理面——收敛
-	// 行为在 internal/database 单测，本环境不装配 duty；kicker/rotator/ops
-	// nil = 收敛由周期拍兜底、rotate/备份/恢复/升级 RPC 显式报错的降级形
-	// 态，与生产 nil-safety 同语义）。密钥库面（W4-S4）：同路径消费（无值
-	// 读回——负面扫描的 CLI 断言面）。
-	serverv1.RegisterDatabaseServiceServer(srv, api.NewDatabaseService(st, box, nil, nil, nil))
-	serverv1.RegisterSecretsServiceServer(srv, api.NewSecretsService(st, box))
-	// 明文配置资源面（T 线 OT-3/IMPL-T1-4）：CLI/集成测试同路径消费
-	//（受理/投影面；Get 明文回读的 admin 门在 scope 登记，与生产同形）。
-	serverv1.RegisterConfigsServiceServer(srv, api.NewConfigsService(st))
-	// 通知 Webhook 面（E6 W5-S4；W4-S3 通道扩展）：CLI golden/冒烟测试同
-	// 路径消费（受理/投影面——投递器 duty 不在进程内装配，TestWebhook 指
-	// 向真实网络才可达）。
-	serverv1.RegisterNotificationsServiceServer(srv, api.NewNotificationsService(st, box))
-	// 告警面（B 线 W5-S2，D-V3W5-1）：CLI 测试同路径消费（受理/投影面——
-	// mb/mm nil = TestAlertRule 如实报不可用、status 部署态如实报 absent）。
-	serverv1.RegisterAlertingServiceServer(srv, api.NewAlertingService(st))
-	// metrics 面（E6 W5-S3）：alerts.mode 前置门的 CLI 驱动面（mb/mm nil =
-	// status 部署态/节点比如实报 unset/0 的降级形态，与生产 nil-safety 同语义）。
-	serverv1.RegisterMetricsServiceServer(srv, api.NewMetricsService(st))
-	// 认证/用户面（v0.3 W1）：CLI/golden 测试同路径消费（注册/登录/会话；
-	// 平台用户管理面在平台管理员判定后的读面）。
-	serverv1.RegisterAuthServiceServer(srv, api.NewAuthService(st))
-	serverv1.RegisterUsersServiceServer(srv, api.NewUsersService(st))
-	// 审计读面（v0.3 W3-S1）：CLI 测试同路径消费（平台管理员双门在 handler，
-	// 与生产同形）。
-	serverv1.RegisterAuditServiceServer(srv, api.NewAuditService(st))
-	// 团队/项目面（v0.3 W2-S1）：CLI/集成测试同路径消费（角色门在 handler
-	// 内强制，与生产同形）。
-	serverv1.RegisterTeamsServiceServer(srv, api.NewTeamsService(st))
-	// 团队/项目面（v0.3 W2-S1）：CLI/集成测试同路径消费（角色门在 handler
-	// 内强制，与生产同形）。IMPL-T15-1：项目网参与端口装配确定性假实现
-	//（attach/detach 的 RPC 链可走通；网络/重部署编排语义在 engine/state
-	// 各自测试覆盖——本环境无底座）。
-	serverv1.RegisterProjectsServiceServer(srv, api.NewProjectsService(st).WithNetworkPort(fakeProjectNetworkPort{}))
-	// 程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：确定性假编排端口
-	//（RPC 链可走通；收敛/对账语义在 engine/state 测试覆盖）。
-	serverv1.RegisterTasksServiceServer(srv, api.NewTasksService(st, box, fakeTasksOrchestrator{}))
+	// 服务装配集（键 = internal/runtime 登记表的服务短名）：真实 api 服务
+	// 实现 + 确定性假端口/降级装配（各条目注记）——生产构造的测试 adapter
+	//（同型构造、fake 在构造期注入，与 wire 供给的生产实例共用登记表的
+	// 注册本体）。未装配的 duty 依赖按 nil/停用形态如实降级（与生产
+	// nil-safety 同语义），不是省略登记。
+	instances := map[string]any{
+		"SystemService":      systemSvc,
+		"AppsService":        api.NewAppsService(st, box, "127.0.0.1:8424", nil),
+		"DeploymentsService": api.NewDeploymentsService(st, nil),
+		"RevisionsService":   api.NewRevisionsService(st),
+		"BuildsService":      api.NewBuildsService(st, buildQueue, uploads),
+		"DriftService":       api.NewDriftService(st, eng),
+		"DomainsService":     api.NewDomainsService(st, nil),
+		"EnvService":         api.NewEnvService(st, box),
+		"LogsService":        api.NewLogsService(st, mgr),
+		// metrics 面（E6 W5-S3）：alerts.mode 前置门的 CLI 驱动面（mb/mm nil =
+		// status 部署态/节点比如实报 unset/0 的降级形态，与生产 nil-safety 同语义）。
+		"MetricsService": api.NewMetricsService(st),
+		// 告警面（B 线 W5-S2，D-V3W5-1）：CLI 测试同路径消费（受理/投影面——
+		// mb/mm nil = TestAlertRule 如实报不可用、status 部署态如实报 absent）。
+		"AlertingService": api.NewAlertingService(st),
+		// 通知 Webhook 面（E6 W5-S4；W4-S3 通道扩展）：CLI golden/冒烟测试同
+		// 路径消费（受理/投影面——投递器 duty 不在进程内装配，TestWebhook 指
+		// 向真实网络才可达）。
+		"NotificationsService": api.NewNotificationsService(st, box),
+		// Web 终端受理面（E7 W5-S6）：停用 hub 形态（terminal.enabled=false——
+		// ticket 受理 fail-closed 如实报不可用；WS 数据面本就不经 gRPC）。
+		"ExecService": api.NewExecService(st, execrelay.NewHub(execrelay.HubConfig{
+			Enabled: func() bool { return false },
+		})),
+		"EventsService": api.NewEventsService(st),
+		// 放置面：nil resolver = 只读降级形态（apitest 只装配读面；写面 RPC
+		// 如实报不可用——生产装配在 internal/runtime/provides.go）。
+		"PlacementService": api.NewPlacementService(st, nil),
+		"TokensService":    api.NewTokensService(st),
+		"GitKeysService":   api.NewGitKeysService(st),
+		// 定时任务面（E5 Cron）：triggers nil = 调度器未装配的进程内夹具形态
+		//（TriggerCronRun 显式不可用；runs 读面同路径消费）。
+		"CronService": api.NewCronService(st, nil),
+		// 库实例面（E4 W4-S2）：CLI golden/冒烟测试同路径消费（受理面——收敛
+		// 行为在 internal/database 单测，本环境不装配 duty；kicker/rotator/ops
+		// nil = 收敛由周期拍兜底、rotate/备份/恢复/升级 RPC 显式报错的降级形
+		// 态，与生产 nil-safety 同语义）。密钥库面（W4-S4）：同路径消费（无值
+		// 读回——负面扫描的 CLI 断言面）。
+		"DatabaseService": api.NewDatabaseService(st, box, nil, nil, nil),
+		"SecretsService":  api.NewSecretsService(st, box),
+		// 明文配置资源面（T 线 OT-3/IMPL-T1-4）：CLI/集成测试同路径消费
+		//（受理/投影面；Get 明文回读的 admin 门在 scope 登记，与生产同形）。
+		"ConfigsService": api.NewConfigsService(st),
+		// 认证/用户/审计/团队/项目面（v0.3）：CLI/golden 测试同路径消费
+		//（角色门与平台管理员双门在 handler 内强制，与生产同形）。
+		"AuthService":  api.NewAuthService(st),
+		"UsersService": api.NewUsersService(st),
+		"AuditService": api.NewAuditService(st),
+		"TeamsService": api.NewTeamsService(st),
+		// IMPL-T15-1：项目网参与端口装配确定性假实现（attach/detach 的 RPC
+		// 链可走通；网络/重部署编排语义在 engine/state 各自测试覆盖——本
+		// 环境无底座）。
+		"ProjectsService": api.NewProjectsService(st).WithNetworkPort(fakeProjectNetworkPort{}),
+		// 程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：确定性假编排端口
+		//（RPC 链可走通；收敛/对账语义在 engine/state 测试覆盖）。
+		"TasksService": api.NewTasksService(st, box, fakeTasksOrchestrator{}),
+	}
+	// 注册本体 = 生产登记表单点（internal/runtime/registration.go）：表 ⇆
+	// 装配集双向对账——服务面扩展时漏装配/多装配即红（IMPL-ARCH-I）。
+	if err := runtime.RegisterGRPCServices(srv, instances); err != nil {
+		t.Fatalf("apitest: register services: %v", err)
+	}
 
 	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = srv.Serve(lis) }()

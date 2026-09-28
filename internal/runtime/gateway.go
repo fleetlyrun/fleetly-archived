@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	sharedv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/shared/v1"
 	"github.com/fleetlyrun/fleetly/internal/execrelay"
 	"github.com/fleetlyrun/fleetly/internal/gitserver"
@@ -31,7 +30,10 @@ import (
 // （默认 rpcStatus 错误体已从 OpenAPI 移除）。
 //
 // ── gateway 挂载清单（T2.17 纪律：gRPC-only 清单显式维护）────────────────
-// 挂载（全部服务，读/写/流一致）：
+// 挂载集与挂载顺序 = registration.go 登记表的双面条目（IMPL-ARCH-I 收敛
+// ——本文件不再维护第二份清单；表序 = 生产 gRPC 注册序，挂载序随表）。
+// 整体 gRPC-only（表条目无 gateway 注册器）：CronService（E5）、TasksService
+//（T 线 DT-5）。其余挂载面速览：
 //   - SystemService（Ping 豁免鉴权；Status/Nodes/Ingress 为 read）
 //   - AppsService / DeploymentsService / RevisionsService / BuildsService
 //   - DriftService / DomainsService / EnvService / PlacementService
@@ -131,36 +133,11 @@ func newGatewayMuxWithTLS(grpcEndpoint string, tlsCfg *tls.Config) (http.Handler
 	} else {
 		opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	}
-	for _, register := range []func(context.Context, *runtime.ServeMux, string, []grpc.DialOption) error{
-		serverv1.RegisterSystemServiceHandlerFromEndpoint,
-		serverv1.RegisterAppsServiceHandlerFromEndpoint,
-		serverv1.RegisterDeploymentsServiceHandlerFromEndpoint,
-		serverv1.RegisterRevisionsServiceHandlerFromEndpoint,
-		serverv1.RegisterBuildsServiceHandlerFromEndpoint,
-		serverv1.RegisterDriftServiceHandlerFromEndpoint,
-		serverv1.RegisterDomainsServiceHandlerFromEndpoint,
-		serverv1.RegisterEnvServiceHandlerFromEndpoint,
-		serverv1.RegisterLogsServiceHandlerFromEndpoint,
-		serverv1.RegisterMetricsServiceHandlerFromEndpoint,       // E6 W5-S3：metrics opt-in 面（PromQL 查询/状态/模式切换）
-		serverv1.RegisterAlertingServiceHandlerFromEndpoint,      // B 线 W5-S2：告警面（规则/mode/状态/试跑）
-		serverv1.RegisterNotificationsServiceHandlerFromEndpoint, // E6 W5-S4：通知 Webhook 面（端点/台账/测试）
-		serverv1.RegisterExecServiceHandlerFromEndpoint,          // E7 W5-S6：Web 终端受理面（ticket/状态；WS 数据面走原生端点）
-		serverv1.RegisterEventsServiceHandlerFromEndpoint,
-		serverv1.RegisterPlacementServiceHandlerFromEndpoint,
-		serverv1.RegisterTokensServiceHandlerFromEndpoint,
-		serverv1.RegisterGitKeysServiceHandlerFromEndpoint,  // M4-2：与 gRPC 侧注册清单对齐
-		serverv1.RegisterDatabaseServiceHandlerFromEndpoint, // E4 W4-S2：库实例资源面（生命周期 RPC；连接投影脱敏）
-		serverv1.RegisterSecretsServiceHandlerFromEndpoint,  // E4 W4-S4：平台密钥库面（D-DB-7；无值读回——list 只出名称/指纹）
-		serverv1.RegisterConfigsServiceHandlerFromEndpoint,  // T 线 OT-3/IMPL-T1-4：明文配置资源面（Get 明文 = admin）
-		serverv1.RegisterAuthServiceHandlerFromEndpoint,     // v0.3 W1：认证面（注册/登录/会话；Register/Login/GetRegistrationState 豁免鉴权）
-		serverv1.RegisterUsersServiceHandlerFromEndpoint,    // v0.3 W1：平台用户管理面（平台管理员判定在 handler）
-		serverv1.RegisterAuditServiceHandlerFromEndpoint,    // v0.3 W3-S1：审计读面（平台管理员判定在 handler——D-W0-6）
-		serverv1.RegisterTeamsServiceHandlerFromEndpoint,    // v0.3 W2-S1：团队/成员/邀请面（角色门在 handler）
-		serverv1.RegisterProjectsServiceHandlerFromEndpoint, // v0.3 W2-S1：项目/队内覆写成员面（覆写管理权判定在 handler）
-	} {
-		if err := register(context.Background(), mux, grpcEndpoint, opts); err != nil {
-			return nil, err
-		}
+	// 全量挂载：挂载集/顺序/gRPC-only 豁免都以登记表为准（IMPL-ARCH-I，
+	// registration.go 单点）——任一 handler 挂载失败 fail-fast 拒绝半装配
+	// 的 REST 面。
+	if err := RegisterGatewayHandlers(context.Background(), mux, grpcEndpoint, opts); err != nil {
+		return nil, err
 	}
 	return sanitizeForwardedFor(mux), nil
 }

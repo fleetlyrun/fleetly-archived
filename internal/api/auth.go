@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -46,33 +47,50 @@ const (
 	ScopeBuild = "build"
 )
 
-// containsScope 报告 scope 集（逗号分隔存储形态）是否蕴含所需 scope
-//（admin ⊃ deploy ⊃ read ⊕ terminal ⊕ tasks ⊕ build——terminal/tasks/build
-// 与 read/deploy 平行，仅 admin 蕴含它们：E7 设计 §2.4 / DT-5 / DT-6 的
-// 执行点）。
+// scopeWord 是 scope 词表中单个词的登记条目（IMPL-ARCH-I：词 → 蕴含集/
+// 排序位收敛为一张声明——常量供包内外引用，蕴含语义与固定序只住在
+// scopeWords，containsScope 与 scopeSetToList 均由表推导，不再各持一份
+// 词形清单）。
+type scopeWord struct {
+	// word 是 scope 词本身（token 存储形态，逗号分隔串的成员）。
+	word string
+	// impliesAll 表示持有该词即蕴含**一切**需求词（admin 的开放集语义——
+	// 未来新增词无需改本条目即被蕴含；与旧 containsScope 的 admin 分支
+	// 「case 即 return true」逐字同语义，fail-closed 边界不受影响）。
+	impliesAll bool
+	// implies 是该词直接满足的需求词闭集（impliesAll 之外的情形；admin
+	// 以外的词都蕴含自身 = 显式授予语义）。
+	implies []string
+}
+
+// scopeWords 是 scope 词表的唯一声明（read/deploy/admin + terminal/tasks/
+// build 三个独立词）。切片序 = scopeSetToList 的固定词表序（Principal.
+// Scopes 存储形态的规范序——与收编前手写排序清单逐位一致）；蕴含语义
+// 逐条对照旧 containsScope 的 switch 分支（admin ⊃ deploy ⊃ read ⊕
+// terminal ⊕ tasks ⊕ build——terminal/tasks/build 与 read/deploy 平行，
+// 仅 admin 蕴含它们：E7 设计 §2.4 / DT-5 / DT-6 的执行点）。新增词 =
+// 加常量 + 加一行（漏行由 auth_scope_words_test.go 的表 ⇆ 常量守卫红）。
+var scopeWords = []scopeWord{
+	{word: ScopeRead, implies: []string{ScopeRead}},
+	{word: ScopeDeploy, implies: []string{ScopeRead, ScopeDeploy}},
+	{word: ScopeTerminal, implies: []string{ScopeTerminal}},
+	{word: ScopeTasks, implies: []string{ScopeTasks}},
+	{word: ScopeBuild, implies: []string{ScopeBuild}},
+	{word: ScopeAdmin, impliesAll: true},
+}
+
+// containsScope 报告 scope 集（逗号分隔存储形态）是否蕴含所需 scope。
+// 表驱动：逐个持有词查 scopeWords，命中 impliesAll（admin）或 implies
+// 闭集即满足；词表外的持有词（空串/未知词）与未命中一样不满足——与旧
+// switch 形态逐字同语义（fail-closed：无命中即 false）。
 func containsScope(scopes, need string) bool {
 	for _, s := range strings.Split(scopes, ",") {
-		switch strings.TrimSpace(s) {
-		case ScopeAdmin:
-			return true
-		case ScopeDeploy:
-			if need == ScopeRead || need == ScopeDeploy {
-				return true
+		held := strings.TrimSpace(s)
+		for _, spec := range scopeWords {
+			if spec.word != held {
+				continue
 			}
-		case ScopeRead:
-			if need == ScopeRead {
-				return true
-			}
-		case ScopeTerminal:
-			if need == ScopeTerminal {
-				return true
-			}
-		case ScopeTasks:
-			if need == ScopeTasks {
-				return true
-			}
-		case ScopeBuild:
-			if need == ScopeBuild {
+			if spec.impliesAll || slices.Contains(spec.implies, need) {
 				return true
 			}
 		}
@@ -229,12 +247,13 @@ func (a *Authenticator) AuthenticateSessionCookie(ctx context.Context, cookieHea
 	return Principal{SessionID: sess.ID, UserID: sess.UserID, Scopes: scopeSetToList(scopes)}, nil
 }
 
-// scopeSetToList 把可达集转为固定词表序的切片（Principal.Scopes 存储形态）。
+// scopeSetToList 把可达集转为固定词表序的切片（Principal.Scopes 存储形态；
+// 序 = scopeWords 声明序——词表驱动，与收编前手写排序清单逐位一致）。
 func scopeSetToList(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
-	for _, s := range []string{ScopeRead, ScopeDeploy, ScopeTerminal, ScopeTasks, ScopeBuild, ScopeAdmin} {
-		if set[s] {
-			out = append(out, s)
+	for _, spec := range scopeWords {
+		if set[spec.word] {
+			out = append(out, spec.word)
 		}
 	}
 	return out

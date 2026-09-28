@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	sharedv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/shared/v1"
 	"github.com/fleetlyrun/fleetly/internal/api"
 )
@@ -25,6 +24,10 @@ import (
 // 校验，链尾）→ handler；流式（Follow/Watch）走 auth/ratelimit 流式拦截
 // 器。服务必须在 Serve 之前注册（lynx Server 在 Start 时才 Serve，构造期
 // 注册安全）。
+//
+// 服务面清单 = registration.go 的 ServiceRegistrations（唯一登记表，
+// IMPL-ARCH-I）：本函数只把 wire 供给的实例按名对位成装配集，注册本体
+// （顺序/register 函数）在表单点；表 ⇆ 装配集双向对账缺一即红。
 func NewGRPCServer(
 	app lynx.App,
 	cfg *AppConfig,
@@ -84,42 +87,42 @@ func NewGRPCServer(
 	}
 	srv := lynxgrpc.NewServer(opts...)
 	g := srv.GetServer()
-	serverv1.RegisterSystemServiceServer(g, sys)
-	serverv1.RegisterAppsServiceServer(g, apps)
-	serverv1.RegisterDeploymentsServiceServer(g, deploys)
-	serverv1.RegisterRevisionsServiceServer(g, revisions)
-	serverv1.RegisterBuildsServiceServer(g, builds)
-	serverv1.RegisterDriftServiceServer(g, drift)
-	serverv1.RegisterDomainsServiceServer(g, domains)
-	serverv1.RegisterEnvServiceServer(g, env)
-	serverv1.RegisterLogsServiceServer(g, logsSvc)
-	serverv1.RegisterMetricsServiceServer(g, metricsSvc)             // E6 W5-S3：metrics opt-in 面（查询/状态/模式）
-	serverv1.RegisterAlertingServiceServer(g, alertingSvc)           // B 线 W5-S2：告警面（规则/mode/状态/试跑）
-	serverv1.RegisterNotificationsServiceServer(g, notificationsSvc) // E6 W5-S4：通知 Webhook 面（端点/台账/测试）
-	serverv1.RegisterExecServiceServer(g, execSvc)                   // E7 W5-S6：Web 终端受理面（ticket/状态；terminal scope）
-	serverv1.RegisterEventsServiceServer(g, events)
-	serverv1.RegisterPlacementServiceServer(g, placement)
-	serverv1.RegisterTokensServiceServer(g, tokens)
-	serverv1.RegisterGitKeysServiceServer(g, gitkeys)
-	serverv1.RegisterCronServiceServer(g, cronSvc)
-	serverv1.RegisterDatabaseServiceServer(g, dbs)
-	serverv1.RegisterSecretsServiceServer(g, secretsSvc) // E4 W4-S4：平台密钥库面（D-DB-7，无值读回）
-	serverv1.RegisterConfigsServiceServer(g, configsSvc) // T 线 OT-3/IMPL-T1-4：明文配置资源面（Get 明文走 admin）
-	// 认证/用户面（v0.3 W1，rbac-teams §5）：注册/登录/注册状态三方法在
-	// 拦截器豁免名单，Logout/LogoutAll/Me/AcceptInvite = 任意已认证，用户
-	// 管理面 = admin scope + handler 内平台管理员判定（internal/api/users.go）。
-	serverv1.RegisterAuthServiceServer(g, authSvc)
-	serverv1.RegisterUsersServiceServer(g, usersSvc)
-	// 审计读面（v0.3 W3-S1，rbac-teams §6 D-W0-6）：平台管理员双门
-	//（scope admin + handler 判定——internal/api/audit.go 头注）。
-	serverv1.RegisterAuditServiceServer(g, auditSvc)
-	// 团队/项目面（v0.3 W2-S1，rbac-teams §5）：角色门在 handler 内强制
-	// （机具令牌/非成员 403、平台管理员只读——internal/api/teams.go 头注）。
-	serverv1.RegisterTeamsServiceServer(g, teamsSvc)
-	serverv1.RegisterProjectsServiceServer(g, projectsSvc)
-	// 程序化动态工作负载面（T 线 DT-5 / IMPL-T2-1）：整体 tasks 独立 scope
-	//（scope.go 登记处）；跨令牌隔离与配额在 handler/state 面收口。
-	serverv1.RegisterTasksServiceServer(g, tasksSvc)
+	// 服务装配集（键 = 登记表的服务短名；值 = wire 供给的生产实例）。
+	// 注册顺序、register 函数与 gateway 挂载一律以登记表为准——此处不是
+	// 第三份清单，只做名对位（漏传参/多传参在对账处红，见
+	// RegisterGRPCServices）。
+	instances := map[string]any{
+		"SystemService":        sys,
+		"AppsService":          apps,
+		"DeploymentsService":   deploys,
+		"RevisionsService":     revisions,
+		"BuildsService":        builds,
+		"DriftService":         drift,
+		"DomainsService":       domains,
+		"EnvService":           env,
+		"LogsService":          logsSvc,
+		"MetricsService":       metricsSvc,
+		"AlertingService":      alertingSvc,
+		"NotificationsService": notificationsSvc,
+		"ExecService":          execSvc,
+		"EventsService":        events,
+		"PlacementService":     placement,
+		"TokensService":        tokens,
+		"GitKeysService":       gitkeys,
+		"CronService":          cronSvc,
+		"DatabaseService":      dbs,
+		"SecretsService":       secretsSvc,
+		"ConfigsService":       configsSvc,
+		"AuthService":          authSvc,
+		"UsersService":         usersSvc,
+		"AuditService":         auditSvc,
+		"TeamsService":         teamsSvc,
+		"ProjectsService":      projectsSvc,
+		"TasksService":         tasksSvc,
+	}
+	if err := RegisterGRPCServices(g, instances); err != nil {
+		return nil, err
+	}
 	return srv, nil
 }
 
