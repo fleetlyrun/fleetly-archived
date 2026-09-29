@@ -59,7 +59,7 @@ docker run -d --name fleetlyd --network host --restart unless-stopped \
 | 删栈内 redis → 托管 `twredis`;server/worker label 增补 `twredis` | 同上全托管裁决;地址/密码经 `TORCHWOOD_DATA_REDIS_ADDR/PASSWORD` env 覆盖 config.yaml 字面量 |
 | minio(SILO)留栈内 | 对象存储非数据库,平台无托管模板(DT-8 口径) |
 | 三个 Config 键改短名(config.yaml/runtime.sql/roles.sql),挂载目标路径不变 | 同 64 上限溢出(A1 修复前绕过) |
-| 新增 `grpcbridge`(alpine/socat) | torchwood 的 fleetly 客户端纯明文 gRPC(`insecure.NewCredentials`),控制面 8421 是 TLS;桥在 app 网听明文 8421 → OPENSSL 连宿主 advertise:8421,**带 `commonname=ctrl.dev.fleetly.run` 发 SNI + CA 校验**(不带 SNI 时 socat 每 5s 刷 `refusing to set empty SNI host name`) |
+| 新增 `grpcbridge`(haproxy:3.1-alpine) | torchwood 的 fleetly 客户端纯明文 gRPC(`insecure.NewCredentials`),控制面 8421 是 TLS;桥在 app 网听明文 8421,TCP 中继 + 上游 `ssl verify none alpn h2 sni str(ctrl.dev.fleetly.run)` 连宿主 advertise:8421。**必须 HAProxy 不能 socat**:fleetlyd 的 grpc-go TLS 服务端要求 ALPN h2,socat OPENSSL 不支持 ALPN——TLS 握手成功后服务端即关连接,明文 gRPC(unary/流式皆然)读 server preface 得 EOF(2026-09-29 实证:CLI 经 socat 中继 unary 复现 EOF;换 HAProxy `alpn h2` 后 unary+BuildFromUpload 流式全通) |
 | worker 健康探针 `kill -0 1`(原 `pgrep -x worker`) | fleetly `command` 覆盖 ENTRYPOINT 后 argv[0]=`/usr/local/bin/worker`,pgrep -x 恒 rc=1→健康门永不过;kill -0 1 = 零依赖 PID-1 存活探针(dokploy 形态 argv[0]=worker 不受影响) |
 
 ## 重建配方(scripts/ 为 2026-09-29 实录脚本,凭据全部 VPS 侧生成,不进仓库)
@@ -69,7 +69,7 @@ docker run -d --name fleetlyd --network host --restart unless-stopped \
 1. `scripts/bootstrap.sh` — 首用户注册(REST `/v1/auth/register`,首用户=平台管理员,bootstrap 随注册吊销)→ 会话铸 machine 令牌 → CLI 就绪(`FLEETLY_ADDR=127.0.0.1:8421 FLEETLY_TLS=insecure`);
 2. `scripts/tw-db-setup.sh` — 托管库创建(percona-18 + redis-7;messageloop 的 mlredis 在 `scripts/db-and-first-deploy.sh`),`databases reveal` 落 `/tmp/rb/secrets.sh`(0600);
 3. 两栈各**两阶段部署**:`fleetly deploy`(首发预期失败:config 前哨 `E_CONFIG_NOT_FOUND`,app 由此创建)→ env/configs/domains → 再部署。torchwood 侧 env×14 + configs×3 + 域名×2 + 机具令牌(scope tasks,build)见 `scripts/torchwood-deploy.sh`;
-4. **torchwood 首发竞态**:init job 与常驻服务并行,首窗角色/编码未就绪可能 `E_HEALTH_TIMEOUT`——状态收敛后重部署即绿(init job 全幂等);
+4. **torchwood 首发竞态**:init job 与常驻服务并行,首窗角色/编码未就绪可能 `E_HEALTH_TIMEOUT`——状态收敛后重部署即绿(init job 全幂等);**首个函数的首次执行还有一个一次性挂靠竞态**:`FLEETLY_NETWORK_MEMBERS` 声明使平台在首个 task-group 网创建时排队 app 重部署(挂靠 dispatcher/server),会把在途的构建请求换掉(表现为 CLI 侧 `Post …/v1/dispatch/builds: EOF`,而构建本身在 fleetlyd 侧已成功)——挂靠一次完成后再重试即绿;
 5. `scripts/tw-provision2.sh` — 供给链:sign-up(setup token)→ sign-in(**会话经 Set-Cookie TORCHWOOD_session_console,body 不投影 token**)→ `POST /v1/server/api-keys`(**必须带 `X-Torchwood-Project` 头**)→ `torchwood runbook up`(mlbridge 仓 runbooks/,供给专库/集合/索引)→ `fleetly projects network attach` 两 app(滚动入项目网)→ mlbridge env 换接 `http://torchwood-server:9080` + 项目 key → 重部署;
 6. `scripts/verify.sh` — 验收:双 app derived_state/任务健康/redis PONG/E4 env 物化/域名 TLS+ALPN/VL 检索。
 

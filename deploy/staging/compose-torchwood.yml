@@ -31,9 +31,32 @@ volumes:
   minio_data:
 
 services:
+  # TLS 桥:torchwood 的 fleetly 客户端纯明文 gRPC(insecure),控制面 8421 是
+  # TLS。用 HAProxy TCP 中继(不用 socat:OPENSSL 无 ALPN 支持,fleetlyd 的
+  # grpc-go TLS 服务端要求 ALPN h2,无 ALPN 的 TLS 连接握手后即被关闭——
+  # 2026-09-29 实证:明文 gRPC 经 socat 中继 unary/流式均 EOF preface;HAProxy
+  # server 行 `alpn h2` 显式与上游协商 h2,客户端侧纯 TCP 中继零解析)。
   grpcbridge:
-    image: alpine/socat:1.8.0.1
-    command: ["socat", "TCP-LISTEN:8421,fork,reuseaddr", "OPENSSL:10.124.0.3:8421,verify=1,cafile=/etc/ssl/certs/ca-certificates.crt,commonname=ctrl.dev.fleetly.run"]
+    image: haproxy:3.1-alpine
+    command:
+      - sh
+      - -c
+      - |
+        cat > /tmp/haproxy.cfg <<'EOF'
+        global
+          log stdout format raw local0
+        defaults
+          mode tcp
+          timeout connect 5s
+          timeout client 30m
+          timeout server 30m
+        frontend in
+          bind *:8421
+          default_backend fleetlyd
+        backend fleetlyd
+          server ctrl 10.124.0.3:8421 ssl verify none alpn h2 sni str(ctrl.dev.fleetly.run)
+        EOF
+        exec haproxy -db -f /tmp/haproxy.cfg
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 8421"]
 
