@@ -50,7 +50,7 @@ func newRegistryTestEnv(t *testing.T) (serverv1.SystemServiceClient, *state.Stor
 func TestRegistrySettingsFace(t *testing.T) {
 	cl, st, admin, read := newRegistryTestEnv(t)
 	ctx := context.Background()
-	const password = "ghp-REGISTRY-PASSWORD-MARKER"
+	const password = "ghp-REGISTRY-PASSWORD-MARKER" //nolint:gosec // G101：测试标记值，非真实凭据
 
 	// scope 把门：read token → PermissionDenied（两面同门）。
 	if _, err := cl.GetRegistrySettings(authCtx(ctx, read), &serverv1.GetRegistrySettingsRequest{}); status.Code(err) != codes.PermissionDenied {
@@ -190,11 +190,13 @@ func TestRegistrySettingsPlatformAdminGate(t *testing.T) {
 	}
 
 	// 平台管理员与机具令牌：写面 200。
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	if _, err := cl.UpdateRegistrySettings(authCtx(ctx, tokRoot), &serverv1.UpdateRegistrySettingsRequest{
 		Host: "ghcr.io", Username: "admin-pull", Password: "pw-gate-only",
 	}); err != nil {
 		t.Fatalf("platform admin update: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	if _, err := cl.UpdateRegistrySettings(authCtx(ctx, tokMachine), &serverv1.UpdateRegistrySettingsRequest{
 		Host: "ghcr.io", Username: "machine-pull", Password: "pw-gate-only-2",
 	}); err != nil {

@@ -174,6 +174,7 @@ func (s *Store) ListTokensForUser(ctx context.Context, userID string) ([]Token, 
 // listTokensWhere 是 token 列表的共享通道（extra 空 = 全列；带占位实参 =
 // 按属主过滤）。
 func (s *Store) listTokensWhere(ctx context.Context, cond string, args ...any) ([]Token, error) {
+	//nolint:gosec // G202：拼接的是列清单与固定 cond 段，值全部走 ? 参数
 	rows, err := s.db.QueryContext(ctx, `SELECT `+tokRowCols+` FROM tokens WHERE revoked_at IS NULL`+cond+` ORDER BY created_at ASC, id ASC`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("state: list tokens: %w", err)

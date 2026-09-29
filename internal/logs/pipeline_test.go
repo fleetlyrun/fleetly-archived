@@ -381,9 +381,9 @@ func TestHistoryBuildSourceRedacted(t *testing.T) {
 		t.Fatalf("CreateApp: %v", err)
 	}
 	const (
-		envSecret   = "env-secret-value-42"
-		hookSecret  = "webhook-secret-value-42"
-		tokenSecret = "https-token-value-42"
+		envSecret   = "env-secret-value-42"     //nolint:gosec // G101：测试夹具 secret，非真实凭据
+		hookSecret  = "webhook-secret-value-42" //nolint:gosec // G101：测试夹具 secret，非真实凭据
+		tokenSecret = "https-token-value-42"    //nolint:gosec // G101：测试夹具 secret，非真实凭据
 	)
 	envCipher, err := box.Encrypt([]byte(envSecret))
 	if err != nil {

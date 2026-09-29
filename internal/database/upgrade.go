@@ -73,6 +73,7 @@ func (m *Manager) Upgrade(ctx context.Context, name string) (string, string, err
 	}
 	old := inst.ImageDigest
 	m.opsWG.Add(1)
+	//nolint:gosec // G118：异步链刻意脱离请求 ctx（受理已返回）——预算取升级 op 自身超时
 	go func() {
 		defer m.opsWG.Done()
 		defer m.endOp(inst.ID)

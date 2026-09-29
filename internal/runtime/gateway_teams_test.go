@@ -99,7 +99,7 @@ func TestGatewayTeamsRestFlow(t *testing.T) {
 			t.Fatalf("%s %s: %v", method, path, err)
 		}
 		if cookie != "" {
-			req.AddCookie(&gohttp.Cookie{Name: "fleetly_session", Value: cookie})
+			req.AddCookie(&gohttp.Cookie{Name: "fleetly_session", Value: cookie}) //nolint:gosec // G124：客户端注入会话 cookie 测鉴权路径，属性由服务端 Set-Cookie 语义承担
 		}
 		if bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+bearer)

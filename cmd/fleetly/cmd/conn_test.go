@@ -164,7 +164,7 @@ func TestWaitVerbCancelCleanExit(t *testing.T) {
 // 链路覆盖行为等价）。同时钉住帮助文案口径：指路 env 与 bootstrap-token
 // 文件（B5 后 token 不进日志，旧"首启日志"指引自 B1 起废除）。
 func TestTokenFlagHelpNoEnvEcho(t *testing.T) {
-	const secret = "flt_h1_no_env_echo_regression"
+	const secret = "flt_h1_no_env_echo_regression" //nolint:gosec // G101：回显回归钉测标记，非真实凭据
 	t.Setenv("FLEETLY_TOKEN", secret)
 	// 帮助面 ①：动词级 -h（apps list 带 conn flags）。
 	code, out, _ := runCLI(t, "apps", "list", "-h")

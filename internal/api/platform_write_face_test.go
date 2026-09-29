@@ -165,6 +165,7 @@ func TestPlatformWriteFaceGate(t *testing.T) {
 	if _, err := notify.GetSmtpSettings(authCtx(ctx, env.tokMachine), &serverv1.GetSmtpSettingsRequest{}); err != nil {
 		t.Fatalf("machine GetSmtpSettings: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	if _, err := notify.UpdateSmtpSettings(authCtx(ctx, env.tokMachine), &serverv1.UpdateSmtpSettingsRequest{
 		Host: "127.0.0.1", Port: 1, From: "fleetly@example.test", Password: "pw-e2e-only",
 	}); err != nil {

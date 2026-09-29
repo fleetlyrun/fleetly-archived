@@ -38,10 +38,10 @@ const (
 	ExecRelayServiceName = "fleetly-exec"
 	// ExecRelaySecretName 是集群 token 的 Swarm secret 名（平台生成 48B，
 	// 哈希落 meta——用户面轮换不做，runbook 记运维路径）。
-	ExecRelaySecretName = "fleetly-exec-token"
+	ExecRelaySecretName = "fleetly-exec-token" //nolint:gosec // G101：Swarm secret 名常量，非凭据本体
 	// MetaKeyClusterTokenHash 是集群 token sha256 hex 的 meta 键（认证比对
 	// 真源——明文只存在于 Swarm secret）。
-	MetaKeyClusterTokenHash = "execrelay_cluster_token_hash"
+	MetaKeyClusterTokenHash = "execrelay_cluster_token_hash" //nolint:gosec // G101：meta 键名常量，非凭据
 	// DefaultPerTokenSessions / DefaultMaxSessions 是并发限额（设计 §2.4）。
 	DefaultPerTokenSessions = 2
 	DefaultMaxSessions      = 8

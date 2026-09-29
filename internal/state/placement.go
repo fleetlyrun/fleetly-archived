@@ -98,6 +98,7 @@ func (s *Store) PlacementByApp(ctx context.Context, appIDs []string) (map[string
 	if len(appIDs) == 0 {
 		return out, nil
 	}
+	//nolint:gosec // G202：拼接的是列清单与占位符串，值全部走 ? 参数（下方 args）
 	q := `SELECT app_id, platform_node_id, state, source, label_ref, reason, etag,
 		pinned_at, created_at, updated_at
 		FROM placements WHERE app_id IN (` + placeholders(len(appIDs)) + `)`

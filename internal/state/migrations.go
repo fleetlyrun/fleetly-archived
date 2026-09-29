@@ -168,7 +168,7 @@ func SchemaVersions(ctx context.Context, path string) (dbVersion, maxVersion int
 	if err != nil {
 		return 0, maxVersion, fmt.Errorf("state: open sqlite %s: %w", path, err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var table string
 	scanErr := db.QueryRowContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",

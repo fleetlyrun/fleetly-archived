@@ -414,7 +414,7 @@ func TestTLSHandshakeGatedByCert(t *testing.T) {
 	defer func() { _ = ln.Close() }()
 	srvLog := log.New(io.Discard, "", 0) // 未就绪期的握手失败是预期形态，静默
 	go func() {
-		s := &http.Server{Handler: http.NewServeMux(), ErrorLog: srvLog}
+		s := &http.Server{Handler: http.NewServeMux(), ErrorLog: srvLog, ReadHeaderTimeout: 5 * time.Second}
 		_ = s.Serve(tls.NewListener(ln, tlsCfg))
 	}()
 

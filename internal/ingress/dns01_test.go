@@ -254,7 +254,7 @@ func TestDNS01BranchFailsHonest(t *testing.T) {
 	}
 
 	// 设置不可读 → 决策显式失败（不按 false 静默走 HTTP-01）。
-	st.Close()
+	_ = st.Close()
 	if _, err := m.dns01ForPlatform(ctx); err == nil {
 		t.Fatal("unreadable settings must fail the dns-01 decision")
 	}

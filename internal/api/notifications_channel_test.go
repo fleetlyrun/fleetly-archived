@@ -212,6 +212,7 @@ func TestSmtpSettingsRPCRoundTrip(t *testing.T) {
 	}
 
 	// 保存（密码明文入站 → 库内必须是密文）。
+	//nolint:gosec // G101：测试夹具口令（密文落库断言的入站材料），非真实凭据
 	saved, err := cl.UpdateSmtpSettings(ctx, &serverv1.UpdateSmtpSettingsRequest{
 		Host: "smtp.example.test", Port: 587,
 		Username: "relay-user", Password: "PLAINTEXT-PW", From: "fleetly@example.test",

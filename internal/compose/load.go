@@ -124,7 +124,7 @@ type Warning struct {
 const (
 	// WarningKindUserLabelNotPassed：非 fleetly.* 的服务 label 平台不透传
 	//（v0.1 受控子集只消费平台约定 label；S16-C2——静默丢弃改警告披露）。
-	WarningKindUserLabelNotPassed = "user_label_not_passed"
+	WarningKindUserLabelNotPassed = "user_label_not_passed" //nolint:gosec // G101：警告 Kind 枚举值，非凭据
 	// WarningKindCronServiceScheduled：服务带 fleetly.cron 声明（E5 Cron）
 	// ——只声明不部署长驻服务的 plan 披露口径（调度器按点建一次性 job；
 	// 无注册 W 码，Kind 标识）。

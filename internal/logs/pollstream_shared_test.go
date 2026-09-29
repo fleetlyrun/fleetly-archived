@@ -39,7 +39,7 @@ func TestPollStreamSharedSkeletonServesBothFamilies(t *testing.T) {
 	app, _ := testsupport.SeedAppE(t, st, "sharedloop")
 	// 种一枚平台 env：app 家族行必须脱敏、任务家族行原样通过（任务无 app
 	// env 脱敏面）——同一条 secret 在两个 sink 的分叉即共路证据的一半。
-	const secret = "shared-loop-secret-4242"
+	const secret = "shared-loop-secret-4242" //nolint:gosec // G101：测试夹具 secret，非真实凭据
 	ciphertext, err := box.Encrypt([]byte(secret))
 	if err != nil {
 		t.Fatalf("Encrypt: %v", err)

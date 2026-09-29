@@ -130,14 +130,3 @@ func sendPayload(ctx context.Context, client *http.Client, rawURL string, secret
 	}
 	return true, resp.StatusCode, ""
 }
-
-// SendTestPayload 发送 type=test 载荷（webhook 通道试发执行体；结构同
-// 真实事件、验签同链路——设计 §5.2「验证连通与验签配置」）。单次同步
-// POST（10s 预算）；不落台账——连通性检查不是投递事实。
-func SendTestPayload(ctx context.Context, rawURL string, secret []byte, endpointID string) (bool, int, string) {
-	body, err := MarshalPayload(NewTestPayload(endpointID, time.Now().UTC().Unix()))
-	if err != nil {
-		return false, 0, "payload marshal failed: " + err.Error()
-	}
-	return sendPayload(ctx, &http.Client{}, rawURL, secret, body, DefaultAttemptTimeout)
-}

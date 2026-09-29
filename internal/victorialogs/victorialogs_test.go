@@ -54,11 +54,11 @@ func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ServiceStat
 func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.created = append(f.created, spec.Annotations.Name)
+	f.created = append(f.created, spec.Name)
 	cur := ServiceState{Exists: true, Version: 1}
 	cur.fillFrom(spec)
 	cur.normalizeNetworkIDs()
-	f.services[spec.Annotations.Name] = cur
+	f.services[spec.Name] = cur
 	return nil
 }
 

@@ -44,7 +44,7 @@ func TestSplitTimestamp(t *testing.T) {
 func muxFrame(fd byte, payload []byte) []byte {
 	h := make([]byte, 8)
 	h[0] = fd
-	binary.BigEndian.PutUint32(h[4:8], uint32(len(payload)))
+	binary.BigEndian.PutUint32(h[4:8], uint32(len(payload))) //nolint:gosec // G115：测试帧长 = 测试载荷长度，恒在 uint32 值域
 	return append(h, payload...)
 }
 

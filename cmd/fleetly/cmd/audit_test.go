@@ -33,7 +33,7 @@ func seedCLIAuthRows(t *testing.T, env *apitestFixture) []state.AuditEntry {
 		{ID: "01CLIAUDITLOGINFAIL000000", At: env.base, Actor: "human", Action: "auth.login_failed", Target: "login:ada@example.com", Result: "error", ErrorCode: "E_AUTH_INVALID_CREDENTIALS"},
 		{ID: "01CLIAUDITAPIDELETE000000", At: env.base.Add(time.Minute), Actor: "user:01USERADA000000000000", Action: "api.AppsService.DeleteApp", Target: "app:01APP00000000000000", Result: "ok", RequestID: "req-7"},
 		{ID: "01CLIAUDITWEBHOOKSET00000", At: env.base.Add(2 * time.Minute), Actor: "user:01USERADA000000000000", Action: "api.AppsService.SetAppWebhookSecret", Target: "app:01APP00000000000000", Result: "ok"},
-		{ID: "01CLIAUDITRETENTION000000", At: env.base.Add(3 * time.Minute), Actor: "system", Action: "audit.retention_changed", Target: "platform:audit", Result: "ok", DiffSummary: `{"note":"a,b"}` + "\nline2"},
+		{ID: "01CLIAUDITRETENTION000000", At: env.base.Add(3 * time.Minute), Actor: "system", Action: "audit.retention_changed", Target: "platform:audit", Result: "ok", DiffSummary: state.DiffSummary("note", "a,b") + "\nline2"},
 	}
 	for _, r := range rows {
 		if err := env.Store.InTx(context.Background(), func(tx *state.Tx) error {

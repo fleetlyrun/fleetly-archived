@@ -763,7 +763,7 @@ func TestCertStoreSaveDetectsTampering(t *testing.T) {
 	store := newCertStore(dir)
 	// 回读出口注入篡改（磁盘/写路径损坏形态）。
 	store.readFile = func(path string) ([]byte, error) {
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) //nolint:gosec // G304：读 t.TempDir 受控工件，路径自注入出口
 		if err != nil {
 			return nil, err
 		}
@@ -847,16 +847,6 @@ func TestAttachNetworkKeepsPreviousApps(t *testing.T) {
 			t.Fatalf("duplicate network attachment %s (attach must be idempotent)", n)
 		}
 	}
-}
-
-// mustApp1 是测试内 app 行取回（幂等重发布段的输入）。
-func mustApp1(t *testing.T, st *state.Store) state.App {
-	t.Helper()
-	app, err := st.GetAppByName(context.Background(), "app1")
-	if err != nil {
-		t.Fatalf("get app1: %v", err)
-	}
-	return app
 }
 
 // TestEnsureTraefikUpdatePreservesAttachedNetworks 收敛更新保留全部既有

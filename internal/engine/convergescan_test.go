@@ -53,7 +53,7 @@ func TestNoConvergenceOutsidePrimitive(t *testing.T) {
 		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		raw, rerr := os.ReadFile(path)
+		raw, rerr := os.ReadFile(path) //nolint:gosec // G304：扫描本仓源码树，路径自 WalkDir
 		if rerr != nil {
 			return rerr
 		}

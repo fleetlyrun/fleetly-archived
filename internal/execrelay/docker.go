@@ -190,7 +190,7 @@ type execStream struct {
 
 func (s *execStream) Read(p []byte) (int, error)  { return s.hijacked.Reader.Read(p) }
 func (s *execStream) Write(p []byte) (int, error) { return s.hijacked.Conn.Write(p) }
-func (s *execStream) Close() error                { s.hijacked.CloseWrite(); s.hijacked.Close(); return nil }
+func (s *execStream) Close() error                { _ = s.hijacked.CloseWrite(); s.hijacked.Close(); return nil }
 func (s *execStream) ExecID() string              { return s.execID }
 
 // shortID 是日志/错误文本里的容器 ID 截断（全 ID 不进错误面的卫生习惯

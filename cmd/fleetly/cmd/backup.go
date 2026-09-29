@@ -173,7 +173,7 @@ func (c *backupsCreateCmd) Run(ctx context.Context, env *commands.Environment, a
 			ID: b.GetId(), Kind: b.GetKind(), Path: b.GetPath(),
 			SHA256: b.GetSha256(), SizeBytes: b.GetSizeBytes(),
 			VerifyStatus: b.GetVerifyStatus(), Error: b.GetError(),
-			CreatedAt: tstampRFC3339(b.GetCreatedAt()),
+			CreatedAt:    tstampRFC3339(b.GetCreatedAt()),
 			UploadStatus: b.GetUploadStatus(),
 			UploadedAt:   tstampRFC3339(b.GetUploadedAt()),
 			UploadError:  b.GetUploadError(),

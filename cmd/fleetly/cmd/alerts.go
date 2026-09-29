@@ -126,11 +126,11 @@ func (c *alertsRulesLsCmd) Run(ctx context.Context, env *commands.Environment, _
 
 // alertsRulesCreateCmd 实现 `fleetly alerts rules create <name> <expr>`。
 type alertsRulesCreateCmd struct {
-	forSec  int
-	labels  repeatedFlags
+	forSec   int
+	labels   repeatedFlags
 	channels string
-	jsonOut bool
-	conn    connFlags
+	jsonOut  bool
+	conn     connFlags
 }
 
 func (c *alertsRulesCreateCmd) Name() string { return "create" }

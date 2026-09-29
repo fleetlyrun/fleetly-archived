@@ -99,7 +99,7 @@ func (s *DeploymentsService) Deploy(ctx context.Context, req *serverv1.DeployReq
 	}
 	// MG-6：解析中转目录随请求回收——持久化副本在 <数据根>/deployments/
 	// <id>/compose.yaml，本目录不存活到函数外，不留孤儿 tmp。
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "compose.yaml")
 	if err := os.WriteFile(path, req.GetCompose(), 0o600); err != nil { //nolint:gosec // G306：compose 内容非密钥，0600 保守
 		return nil, fmt.Errorf("write compose temp file: %w", err)

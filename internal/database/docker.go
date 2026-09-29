@@ -241,8 +241,8 @@ func (c *realDockerClient) ServiceInspect(ctx context.Context, name string) (Ser
 	}
 	svc := res.Service
 	out := ServiceState{Exists: true, Version: svc.Version.Index, Labels: map[string]string{}}
-	if svc.Spec.Annotations.Labels != nil {
-		for k, v := range svc.Spec.Annotations.Labels {
+	if svc.Spec.Labels != nil {
+		for k, v := range svc.Spec.Labels {
 			out.Labels[k] = v
 		}
 	}

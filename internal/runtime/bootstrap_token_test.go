@@ -41,7 +41,7 @@ func TestBootstrapTokenWrittenToFileNotLogged(t *testing.T) {
 	if !strings.Contains(buf.String(), tokenPath) {
 		t.Fatalf("log must report token file path, got %q", buf.String())
 	}
-	raw, err := os.ReadFile(tokenPath)
+	raw, err := os.ReadFile(tokenPath) //nolint:gosec // G304：读测试临时目录工件
 	if err != nil {
 		t.Fatalf("read bootstrap token file: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestBootstrapTokenWrittenToFileNotLogged(t *testing.T) {
 		if err := bootstrapAdminToken(log, tokenPath, st2); err != nil {
 			t.Fatalf("bootstrapAdminToken (file exists): %v", err)
 		}
-		after, err := os.ReadFile(tokenPath)
+		after, err := os.ReadFile(tokenPath) //nolint:gosec // G304：读测试临时目录工件
 		if err != nil {
 			t.Fatalf("re-read token file: %v", err)
 		}

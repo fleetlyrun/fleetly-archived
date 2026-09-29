@@ -51,9 +51,9 @@ type RenderInput struct {
 // v0.3 W4）。
 const (
 	pgUser           = "fleetly"
-	pgPasswordFile   = "/run/secrets/password"
-	pgSecretName     = "password"
-	redisPasswordEnv = "FLEETLY_DB_PASSWORD"
+	pgPasswordFile   = "/run/secrets/password" //nolint:gosec // G101：secret 文件路径常量，非凭据本体
+	pgSecretName     = "password"              //nolint:gosec // G101：secret 资源名常量，非凭据本体
+	redisPasswordEnv = "FLEETLY_DB_PASSWORD"   //nolint:gosec // G101：env 变量名常量，非凭据
 )
 
 // pgDataDirectory 返回 PG 的 PGDATA（数据目录 = 挂载点 + pgdata 子目录

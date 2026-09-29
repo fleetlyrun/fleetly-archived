@@ -63,7 +63,7 @@ const (
 	// serve /etc/zot/config.json——v2.1.21 镜像实况）。
 	registryConfigMountPath = "/etc/zot/config.json"
 	// registryHTPasswdMountPath 是 htpasswd 工件在容器内的只读挂载点。
-	registryHTPasswdMountPath = "/fleetly/registry/htpasswd"
+	registryHTPasswdMountPath = "/fleetly/registry/htpasswd" //nolint:gosec // G101：挂载路径常量，非凭据
 	// RegistryBackendPort 是 zot 监听端口（overlay 内明文 5000；Traefik 经
 	// fleetly-system overlay 反代该 VIP 端口）。
 	RegistryBackendPort = "5000"
@@ -243,7 +243,7 @@ func (m *Manager) ensureZotConfigArtifact(creds *registryCredentials) error {
 		return fmt.Errorf("ingress: read zot config %s: %w", creds.zotConfigFile, rerr)
 	}
 	// 配置只含路径与端口，无秘密材料——0644（凭据/htpasswd 是 0600）。
-	if err := os.WriteFile(creds.zotConfigFile, want, 0o644); err != nil {
+	if err := os.WriteFile(creds.zotConfigFile, want, 0o644); err != nil { //nolint:gosec // G306：刻意 0644——内容无秘密材料（上方注释即决策）
 		return fmt.Errorf("ingress: write zot config %s: %w", creds.zotConfigFile, err)
 	}
 	m.log.Info("ingress: registry zot config artifact written", "file", creds.zotConfigFile)

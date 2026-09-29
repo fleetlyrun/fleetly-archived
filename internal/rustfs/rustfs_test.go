@@ -79,7 +79,6 @@ type fakeDocker struct {
 	mu sync.Mutex
 
 	swarmActive bool
-	platformID  string // store 侧 meta；fake 只读自身字段
 
 	services map[string]ServiceState
 	created  []string
@@ -121,10 +120,10 @@ func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ServiceStat
 func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.created = append(f.created, spec.Annotations.Name)
+	f.created = append(f.created, spec.Name)
 	cur := ServiceState{Exists: true, Version: 1}
 	fillStateFromSpec(&cur, spec)
-	f.services[spec.Annotations.Name] = cur
+	f.services[spec.Name] = cur
 	return nil
 }
 

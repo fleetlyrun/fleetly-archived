@@ -33,7 +33,7 @@ const acmeDNSProviderWord = "none|dnspod|cloudflare"
 
 // acmeEnvToken 是凭证的 env 回退变量名（实现票：token 经 env 回退不进
 // shell 历史——--token 旗标缺位时读取）。
-const acmeEnvToken = "FLEETLY_ACME_DNS_TOKEN"
+const acmeEnvToken = "FLEETLY_ACME_DNS_TOKEN" //nolint:gosec // G101：env 变量名常量，非凭据
 
 // acmeCmd 是外层动词 `acme`：分发 show/dns/wildcard。
 type acmeCmd struct {
@@ -47,9 +47,11 @@ func newAcmeCmd() *acmeCmd {
 	return &acmeCmd{sub: sub}
 }
 
-func (c *acmeCmd) Name() string     { return "acme" }
-func (c *acmeCmd) Synopsis() string { return "ACME wildcard certificate and DNS-01 provider settings (admin scope)" }
-func (c *acmeCmd) Usage() string    { return "acme <show|dns|wildcard> [flags] [args]" }
+func (c *acmeCmd) Name() string { return "acme" }
+func (c *acmeCmd) Synopsis() string {
+	return "ACME wildcard certificate and DNS-01 provider settings (admin scope)"
+}
+func (c *acmeCmd) Usage() string { return "acme <show|dns|wildcard> [flags] [args]" }
 
 func (c *acmeCmd) SetFlags(_ *flag.FlagSet) {}
 

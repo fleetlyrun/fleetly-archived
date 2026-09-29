@@ -174,8 +174,8 @@ func readPastedToken(flagToken string, out io.Writer) (string, error) {
 		return flagToken, nil
 	}
 	if stdinIsTerminal() {
-		fmt.Fprintln(out, "Create a PAT in the Console (user menu > API tokens), then paste it here (input is echoed):")
-		fmt.Fprint(out, "token: ")
+		_, _ = fmt.Fprintln(out, "Create a PAT in the Console (user menu > API tokens), then paste it here (input is echoed):")
+		_, _ = fmt.Fprint(out, "token: ")
 		line, err := bufio.NewReader(stdin).ReadString('\n')
 		if err != nil && line == "" {
 			return "", fmt.Errorf("read token from terminal: %w", err)

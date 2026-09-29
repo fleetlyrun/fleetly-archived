@@ -114,7 +114,7 @@ func TestActiveImplDocsReferenceExistingTests(t *testing.T) {
 	inForeignSection := false
 	inFence := false
 	for _, doc := range selectedDocs {
-		raw, err := os.ReadFile(filepath.Join(docsPlanDir, filepath.FromSlash(doc.name)))
+		raw, err := os.ReadFile(filepath.Join(docsPlanDir, filepath.FromSlash(doc.name))) //nolint:gosec // G304：读 docs/plan 在册文档，路径自清单
 		if err != nil {
 			t.Fatalf("read %s: %v", doc.path, err)
 		}
@@ -272,7 +272,7 @@ func collectRepoTestFuncNames(t *testing.T, repoRoot string) map[string]bool {
 		if !strings.HasSuffix(path, ".go") {
 			return nil
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) //nolint:gosec // G304：扫描本仓源码树，路径自 WalkDir
 		if err != nil {
 			return err
 		}

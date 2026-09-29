@@ -51,7 +51,7 @@ func main() {
 	expectClose := fs.Int("expect-close", -1, "await a session close frame with this code")
 	holdSecs := fs.Int("hold-seconds", 30, "hold-mode session lifetime")
 	budget := fs.Duration("timeout", 30*time.Second, "overall budget")
-	fs.Parse(os.Args[1:]) //nolint:errcheck // flag 解析失败自带 Usage 退出
+	fs.Parse(os.Args[1:]) //nolint:errcheck,gosec // flag 解析失败自带 Usage 退出
 
 	ctx, cancel := context.WithTimeout(context.Background(), *budget)
 	defer cancel()
@@ -82,7 +82,7 @@ func main() {
 		}
 		os.Exit(1)
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	if *mode == "hold" {
 		// 保持会话：整消息读（丢弃载荷——coder/websocket 要求整消息消费，
@@ -90,7 +90,7 @@ func main() {
 		// 直到本端断开（并发上限占面）。
 		deadline := time.Now().Add(time.Duration(*holdSecs) * time.Second)
 		for time.Now().Before(deadline) {
-			rctx, rcancel := context.WithTimeout(ctx, deadline.Sub(time.Now()))
+			rctx, rcancel := context.WithTimeout(ctx, time.Until(deadline))
 			_, _, err := conn.Read(rctx)
 			rcancel()
 			if err != nil {
@@ -105,7 +105,7 @@ func main() {
 	var out bytes.Buffer
 	deadline := time.Now().Add(*budget)
 	for {
-		rctx, rcancel := context.WithTimeout(ctx, deadline.Sub(time.Now()))
+		rctx, rcancel := context.WithTimeout(ctx, time.Until(deadline))
 		kind, reader, err := conn.Reader(rctx)
 		if err != nil {
 			rcancel()
@@ -177,7 +177,7 @@ func acquireTicket(ctx context.Context, addr, token, app, service string) (strin
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}

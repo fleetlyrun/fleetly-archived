@@ -23,7 +23,7 @@ func TestVerifyDomainsUsesConfiguredPorts(t *testing.T) {
 	httpPort := httpLn.Addr().(*net.TCPAddr).Port
 	httpSrv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	})}
+	}), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = httpSrv.Serve(httpLn) }()
 	t.Cleanup(func() { _ = httpLn.Close() })
 
@@ -41,7 +41,7 @@ func TestVerifyDomainsUsesConfiguredPorts(t *testing.T) {
 	tlsPort := tlsLn.Addr().(*net.TCPAddr).Port
 	tlsSrv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}), TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}}}
+	}), TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}}, ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = tlsSrv.ServeTLS(tlsLn, "", "") }()
 	t.Cleanup(func() { _ = tlsLn.Close() })
 

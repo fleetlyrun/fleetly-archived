@@ -40,7 +40,7 @@ func auditFixtureRows(base time.Time) []AuditEntry {
 		{
 			ID: "01AUDITSYSTEMPRUNE000000000", At: base.Add(-1 * time.Hour),
 			Actor: "system", Action: "audit.retention_changed", Target: "platform:audit",
-			Result: "ok", DiffSummary: `{"retention_days":90}`,
+			Result: "ok", DiffSummary: DiffSummary("retention_days", 90),
 		},
 	}
 }

@@ -135,8 +135,8 @@ func wrapConsoleGzip(w http.ResponseWriter, r *http.Request, name string) (http.
 	gzw := &consoleGzipWriter{ResponseWriter: w, gw: gzip.NewWriter(nil)}
 	return gzw, func() {
 		if gzw.compress {
-			//nolint:errcheck // 静态资产收尾冲刷——失败只能意味着连接已断
-			gzw.gw.Close()
+			//nolint:errcheck,gosec // G104：静态资产收尾冲刷——失败只能意味着连接已断
+			_ = gzw.gw.Close()
 		}
 	}
 }

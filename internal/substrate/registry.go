@@ -148,6 +148,7 @@ func (c *Client) ManifestHead(ctx context.Context, ref string) (string, error) {
 // encodedRegistryAuth 把凭据编码为 X-Registry-Auth 头形态（AuthConfig JSON
 // 的 base64url——docker API 的 service create/update 原生格式）。
 func encodedRegistryAuth(host string, creds build.RegistryCredentials) (string, error) {
+	//nolint:gosec // G117：X-Registry-Auth 头的 Docker 原生形态就是 AuthConfig JSON+base64，序列化即协议要求
 	raw, err := json.Marshal(registry.AuthConfig{
 		Username:      creds.User,
 		Password:      creds.Password,

@@ -333,6 +333,7 @@ func (s *Store) ExpiredTasks(ctx context.Context, now time.Time, limit int) ([]T
 
 // listTasksWhere 是任务列表的共享通道。
 func (s *Store) listTasksWhere(ctx context.Context, tail string, args ...any) ([]Task, error) {
+	//nolint:gosec // G202：拼接的是列清单与固定 tail 段，值全部走 ? 参数
 	rows, err := s.db.QueryContext(ctx, `SELECT `+taskRowCols+` FROM tasks`+tail, args...)
 	if err != nil {
 		return nil, fmt.Errorf("state: list tasks: %w", err)
@@ -768,6 +769,7 @@ func (s *Store) ListTaskNetworkMembersForRef(ctx context.Context, ref string) ([
 }
 
 func (s *Store) listTaskNetworkMembers(ctx context.Context, tail string, args ...any) ([]TaskNetworkMember, error) {
+	//nolint:gosec // G202：拼接的是列清单与固定 tail 段，值全部走 ? 参数
 	rows, err := s.db.QueryContext(ctx, `SELECT network_ref, app_id, service FROM task_network_members`+tail, args...)
 	if err != nil {
 		return nil, fmt.Errorf("state: list task network members: %w", err)

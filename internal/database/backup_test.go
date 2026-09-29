@@ -334,11 +334,13 @@ func TestBackupSchedulingWindowAndPrune(t *testing.T) {
 			return JobRunOutcome{State: "complete", ExitCode: 0}
 		}
 	}
-	// 窗内节拍（now 已钉定于台账回拨之前，见上）。
+	// 窗内节拍（now 已钉定于台账回拨之前，见上）。等待收敛终态 = 新行在册
+	// 且 prune 镜像删完（8 旧 + 1 新 → 7）——只等新行落库会把断言提前到
+	// prune 异步链未走完的窗口（CI 实爆：9 行 ≠ 7）。
 	h.beatRun()
-	waitUntil(t, 5*time.Second, "scheduled daily row", func() bool {
-		rows, _ := h.st.ListDatabaseBackups(context.Background(), inst.ID, 20)
-		return len(rows) > 0 && rows[0].ResticSnapshot == "snap-daily-9"
+	waitUntil(t, 5*time.Second, "scheduled daily row pruned to keep", func() bool {
+		rows, _ := h.st.ListDatabaseBackups(context.Background(), inst.ID, 50)
+		return len(rows) == 7 && rows[0].ResticSnapshot == "snap-daily-9"
 	})
 	// 台账镜像：8 旧 + 1 新 = 9 行 → prune 到 keep 7。
 	rows, _ := h.st.ListDatabaseBackups(context.Background(), inst.ID, 50)

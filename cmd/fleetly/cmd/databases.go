@@ -80,9 +80,9 @@ func (f *databaseLimitFlags) backupPlan() *serverv1.DatabaseBackupPlan {
 		return nil
 	}
 	return &serverv1.DatabaseBackupPlan{
-		IntervalHours: int32(f.backupHours),
-		Keep:          int32(f.backupKeep),
-		HourUtc:       int32(f.backupHourUTC),
+		IntervalHours: int32(f.backupHours),   //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
+		Keep:          int32(f.backupKeep),    //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
+		HourUtc:       int32(f.backupHourUTC), //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
 	}
 }
 
@@ -573,7 +573,7 @@ func (c *databaseBackupsCmd) Run(ctx context.Context, env *commands.Environment,
 	return c.conn.withClient(func(cl *fleetlyClient) error {
 		resp, err := cl.Databases().ListDatabaseBackups(ctx, &serverv1.ListDatabaseBackupsRequest{
 			Name:  c.conn.ref(args[0]),
-			Limit: int32(c.limit),
+			Limit: int32(c.limit), //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
 		})
 		if err != nil {
 			return err

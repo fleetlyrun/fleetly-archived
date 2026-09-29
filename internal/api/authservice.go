@@ -346,7 +346,7 @@ func (s *AuthService) writeAuthAudit(ctx context.Context, action, userID, result
 func loginTargetEmail(email string) string {
 	out := make([]byte, 0, len(email))
 	for _, r := range email {
-		c := byte(r)
+		c := byte(r) //nolint:gosec // G115：截断是收敛手段——畸形宽字符压缩进有界键空间（函数契约），不参与明文回显
 		if c >= 'A' && c <= 'Z' {
 			c += 'a' - 'A'
 		}

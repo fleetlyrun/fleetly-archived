@@ -64,7 +64,7 @@ func bootstrapAdminToken(log *slog.Logger, path string, st *state.Store) error {
 // writeBootstrapTokenFile 把 token 明文写 0600 文件并 fsync（B5：崩溃窗口
 // 内不落半行；O_EXCL 防并发双写）。
 func writeBootstrapTokenFile(path, plaintext string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // G304：路径来自平台配置的数据根，0600 独占创建
 	if err != nil {
 		return err
 	}

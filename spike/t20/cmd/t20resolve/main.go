@@ -32,6 +32,7 @@ func main() {
 	flag.Parse()
 
 	if *encodeHost != "" {
+		//nolint:gosec // G117：X-Registry-Auth 的 Docker 原生形态就是 AuthConfig JSON+base64，序列化即协议要求
 		raw, err := json.Marshal(registry.AuthConfig{
 			Username:      *username,
 			Password:      *password,

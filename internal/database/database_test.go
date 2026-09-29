@@ -91,7 +91,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.services[spec.Name] = ServiceState{
 		Exists:   true,
 		Version:  1,
-		Labels:   spec.Annotations.Labels,
+		Labels:   spec.Labels,
 		Replicas: *spec.Mode.Replicated.Replicas,
 	}
 	return nil
@@ -102,7 +102,7 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 	f.services[name] = ServiceState{
 		Exists:   true,
 		Version:  2,
-		Labels:   spec.Annotations.Labels,
+		Labels:   spec.Labels,
 		Replicas: *spec.Mode.Replicated.Replicas,
 	}
 	return nil

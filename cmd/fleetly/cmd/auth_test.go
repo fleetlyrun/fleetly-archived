@@ -356,7 +356,7 @@ func TestAuthVerbSurfaces(t *testing.T) {
 		t.Fatalf("unknown subcommand: code=%d, want 64", code)
 	}
 
-	const secret = "flt_h1_no_env_echo_regression"
+	const secret = "flt_h1_no_env_echo_regression" //nolint:gosec // G101：回显回归钉测标记，非真实凭据
 	t.Setenv("FLEETLY_TOKEN", secret)
 	code, out, _ = runCLI(t, "auth", "login", "-h")
 	if code != 0 {

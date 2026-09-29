@@ -505,7 +505,7 @@ func (s *DatabaseService) RevealDatabaseCredentials(ctx context.Context, req *se
 		Name:     inst.Name,
 		Template: inst.Template,
 		Host:     vars[prefix+"_HOST"],
-		Port:     int32(tpl.EnginePort),
+		Port:     int32(tpl.EnginePort), //nolint:gosec // G115：模板注册表常量端口 ≤65535
 		Password: string(plain),
 		Url:      vars[prefix+"_URL"],
 	}
@@ -813,9 +813,9 @@ func (s *DatabaseService) databaseView(ctx context.Context, inst state.DatabaseI
 			MemoryBytes: inst.Settings.MemoryBytes,
 		},
 		BackupPlan: &serverv1.DatabaseBackupPlan{
-			IntervalHours: int32(inst.Settings.Backup.IntervalHours),
-			Keep:          int32(inst.Settings.Backup.Keep),
-			HourUtc:       int32(inst.Settings.Backup.HourUTC),
+			IntervalHours: int32(inst.Settings.Backup.IntervalHours), //nolint:gosec // G115：备份计划写入面 protovalidate 已限域
+			Keep:          int32(inst.Settings.Backup.Keep),          //nolint:gosec // G115：备份计划写入面 protovalidate 已限域
+			HourUtc:       int32(inst.Settings.Backup.HourUTC),       //nolint:gosec // G115：备份计划写入面 protovalidate 已限域
 		},
 	}
 	if !inst.CredentialUpdatedAt.IsZero() {
@@ -848,7 +848,7 @@ func connectionView(inst state.DatabaseInstance, fingerprint string) *serverv1.D
 	prefix := dbtemplate.EnvPrefix(inst.Name)
 	out := &serverv1.DatabaseConnectionView{
 		Host:                vars[prefix+"_HOST"],
-		Port:                int32(tpl.EnginePort),
+		Port:                int32(tpl.EnginePort), //nolint:gosec // G115：模板注册表常量端口 ≤65535
 		Url:                 vars[prefix+"_URL"],
 		PasswordFingerprint: fingerprint,
 	}

@@ -92,7 +92,7 @@ func TestRegisterUserFirstUserFullProvision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query events: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var n string
 		if err := rows.Scan(&n); err != nil {

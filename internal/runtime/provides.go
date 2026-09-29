@@ -1045,6 +1045,7 @@ func NewHTTPServer(app lynx.App, cfg *AppConfig, src *gitserver.GitTriggers, ctl
 	// 身信任锚的 InsecureSkipVerify，外部面 TLS 由监听器强制）。
 	var gwTLS *tls.Config
 	if cfg.TLSMode() != ControlPlaneTLSOff {
+		//nolint:gosec // G402：回环自拨的既定语义——`?insecure` 网关回拨形态（外部面 TLS 由监听器强制）
 		gwTLS = &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true}
 	}
 	mux, err := newGatewayMuxWithTLS(grpcEndpointFromAddr(cfg.GRPCAddr()), gwTLS)

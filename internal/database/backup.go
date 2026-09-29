@@ -130,6 +130,7 @@ func (m *Manager) TriggerBackup(ctx context.Context, name string) error {
 		return err
 	}
 	m.opsWG.Add(1)
+	//nolint:gosec // G118：异步链刻意脱离请求 ctx（受理已返回，注释即契约）——预算取备份链步之和的宽限形态
 	go func() {
 		defer m.opsWG.Done()
 		defer m.endOp(inst.ID)
@@ -423,6 +424,7 @@ func (m *Manager) dutyBackupScheduling(ctx context.Context, rows []state.Databas
 			continue // 操作互斥（备份/恢复/升级在途）：本窗让位，下窗重判
 		}
 		m.opsWG.Add(1)
+		//nolint:gosec // G118：调度 tick 循环派生后台备份，刻意脱离 tick ctx（duty 生命周期自管）
 		go func(inst state.DatabaseInstance) {
 			defer m.opsWG.Done()
 			defer m.endOp(inst.ID)

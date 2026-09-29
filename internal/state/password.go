@@ -52,7 +52,7 @@ func VerifyPassword(password, encoded string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(password), salt, params.timeCost, params.memoryKiB, params.threads, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, params.timeCost, params.memoryKiB, params.threads, uint32(len(want))) //nolint:gosec // G115：len(want) = argon2 摘要长度（32B），恒在 uint32 值域
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return false, nil
 	}

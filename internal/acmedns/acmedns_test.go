@@ -100,9 +100,8 @@ type fakeDNSPod struct {
 	lastForm map[string]string             // 最近一次请求表单（形态断言）
 	lastPath string                        // 最近一次请求路径
 	// failAction 非空时该接口返回业务错误码（failCode 覆盖缺省码）。
-	failAction  string
-	failCode    string
-	failMessage string
+	failAction string
+	failCode   string
 }
 
 func newFakeDNSPod(t *testing.T) (*fakeDNSPod, *httptest.Server) {

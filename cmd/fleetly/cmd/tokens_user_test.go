@@ -95,7 +95,7 @@ func TestTokensCreateSelfService(t *testing.T) {
 func TestTokensCreateScopeGuardDecline(t *testing.T) {
 	env := startCLI(t)
 	founder := env.SeedUser(t, "admin@example.com", "password-123")
-	worker, err := env.Store.CreateUser(context.Background(), state.UserWrite{
+	worker, err := env.Store.CreateUser(context.Background(), state.UserWrite{ //nolint:gosec // G101：测试夹具口令，非真实凭据
 		Email: "worker@example.com", Password: "temp-pw-worker-123", ActorUserID: founder.User.ID,
 	})
 	if err != nil {

@@ -127,10 +127,10 @@ func (m *Manager) convergeProvisioning(ctx context.Context, inst *state.Database
 	}
 
 	// ⑥ 健康门：healthy → ready；任务硬失败 → failed；超预算 → failed。
-	switch verdict, reason := m.healthVerdict(ctx, desired.Name, desired.Image); {
-	case verdict == healthHealthy:
+	switch verdict, reason := m.healthVerdict(ctx, desired.Name, desired.Image); verdict {
+	case healthHealthy:
 		m.markReady(ctx, inst)
-	case verdict == healthFailing:
+	case healthFailing:
 		m.failProvisioning(ctx, inst, reason)
 	default: // healthPending：探测窗内/启动中——留在 provisioning 等待
 		if reason := m.provisionTimedOut(inst); reason != "" {

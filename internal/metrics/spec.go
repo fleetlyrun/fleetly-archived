@@ -107,7 +107,7 @@ const (
 	// notifierTokenMountPath 是 ingress token 文件在 vmalert 任务内的只读
 	// 挂载点（-notifier.basicAuth.passwordFile 指向它——凭据材料不进服务
 	// spec，token file 复用，设计 §2.3）。
-	notifierTokenMountPath = "/etc/fleetly/notifier-token"
+	notifierTokenMountPath = "/etc/fleetly/notifier-token" //nolint:gosec // G101：token 文件挂载路径常量，非凭据
 	// notifierBasicAuthUsername 是 vmalert → 接收器 Basic 认证的用户名
 	//（常量非凭据；凭据 = 密码位的 ingress token）。
 	notifierBasicAuthUsername = "fleetly"

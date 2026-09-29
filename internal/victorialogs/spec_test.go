@@ -27,8 +27,8 @@ func TestDefaultImageIsPinnedDigest(t *testing.T) {
 // TestBuildSpecInvariants 期望 spec 全部执行面（设计 §2.1 形态表逐条）。
 func TestBuildSpecInvariants(t *testing.T) {
 	spec := buildSpec("n_TESTNODEID01", 7)
-	if spec.Annotations.Name != ServiceName {
-		t.Fatalf("service name = %s, want %s", spec.Annotations.Name, ServiceName)
+	if spec.Name != ServiceName {
+		t.Fatalf("service name = %s, want %s", spec.Name, ServiceName)
 	}
 	cs := spec.TaskTemplate.ContainerSpec
 	if cs.Image != DefaultVictoriaLogsImage {

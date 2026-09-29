@@ -247,9 +247,9 @@ func (s *Store) RegisterUser(ctx context.Context, w RegisterWrite) (RegisterResu
 		// 事件，本事务内恰好落这一次）。actor = 注册者本人（自助动作）；
 		// 无调用方 PAT（注册面豁免鉴权）。
 		if hasInvite {
-			var cerr error
-			invite, cerr = consumeInviteRowTx(ctx, tx, invite, uid, uid, "")
-			if cerr != nil {
+			// 消费即副作用（成员行+审计+事件都在 consumeInviteRowTx 事务内
+			// 落齐）；更新后的邀请行本路径无人再读，显式弃值。
+			if _, cerr := consumeInviteRowTx(ctx, tx, invite, uid, uid, ""); cerr != nil {
 				return cerr
 			}
 		}

@@ -51,7 +51,7 @@ func schemaVersionConfig(path string) (*runtime.AppConfig, error) {
 		// 与 lynx 同口径：搜索路径下无配置文件是可选配置，不报错；显式
 		// 指定的 -c 文件缺失/解析错误是硬失败。
 		var notFound viper.ConfigFileNotFoundError
-		if !(path == "" && errors.As(err, &notFound)) {
+		if path != "" || !errors.As(err, &notFound) {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	}

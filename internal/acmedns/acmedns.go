@@ -58,9 +58,6 @@ type options struct {
 	baseURL string
 }
 
-// WithHTTPClient 注入 HTTP 客户端（测试）。
-func WithHTTPClient(c *http.Client) Option { return func(o *options) { o.httpClient = c } }
-
 // WithBaseURL 覆盖 API 基址（httptest 假端点；生产禁用——错误形态诚实
 // 面向官方端点）。
 func WithBaseURL(u string) Option { return func(o *options) { o.baseURL = u } }
@@ -155,7 +152,7 @@ type credentials struct {
 // api_token 内含的双引号/反斜杠由 encoding/json 转义兜底（词形不变式：
 // Envelope → parseCredentials 恒还原同一 token）。
 func CredentialsEnvelope(apiToken string) ([]byte, error) {
-	return json.Marshal(credentials{APIToken: apiToken})
+	return json.Marshal(credentials{APIToken: apiToken}) //nolint:gosec // G117：序列化即凭证信封的存储形态（包唯一构造出口），非泄漏面
 }
 
 // parseCredentials 解析并校验凭证 JSON（api_token 必填非空）。
@@ -168,16 +165,6 @@ func parseCredentials(raw []byte) (credentials, error) {
 		return credentials{}, fmt.Errorf("acmedns: credentials must carry a non-empty api_token")
 	}
 	return c, nil
-}
-
-// firstError 拼接首个非空错误信息（错误文案出口；不含凭证材料）。
-func firstError(parts ...string) string {
-	for _, p := range parts {
-		if p != "" {
-			return p
-		}
-	}
-	return "unknown error"
 }
 
 // trimTrailingDot 去掉 DNS 协议形态 FQDN 的尾点（provider API 以无尾点

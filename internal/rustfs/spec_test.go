@@ -63,12 +63,12 @@ func TestBuildSpecShape(t *testing.T) {
 	}
 	spec := buildSpec("net-id-123", "n_TESTNODEID", c, refs)
 
-	if spec.Annotations.Name != ServiceName {
-		t.Fatalf("service name = %s, want %s", spec.Annotations.Name, ServiceName)
+	if spec.Name != ServiceName {
+		t.Fatalf("service name = %s, want %s", spec.Name, ServiceName)
 	}
-	if spec.Annotations.Labels[state.LabelManaged] != state.ManagedLabelValue ||
-		spec.Annotations.Labels[rustfsLabel] != "true" {
-		t.Fatalf("service labels = %v, want managed+rustfs", spec.Annotations.Labels)
+	if spec.Labels[state.LabelManaged] != state.ManagedLabelValue ||
+		spec.Labels[rustfsLabel] != "true" {
+		t.Fatalf("service labels = %v, want managed+rustfs", spec.Labels)
 	}
 	cs := spec.TaskTemplate.ContainerSpec
 	if cs == nil {
@@ -274,8 +274,8 @@ func TestProbeRepoURLAndEnv(t *testing.T) {
 	if env["RESTIC_PASSWORD"] == "" || env["RESTIC_PASSWORD"] == c.SecretKey {
 		t.Fatal("repo password must be derived (present and distinct from the secret key)")
 	}
-	if probeRepoPassword(c) != probeRepoPassword(c) {
-		t.Fatal("derived password must be deterministic")
+	if env["RESTIC_PASSWORD"] != probeRepoPassword(c) {
+		t.Fatal("repo password must be the deterministic derivation of the managed secret key")
 	}
 	if probeSpecCommand(t, c, "backup", "/etc") != "backup" {
 		t.Fatal("probe spec must append the restic subcommand after global options")

@@ -37,7 +37,7 @@ const (
 	dockerSockMount = "/var/run/docker.sock"
 	// relaySecretTarget 是集群 token secret 的容器内挂载路径（relay 缺省
 	// 读取路径同锚——DefaultTokenPath）。
-	relaySecretTarget = "/run/secrets/fleetly-exec-token"
+	relaySecretTarget = "/run/secrets/fleetly-exec-token" //nolint:gosec // G101：secret 挂载路径常量，非凭据
 	// relayMemoryLimitBytes 是内存限额（relay 是事件驱动的小进程——64MB
 	// 起步；预算台账 §4「exec 任务 idle 计入全栈台账」）。
 	relayMemoryLimitBytes = int64(64) << 20

@@ -168,6 +168,7 @@ func TestDatabaseInstanceCRUD(t *testing.T) {
 		Backup: DatabaseBackupPlan{IntervalHours: 12, Keep: 14, HourUTC: 4},
 	}
 	proj := seedFixtureProject(t, st)
+	//nolint:gosec // G101：测试夹具密文标记，非真实凭据
 	inst, err := st.CreateDatabaseInstance(ctx, DatabaseInstance{
 		Name: "pg-prod", Template: "postgres-16", ImageDigest: "postgres:16@sha256:aaa",
 		CredentialCipher: "age-cipher-v1", PlatformNodeID: "n_01", Settings: settings,
@@ -210,6 +211,7 @@ func TestDatabaseInstanceCRUD(t *testing.T) {
 		t.Fatalf("credential cipher round-trip broken: %q", byID.CredentialCipher)
 	}
 
+	//nolint:gosec // G101：测试夹具密文标记，非真实凭据
 	other, err := st.CreateDatabaseInstance(ctx, DatabaseInstance{
 		Name: "redis-cache", Template: "redis-7", ImageDigest: "redis:7@sha256:bbb", CredentialCipher: "age-cipher-v2",
 		ProjectID: proj.ID, TeamID: proj.TeamID,

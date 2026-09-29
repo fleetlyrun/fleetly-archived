@@ -45,8 +45,6 @@ func (e *RestoreStageError) Error() string {
 	return fmt.Sprintf("restore failed at stage %s: %v", e.Stage, e.Err)
 }
 
-func (e *RestoreStageError) Unwrap() error { return e.Err }
-
 // restoreAbort 是编排层失败面的收口构造（阶段上下文 + E_DB_RESTORE_FAILED
 // 信封 + runbook 指引——实例保持停止的现场说明随错误文本落 last_error 与
 // 事件）。
@@ -92,6 +90,7 @@ func (m *Manager) RestoreBackup(ctx context.Context, name, snapshotID string) er
 		return ErrOperationInFlight{Current: "backup/restore/upgrade"}
 	}
 	m.opsWG.Add(1)
+	//nolint:gosec // G118：异步链刻意脱离请求 ctx（受理已返回）——预算取恢复链步之和的宽限形态
 	go func() {
 		defer m.opsWG.Done()
 		defer m.endOp(inst.ID)

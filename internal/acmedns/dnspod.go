@@ -40,9 +40,6 @@ const dnspodAPIBase = "https://dnsapi.cn"
 // challenge 记录本就该短命）。
 const dnspodRecordTTL = "600"
 
-// dnspodPageMax 是 Record.List 的单页上限（官方口径）。
-const dnspodPageMax = "3000"
-
 // dnspodUserAgent 是 API 要求的非空 UA。
 const dnspodUserAgent = "fleetly-acmedns/1.0 (+https://fleetly.run)"
 

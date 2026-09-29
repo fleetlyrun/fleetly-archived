@@ -156,16 +156,6 @@ func TestDatabaseCreateAndGetMasked(t *testing.T) {
 	}
 }
 
-// boxOf 是测试用 envelope box（与 harness 同构：独立 key 文件）。
-func boxOf(t *testing.T) *secrets.Box {
-	t.Helper()
-	box, _, err := secrets.EnsureKey(t.TempDir() + "/box.key")
-	if err != nil {
-		t.Fatalf("EnsureKey: %v", err)
-	}
-	return box
-}
-
 func TestDatabaseListExcludesDeleted(t *testing.T) {
 	_, _, cl, token := newDatabaseTestEnv(t)
 	mustCreate(t, cl, token, "db-a", dbtemplate.TemplatePostgres16)

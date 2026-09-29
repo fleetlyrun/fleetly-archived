@@ -330,6 +330,7 @@ func (s *Store) LatestDeploymentsByApp(ctx context.Context, appIDs []string, per
 	// modernc sqlite ≥3.25 支持 ROW_NUMBER 窗口函数；rn 截断与
 	// ListAppDeployments 的 LIMIT 语义等价，外层排序保证逐 app 窗口内
 	// created_at 倒序稳定。
+	//nolint:gosec // G202：拼接的是列清单与占位符串，值全部走 ? 参数（下方 args）
 	q := `SELECT ` + plainCols + ` FROM (
 			SELECT ` + deploymentScanCols + `,
 				ROW_NUMBER() OVER (PARTITION BY d.app_id ORDER BY d.created_at DESC, d.id DESC) AS rn

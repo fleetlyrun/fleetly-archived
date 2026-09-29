@@ -45,7 +45,7 @@ func TestCLIAcmeShowDefaults(t *testing.T) {
 func TestCLIAcmeDNSSetAndEnvFallback(t *testing.T) {
 	env := startCLI(t)
 	_ = env
-	const token = "77,cli-secret-TOKEN-MARKER"
+	const token = "77,cli-secret-TOKEN-MARKER" //nolint:gosec // G101：测试标记值，非真实凭据
 
 	// provider 缺位 → CLI 侧用法拒绝（64）。
 	code, _, errOut := runCLIConn(t, "acme", "dns", "set")

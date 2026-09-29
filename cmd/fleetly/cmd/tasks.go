@@ -171,7 +171,7 @@ func (c *tasksListCmd) Run(ctx context.Context, env *commands.Environment, args 
 	return c.conn.withClient(func(cl *fleetlyClient) error {
 		resp, err := cl.Tasks().ListTasks(ctx, &serverv1.ListTasksRequest{
 			IncludeTerminal: c.all,
-			Limit:           int32(c.limit),
+			Limit:           int32(c.limit), //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
 		})
 		if err != nil {
 			return err
@@ -287,7 +287,7 @@ func (c *tasksLogsCmd) Run(ctx context.Context, env *commands.Environment, args 
 		resp, err := cl.Logs().SearchLogs(ctx, &serverv1.SearchLogsRequest{
 			Tasks:   []string{args[0]},
 			Keyword: c.keyword,
-			Limit:   int32(c.limit),
+			Limit:   int32(c.limit), //nolint:gosec // G115：CLI 旗标，越界值由服务端 protovalidate 拒绝
 		})
 		if err != nil {
 			return err

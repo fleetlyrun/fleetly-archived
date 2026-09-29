@@ -238,7 +238,7 @@ func (i *Ingester) recordFailure(ctx context.Context, err error, batch []Entry) 
 	re := append([]Entry{}, batch...)
 	re = append(re, i.pending...)
 	if len(re) > queueCapacity {
-		i.dropped += uint64(len(re) - queueCapacity)
+		i.dropped += uint64(len(re) - queueCapacity) //nolint:gosec // G115：差值 ≤ 队列容量+批大小，非负且量级有界
 		re = re[len(re)-queueCapacity:]
 	}
 	i.pending = re

@@ -30,12 +30,11 @@ import (
 
 // authEnv 是认证面测试环境（独立 store——注册窗口从零用户开始）。
 type authEnv struct {
-	st      *state.Store
-	conn    *grpc.ClientConn
-	auth    *AuthService
-	users   *UsersService
-	authn   *Authenticator
-	machine string // admin scope 机具令牌（平台面第二门形态）
+	st    *state.Store
+	conn  *grpc.ClientConn
+	auth  *AuthService
+	users *UsersService
+	authn *Authenticator
 }
 
 func newAuthEnv(t *testing.T) *authEnv {
@@ -192,6 +191,7 @@ func TestAuthRegisterAndWindowRules(t *testing.T) {
 	if err := env.st.SaveRegistration(context.Background(), "closed", state.AuthSaveOptions{Actor: "user:x"}); err != nil {
 		t.Fatalf("close the window: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	if _, err := client.Register(ctxIP("198.51.100.2"), &serverv1.RegisterRequest{Email: "third@example.com", Password: "pw-third-88"}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("closed-window registration err = %v, want PermissionDenied", err)
 	}
@@ -617,7 +617,7 @@ func TestAuthRateLimitIPKeyUnforgeable(t *testing.T) {
 
 // ipToString 构造 203.0.x.y / 198.0.x.y 形态的测试 IP 串（避免主保留段）。
 func ipToString(base, i int) string {
-	return net.IPv4(byte(base), byte(10), byte(i/256), byte(i%256)).String()
+	return net.IPv4(byte(base), byte(10), byte(i/256), byte(i%256)).String() //nolint:gosec // G115：base∈{198,203}/i<65536 由测试构造保证
 }
 
 // TestAuthFaceScopeRegistration：认证/用户面方法级登记完整性——豁免三面 +
@@ -704,6 +704,7 @@ func TestAuthRegisterWithInviteToken(t *testing.T) {
 
 	// 关窗 + 无效 token → E_INVITE_INVALID（查无此 token 形态；已消费/
 	// 已吊销/已过期的同码拒绝由 state 层测试钉死）。
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	_, err = client.Register(ctxIP("198.51.100.6"), &serverv1.RegisterRequest{
 		Email: "ghost@example.com", Password: "pw-ghost-12", InviteToken: "bogus-token",
 	})

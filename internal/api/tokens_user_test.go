@@ -51,6 +51,7 @@ func newTokEnv(t *testing.T) *tokEnv {
 // seedUser 播种用户（首用户=平台管理员；其后自动开窗注册）。
 func (e *tokEnv) seedUser(t *testing.T, email string) state.RegisterResult {
 	t.Helper()
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	rr, err := e.st.RegisterUser(context.Background(), state.RegisterWrite{Email: email, Password: "pw-tokens-123"})
 	if err == nil {
 		return rr
@@ -61,6 +62,7 @@ func (e *tokEnv) seedUser(t *testing.T, email string) state.RegisterResult {
 	if err := e.st.SaveRegistration(context.Background(), state.AuthRegistrationOpen, state.AuthSaveOptions{Actor: "test"}); err != nil {
 		t.Fatalf("SaveRegistration open: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	rr, err = e.st.RegisterUser(context.Background(), state.RegisterWrite{Email: email, Password: "pw-tokens-123"})
 	if err != nil {
 		t.Fatalf("RegisterUser(%s) after opening: %v", email, err)
@@ -150,6 +152,7 @@ func TestCreateTokenScopeSubsetGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTeamWithOwner: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	worker, err := env.st.CreateUser(ctx, state.UserWrite{
 		Email: "worker@example.com", Password: "temp-pw-worker-123", ActorUserID: founder.User.ID,
 	})

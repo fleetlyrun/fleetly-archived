@@ -426,7 +426,7 @@ func TestMigration00018RBACSchema(t *testing.T) {
 		if err != nil {
 			t.Fatalf("index_list %s: %v", table, err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		out := map[string]bool{}
 		for rows.Next() {
 			var seq int

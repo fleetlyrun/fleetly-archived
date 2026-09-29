@@ -56,7 +56,7 @@ const (
 
 // DefaultTokenPath 是集群 token secret 文件的缺省挂载路径（duty spec 的
 // secret target 同锚）。
-const DefaultTokenPath = "/run/secrets/fleetly-exec-token"
+const DefaultTokenPath = "/run/secrets/fleetly-exec-token" //nolint:gosec // G101：secret 挂载路径常量，非凭据
 
 // SessionLimits 是会话时限（零值字段回落生产常量；单测注入缩短）。
 type SessionLimits struct {

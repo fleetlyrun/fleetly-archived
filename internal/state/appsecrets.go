@@ -176,7 +176,7 @@ func (t *Tx) RemoveAppSecret(ctx context.Context, appID, name string) error {
 }
 
 // appSecretScanCols 是密钥库行查询列清单（新增列只加在此与扫描函数）。
-const appSecretScanCols = `id, app_id, name, value_cipher, hash8, created_at, updated_at`
+const appSecretScanCols = `id, app_id, name, value_cipher, hash8, created_at, updated_at` //nolint:gosec // G101：SQL 列名清单，非凭据
 
 // scanAppSecret 从单行构造 AppSecret。
 func scanAppSecret(row interface{ Scan(dest ...any) error }) (AppSecret, error) {

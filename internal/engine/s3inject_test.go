@@ -324,7 +324,7 @@ func TestS3ExternalInjectionValues(t *testing.T) {
 	for _, v := range vars["web"] {
 		byKey[v.Key] = v.Value
 	}
-	want := map[string]string{
+	want := map[string]string{ //nolint:gosec // G101：注入透传断言的期望值，非真实凭据
 		"S3_ENDPOINT": "https://s3.example.com", "S3_REGION": "us-east-1", "S3_BUCKET": "fleetly-backup",
 		"S3_ACCESS_KEY_ID": "AKIDEXT", "S3_SECRET_ACCESS_KEY": "ext-sk-plain", "S3_PATH_STYLE": "true",
 	}

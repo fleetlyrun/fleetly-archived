@@ -64,7 +64,7 @@ func (s *RuntimeService) ShowAppRuntime(ctx context.Context, req *serverv1.ShowA
 		for _, t := range svc.Tasks {
 			view.Tasks = append(view.Tasks, &serverv1.ServiceTaskView{
 				Id:           t.ID,
-				Slot:         int32(t.Slot),
+				Slot:         int32(t.Slot), //nolint:gosec // G115：Swarm slot 序号，量级极小
 				State:        t.State,
 				DesiredState: t.DesiredState,
 				Error:        t.Err,

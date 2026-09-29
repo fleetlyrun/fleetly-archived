@@ -187,7 +187,7 @@ func TestBuildSwarmSpecSecretFileTargetFullValues(t *testing.T) {
 		Image:    "repo/app@sha256:abc",
 		Replicas: 1,
 		Secrets: []engine.SecretMount{
-			{SecretName: "fleetly-demo-token-abc12345", Target: "/run/secrets/token"},
+			{SecretName: "fleetly-demo-token-abc12345", Target: "/run/secrets/token"}, //nolint:gosec // G101：测试夹具 secret 名，非真实凭据
 		},
 	}
 	sw, err := buildSwarmSpec(spec, map[string]string{"fleetly-demo-token-abc12345": "secret-id-1"}, nil)
@@ -223,7 +223,7 @@ func TestBuildSwarmSpecSecretNotEnsuredFailsExplicitly(t *testing.T) {
 		Name:     "s",
 		Image:    "img",
 		Replicas: 1,
-		Secrets:  []engine.SecretMount{{SecretName: "fleetly-s-token-abc12345", Target: "/run/secrets/token"}},
+		Secrets:  []engine.SecretMount{{SecretName: "fleetly-s-token-abc12345", Target: "/run/secrets/token"}}, //nolint:gosec // G101：测试夹具 secret 名，非真实凭据
 	}, nil, nil)
 	if err == nil {
 		t.Fatal("missing secret id must fail explicitly (engine ordering bug), got nil")

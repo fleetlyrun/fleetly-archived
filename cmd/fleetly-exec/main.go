@@ -46,7 +46,7 @@ func run() error {
 	tlsName := fs.String("tls-name", os.Getenv(execrelay.EnvControlTLSName), "wss ServerName (env FLEETLY_CONTROL_TLS_NAME; empty = ws:// plaintext)")
 	tokenPath := fs.String("token-path", envOr("FLEETLY_EXEC_TOKEN_PATH", execrelay.DefaultTokenPath), "cluster token file path")
 	dockerHost := fs.String("docker-host", os.Getenv("DOCKER_HOST"), "docker endpoint (env DOCKER_HOST)")
-	fs.Parse(os.Args[1:]) //nolint:errcheck // flag 解析失败自带 Usage 退出
+	fs.Parse(os.Args[1:]) //nolint:errcheck,gosec // flag 解析失败自带 Usage 退出
 
 	if *addr == "" {
 		return fmt.Errorf("control address is empty (set FLEETLY_CONTROL_ADDR or -addr)")

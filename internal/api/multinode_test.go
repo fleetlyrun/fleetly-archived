@@ -104,7 +104,7 @@ func TestGetJoinGuideRequiresBaseDomain(t *testing.T) {
 // 规则按 worker_ip 生成、ctrl.<base> 保持仅 manager、完成判据含 node.joined。
 func TestGetJoinGuideContent(t *testing.T) {
 	st := tStore(t)
-	fj := &fakeJoin{addr: "198.51.100.10", token: "swmtkn-test-token"}
+	fj := &fakeJoin{addr: "198.51.100.10", token: "swmtkn-test-token"} //nolint:gosec // G101：测试夹具 token，非真实凭据
 	svc := NewSystemService("dev", st, nil, nil, nil).WithJoinGuide("example.test", fj)
 	srv := newAuthServer(NewAuthenticator(st))
 	serverv1.RegisterSystemServiceServer(srv, svc)

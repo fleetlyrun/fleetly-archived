@@ -93,6 +93,7 @@ func TestSetEnvAuditActorAttribution(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateUser bootstrap: %v", err)
 	}
+	//nolint:gosec // G101：测试夹具口令，非真实凭据
 	user, err := st.CreateUser(ctx, state.UserWrite{
 		Email: "env-actor@fleetly.run", Password: "env-actor-pass-1",
 	})

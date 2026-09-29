@@ -174,7 +174,7 @@ func healthcheckOf(hc engine.HealthcheckSpec) *container.HealthConfig {
 		Test:        append([]string(nil), hc.Test...),
 		Interval:    hc.Interval,
 		Timeout:     hc.Timeout,
-		Retries:     int(hc.Retries),
+		Retries:     int(hc.Retries), //nolint:gosec // G115：compose healthcheck retries，量级极小
 		StartPeriod: hc.StartPeriod,
 	}
 }

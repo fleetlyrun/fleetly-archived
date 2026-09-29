@@ -41,6 +41,8 @@ func (f *fakeSecretEnsure) EnsureSecret(_ context.Context, name string, data []b
 
 // secretCompose 是 external secret 部署 fixture：web 短语法 + worker 长语法
 // （同 source 双服务引用 = 一次解密一次 ensure 的去重对照）。
+//
+//nolint:gosec // G101：external secret 部署 fixture，无真实凭据
 const secretCompose = `name: demo
 services:
   web:

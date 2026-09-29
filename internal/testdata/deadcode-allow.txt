@@ -54,3 +54,56 @@ unreachable func: NewID
 unreachable func: Client.EnsureBucket
 unreachable func: Client.Stat
 unreachable func: Client.List
+
+# ── 2026-09-29 CI 整改批：仅被 _test 消费的生产侧符号（deadcode 无 -test
+#    面的原生盲区；各条目经 grep 全仓核验唯一消费方为测试）──
+
+# acmedns：WithBaseURL 供 httptest 假端点注入（dnspod/cloudflare 探针单测；
+#httpClient 同族注入点随首个真实消费方出现再转正，本批已删）。
+unreachable func: WithBaseURL
+
+# engine：dutyCallCount 是 duty 测试注入缝的读面（safecall_test 等待/断言
+# duty 被调次数）。
+unreachable func: Engine.dutyCallCount
+
+# gitserver：waitIdle 是 webhook worker 的测试同步点（部署行异步落库的
+# 确定性等待，webhook_test 消费）。
+unreachable func: webhookRunner.waitIdle
+
+# ingress：currentRevision 是 view 修订号的测试读面（dynamic_test/view_test
+# 推进与 servedRevision 断言；原子值直读不出方法入口故 RTA 不可达）。
+unreachable func: view.currentRevision
+
+# naming：四个识别谓词是命名契约的钉测面（naming_test/naming_task_test/
+# rotate_test/projectnetwork_test 消费）+ 注释引用的对账语义锚——生产对账
+# 面经 QualifiedName 前缀族同源常量实现，谓词本体留作契约读面。
+unreachable func: IsProjectNetworkName
+unreachable func: IsTaskGroupNetworkName
+unreachable func: IsDbServiceName
+unreachable func: IsDBJobName
+
+# notify：VerifySignature 是签发侧的对偶读面（notify_test 验签链路钉测 +
+# 投递自证）；SendTestPayload 无消费方已删（本批）。
+unreachable func: VerifySignature
+
+# runtime：newGatewayMux 是明文回拨形态的构造器（生产走 WithTLS 形态；
+# gateway_tls_test 对照组消费——缺陷形态钉死防回归明文回拨）。
+unreachable func: newGatewayMux
+
+# state：转移表/词表穷举辅助——S16-C5 同族（engine 侧已豁免），真源在
+# UpdateDeployment/UpdateTask 写路径咬合，state 侧导出仅 machine_test/
+# dbinstances_test 穷举一致性测试消费；OwnershipAnchorLabels 是归属锚
+# label 的契约读面（projectnetwork_test 谓词集合钉测）。
+unreachable func: LegalDatabaseTransitions
+unreachable func: AllDatabaseStates
+unreachable func: OwnershipAnchorLabels
+unreachable func: LegalTaskTransitions
+unreachable func: AllTaskStatuses
+
+# testsupport：跨包测试夹具包——包存在性即测试基建（数十个 _test 文件
+# 消费；deadcode 无 -test 面的原生盲区，整文件豁免）。
+internal/testsupport/fixture.go
+
+# sdk/go：WithTLSInsecure 是 SDK 对外选项面（外部消费仓经 SDK DialGRPC
+# TLS 接入——IMPL-T1-6 割接形态；主模块 RTA 天然不可达外部使用方）。
+unreachable func: WithTLSInsecure

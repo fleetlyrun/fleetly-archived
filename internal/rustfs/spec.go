@@ -44,7 +44,7 @@ const (
 	// accessKeyFileTarget / secretKeyFileTarget 是凭据 secret 的容器内
 	// 挂载路径（官方 _FILE 形态的文档惯例路径 /run/secrets/<name>）。
 	accessKeyFileTarget = "/run/secrets/rustfs_access_key"
-	secretKeyFileTarget = "/run/secrets/rustfs_secret_key"
+	secretKeyFileTarget = "/run/secrets/rustfs_secret_key" //nolint:gosec // G101：secret 挂载路径常量，非凭据本体
 	// backendPort 是 S3 API 监听端口（RUSTFS_ADDRESS=:9000，官方缺省）。
 	backendPort = "9000"
 	// memoryLimitBytes 是内存限额（设计 §2.5：对齐 zot 口径 256MB）。

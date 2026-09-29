@@ -69,7 +69,7 @@ func TestGatewayDialbackTLS(t *testing.T) {
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(gs.Stop)
 
-	dialTLS := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true}
+	dialTLS := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true} //nolint:gosec // G402：自签测试证书，验证的是回拨链路非对端身份
 	mux, err := newGatewayMuxWithTLS(lis.Addr().String(), dialTLS)
 	if err != nil {
 		t.Fatalf("newGatewayMuxWithTLS: %v", err)
@@ -81,7 +81,7 @@ func TestGatewayDialbackTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ping via TLS dialback: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ping status = %d, want 200", resp.StatusCode)
 	}
@@ -111,7 +111,7 @@ func TestGatewayDialbackPlaintextAgainstTLSFails(t *testing.T) {
 	resp, err := client.Get(srv.URL + "/v1/system/ping")
 	// 缺陷形态：gRPC 拨号失败 → gateway 500/503 信封（不是 200）。
 	if err == nil {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode == http.StatusOK {
 			t.Fatal("plaintext dialback unexpectedly succeeded against a TLS gRPC face (regression: insecure dial must not work here)")
 		}

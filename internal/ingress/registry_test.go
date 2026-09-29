@@ -150,7 +150,7 @@ func TestEnsureRegistryCredentialsArtifacts(t *testing.T) {
 		t.Fatalf("first ensure: %v", err)
 	}
 	// 凭据文件：user:password 单行（与 ingress token 同形的平台生成物）。
-	raw, err := os.ReadFile(authFile)
+	raw, err := os.ReadFile(authFile) //nolint:gosec // G304：读测试临时目录工件
 	if err != nil {
 		t.Fatalf("read auth file: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestEnsureRegistryCredentialsArtifacts(t *testing.T) {
 		t.Fatalf("auth file content malformed: %q (user=%q pass len=%d)", raw, user, len(pass))
 	}
 	// htpasswd 工件：bcrypt hash 校验通过（zot 消费面——明文不进容器）。
-	htRaw, err := os.ReadFile(htFile)
+	htRaw, err := os.ReadFile(htFile) //nolint:gosec // G304：读测试临时目录工件
 	if err != nil {
 		t.Fatalf("read htpasswd: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestEnsureRegistryCredentialsArtifacts(t *testing.T) {
 		t.Fatalf("htpasswd hash does not verify against the generated password: %v", err)
 	}
 	// zot 配置工件：确定性 JSON，鉴权指向容器内挂载点、端口 5000。
-	cfgRaw, err := os.ReadFile(cfgFile)
+	cfgRaw, err := os.ReadFile(cfgFile) //nolint:gosec // G304：读测试临时目录工件
 	if err != nil {
 		t.Fatalf("read zot config: %v", err)
 	}
@@ -186,14 +186,14 @@ func TestEnsureRegistryCredentialsArtifacts(t *testing.T) {
 	// 幂等：再收敛一轮，全部工件字节级不变（bcrypt 按校验写、配置按内容写）。
 	snap := map[string]string{}
 	for _, f := range []string{authFile, htFile, cfgFile} {
-		b, _ := os.ReadFile(f)
+		b, _ := os.ReadFile(f) //nolint:gosec // G304：读测试临时目录工件
 		snap[f] = string(b)
 	}
 	if err := m.EnsureRegistry(context.Background()); err != nil {
 		t.Fatalf("second ensure: %v", err)
 	}
 	for _, f := range []string{authFile, htFile, cfgFile} {
-		b, _ := os.ReadFile(f)
+		b, _ := os.ReadFile(f) //nolint:gosec // G304：读测试临时目录工件
 		if string(b) != snap[f] {
 			t.Fatalf("artifact %s churned across idempotent ensure", f)
 		}

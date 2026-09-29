@@ -93,7 +93,7 @@ func (s *GitTriggers) DeployFromCommit(ctx context.Context, in DeployInput) (sta
 	}
 	// MG-6：解析中转目录随请求回收——持久化副本已另落 <数据根>/deployments/
 	// <id>/compose.yaml，本目录不存活到函数外，不留孤儿 tmp。
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "compose.yaml")
 	if err := os.WriteFile(path, composeBytes, 0o600); err != nil { //nolint:gosec // G306：compose 内容非密钥，0600 保守
 		return state.DeployRecord{}, nil, fmt.Errorf("gitserver: write compose temp file: %w", err)

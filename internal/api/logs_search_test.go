@@ -149,9 +149,9 @@ func TestSearchLogsRowsAndCursor(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		offset := 0
-		fmt.Sscanf(r.Form.Get("offset"), "%d", &offset)
+		_, _ = fmt.Sscanf(r.Form.Get("offset"), "%d", &offset)
 		budget := 11
-		fmt.Sscanf(r.Form.Get("limit"), "%d", &budget)
+		_, _ = fmt.Sscanf(r.Form.Get("limit"), "%d", &budget)
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		// VL 语义模拟：至多返回 limit 预算（含 +1 has-more 探测）内的
 		// 行；全集 5 行。首页（offset=0，budget=5）返回 5 行 = limit(4)+1
@@ -162,7 +162,7 @@ func TestSearchLogsRowsAndCursor(t *testing.T) {
 			if i%2 == 1 {
 				stderr = "true"
 			}
-			fmt.Fprintf(w, "{\"_msg\":\"row-%d\",\"_time\":\"2026-09-21T10:00:00Z\",\"app\":\"app\",\"service\":\"web\",\"source\":\"container\",\"stderr\":%q}\n", i, stderr)
+			_, _ = fmt.Fprintf(w, "{\"_msg\":\"row-%d\",\"_time\":\"2026-09-21T10:00:00Z\",\"app\":\"app\",\"service\":\"web\",\"source\":\"container\",\"stderr\":%q}\n", i, stderr)
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -222,7 +222,7 @@ func TestSearchLogsAccessFieldsProjected(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		fmt.Fprint(w, `{"_msg":"GET 200 h / 1ms","_time":"2026-09-21T10:00:00Z","app":"app","service":"web","source":"access",`+
+		_, _ = fmt.Fprint(w, `{"_msg":"GET 200 h / 1ms","_time":"2026-09-21T10:00:00Z","app":"app","service":"web","source":"access",`+
 			`"method":"GET","status":"200","route":"fleetly-app-web-websecure@http","deployment_id":"dep-9","rogue":"x"}`+"\n")
 	}))
 	t.Cleanup(srv.Close)

@@ -190,6 +190,7 @@ func TestWebhookValidationGuards(t *testing.T) {
 func TestWebhookSecretNeverInAudit(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
+	//nolint:gosec // G101：测试夹具密文/指纹标记，非真实凭据
 	_, err := st.CreateWebhookEndpoint(ctx, WebhookEndpointWrite{
 		Name:              "ops",
 		URL:               "https://secret-host.example.test/hook",

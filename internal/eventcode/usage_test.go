@@ -83,7 +83,7 @@ func productionSources(t *testing.T) map[string]string {
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
-			raw, err := os.ReadFile(path)
+			raw, err := os.ReadFile(path) //nolint:gosec // G304：扫描本仓源码树，路径自 WalkDir
 			if err != nil {
 				return err
 			}

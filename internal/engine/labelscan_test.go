@@ -23,7 +23,7 @@ import (
 // appLabelFilterWhitelist 是允许出现 `state.LabelApp:` 构造的文件（相对
 // internal/ 的斜杠路径）与一行理由。白名单必须随代码演进收缩/修正——某文
 // 件不再命中模式时本测试会提示清理（清单与代码双向钉死）。
-var appLabelFilterWhitelist = map[string]string{
+var appLabelFilterWhitelist = map[string]string{ //nolint:gosec // G101：扫描豁免清单（路径→理由），非凭据
 	"engine/ownership.go":    "归属 module 本体：过滤 map 的唯一产出点（qualifiedServiceFilter）",
 	"engine/engine.go":       "applyDesired 省略=删除作用域：label 值自期望 spec 自推导（W2-S3 重放安全决策，票面禁止改动）",
 	"engine/planner.go":      "期望 spec 的 label 写方（规划路径，值经 naming.QualifiedName 三段限定形）",
@@ -53,7 +53,7 @@ func TestNoHandWrittenAppLabelFilters(t *testing.T) {
 		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
-		raw, rerr := os.ReadFile(path)
+		raw, rerr := os.ReadFile(path) //nolint:gosec // G304：扫描本仓源码树，路径自 WalkDir
 		if rerr != nil {
 			return rerr
 		}

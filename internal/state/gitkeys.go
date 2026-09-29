@@ -150,6 +150,7 @@ func (s *Store) ListGitKeysForUser(ctx context.Context, userID string) ([]GitKey
 // listGitKeysWhere 是 git key 列表的共享通道（extra 为空 = 全列；带占位
 // 实参 = 按属主过滤）。
 func (s *Store) listGitKeysWhere(ctx context.Context, where string, args ...any) ([]GitKey, error) {
+	//nolint:gosec // G202：拼接的是列清单与固定 where 段，值全部走 ? 参数
 	rows, err := s.db.QueryContext(ctx, `SELECT `+gitKeyRowCols+` FROM git_keys`+where+` ORDER BY created_at ASC, id ASC`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("state: list git keys: %w", err)

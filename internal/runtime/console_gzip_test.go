@@ -24,7 +24,7 @@ func newGzipTestHandler(t *testing.T) http.Handler {
 		"photo.woff2": "binary-font-blob",
 	}
 	for name, body := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil { //nolint:gosec // G306：测试静态工件收紧 0600，无消费方依赖宽松位
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}

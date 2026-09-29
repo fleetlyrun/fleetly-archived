@@ -94,7 +94,10 @@ func uploadTarBytes(t *testing.T, dockerfile string, extra map[string]string) []
 	return buf.Bytes()
 }
 
-// streamUpload 以标准协议形态上传（首帧 metadata + tar 分片）。
+// streamUpload 以标准协议形态上传（首帧 metadata + tar 分片）。Send 失败时
+// 不直接透传——服务端可能已先于发送携带终态关闭流（如鉴权拦截器即时拒绝，
+// 调度时序下 Send 撞上的是传输层非 status 错误）；权威状态一律回落
+// CloseAndRecv 收取。
 func streamUpload(ctx context.Context, conn *grpc.ClientConn, name, dockerfile string, tarBytes []byte, chunk int) (*serverv1.BuildFromUploadResponse, error) {
 	client := serverv1.NewBuildsServiceClient(conn)
 	stream, err := client.BuildFromUpload(ctx)
@@ -106,7 +109,7 @@ func streamUpload(ctx context.Context, conn *grpc.ClientConn, name, dockerfile s
 			Metadata: &serverv1.BuildFromUploadMetadata{Name: name, Dockerfile: dockerfile},
 		},
 	}); err != nil {
-		return nil, err
+		return harvestStreamStatus(stream, err)
 	}
 	for off := 0; off < len(tarBytes); off += chunk {
 		end := off + chunk
@@ -116,13 +119,25 @@ func streamUpload(ctx context.Context, conn *grpc.ClientConn, name, dockerfile s
 		if err := stream.Send(&serverv1.BuildFromUploadRequest{
 			Payload: &serverv1.BuildFromUploadRequest_Chunk{Chunk: tarBytes[off:end]},
 		}); err != nil {
-			return nil, err
+			return harvestStreamStatus(stream, err)
 		}
 	}
 	return stream.CloseAndRecv()
 }
 
-// streamRaw 以原始帧序上传（协议违约用例）。
+// harvestStreamStatus 把「Send 已败」的流式调用收敛到服务端权威状态：优先
+// CloseAndRecv 的 status（服务端拒绝面），双空才回落 Send 的原始错误。
+func harvestStreamStatus(stream serverv1.BuildsService_BuildFromUploadClient, sendErr error) (*serverv1.BuildFromUploadResponse, error) {
+	if resp, rerr := stream.CloseAndRecv(); rerr != nil {
+		return nil, rerr
+	} else if resp != nil {
+		return resp, nil
+	}
+	return nil, sendErr
+}
+
+// streamRaw 以原始帧序上传（协议违约用例）。Send 失败回落 CloseAndRecv
+// （同 streamUpload——服务端违约拒绝与发送竞速的时序无关性）。
 func streamRaw(ctx context.Context, conn *grpc.ClientConn, msgs ...*serverv1.BuildFromUploadRequest) (*serverv1.BuildFromUploadResponse, error) {
 	client := serverv1.NewBuildsServiceClient(conn)
 	stream, err := client.BuildFromUpload(ctx)
@@ -131,7 +146,7 @@ func streamRaw(ctx context.Context, conn *grpc.ClientConn, msgs ...*serverv1.Bui
 	}
 	for _, m := range msgs {
 		if err := stream.Send(m); err != nil {
-			return nil, err
+			return harvestStreamStatus(stream, err)
 		}
 	}
 	return stream.CloseAndRecv()

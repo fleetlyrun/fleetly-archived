@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/fleetlyrun/fleetly/internal/apperr"
-	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -503,11 +502,4 @@ func countNewEverRan(tasks []TaskState, targetImage string) int {
 		}
 	}
 	return n
-}
-
-// networkNameOf 是 per-app 网络名（naming 契约的引擎侧出口；v0.3 三段形
-// ——team/prj 段进公式，rbac-teams §4.3）。MoveApp 编排消费（新网确认与
-// 旧网 prune 的命名出口）。
-func networkNameOf(team, prj, app string) (string, error) {
-	return naming.NetworkName(team, prj, app)
 }

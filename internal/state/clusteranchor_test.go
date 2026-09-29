@@ -78,14 +78,6 @@ func seedSelf(fd *fakeDocker, swarmID string) {
 	fd.setSelf(swarmID, nil)
 }
 
-// workerNode 构造一个未锚定 worker 快照项。
-func workerNode(id, hostname string, version uint64) SubstrateNode {
-	return SubstrateNode{
-		SwarmNodeID: id, Hostname: hostname, State: "ready", Availability: "active",
-		Version: ObjectVersion{Index: version}, Labels: map[string]string{},
-	}
-}
-
 // eventsByName 取事件表中指定名的全部 payload（差分断言用）。
 func eventsByName(t *testing.T, st *Store, name string) []Event {
 	t.Helper()
