@@ -118,8 +118,9 @@ export function AppContainersPage() {
     );
   }
 
-  // EmitUnpopulated=false：空服务集响应省略字段——isSuccess 后 undefined
-  // 即「已加载且为空」，与加载中（isSuccess 前）严格区分。
+  // gateway EmitUnpopulated=true：空服务集显式输出 []——isSuccess 后即
+  // 「已加载」（空集=合法空，与加载中由 isSuccess 区分；`?? []` 为测试桩
+  // 历史形态兜底）。
   const services = runtimeQuery.data.services ?? [];
   const tasks: { service: ServiceRuntimeView; task: ServiceTaskView }[] = [];
   for (const svc of services) {

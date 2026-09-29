@@ -234,7 +234,7 @@ func (s *AppsService) SuspendApp(ctx context.Context, req *serverv1.SuspendAppRe
 // ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
 // revision 的重部署（engine.EnqueueRollback 与行内回滚/Console Redeploy 同
 // 管线恢复副本；挂起门以清位后的行状态判定，本路径不被拦）。无成功部署
-//（保留窗空 → E_ROLLBACK_NO_TARGET）如实吞掉：无物可恢复，清位照常生效，
+// （保留窗空 → E_ROLLBACK_NO_TARGET）如实吞掉：无物可恢复，清位照常生效，
 // deployment_id 留空（响应字段语义见 proto 注释）。事件/审计与清位同事务。
 func (s *AppsService) ResumeApp(ctx context.Context, req *serverv1.ResumeAppRequest) (*serverv1.ResumeAppResponse, error) {
 	app, err := resolveApp(ctx, s.st, req.GetName())
@@ -630,7 +630,8 @@ func deploymentView(r state.DeployRecord) *serverv1.DeploymentView {
 		CreatedAt:       timestamppb.New(r.CreatedAt),
 		UpdatedAt:       timestamppb.New(r.UpdatedAt),
 		// git 触发来源（T2.19）：仅 git push/webhook 入队的部署非空——空串
-		// 在 EmitUnpopulated=false 语义下不输出（读面缺省即「非 git 来源」）。
+		// 在 gateway EmitUnpopulated=true 语义下显式输出 ""（读面空串即「非
+		// git 来源」；2026-09-29 JSON 口径反转，零值字段恒在）。
 		SourceGitSha: r.SourceGitSHA,
 		SourceGitRef: r.SourceGitRef,
 	}

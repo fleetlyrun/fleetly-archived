@@ -101,7 +101,7 @@ export function HomePage() {
   });
   const { events } = useEventStream();
 
-  // 生成类型口径：空 repeated 字段不出现在 JSON（EmitUnpopulated=false）。
+  // 生成类型口径：gateway EmitUnpopulated=true 下空 repeated 显式输出 []。
   const apps = appsQuery.data?.apps ?? [];
   const activeApps = apps.filter((a) => (a.lifecycle ?? "active") === "active");
   const deletingCount = apps.length - activeApps.length;

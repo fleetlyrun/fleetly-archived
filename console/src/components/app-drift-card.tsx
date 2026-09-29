@@ -181,8 +181,8 @@ export function AppDriftCard({ app }: AppDriftCardProps) {
 
   const report = driftQuery.data;
 
-  // 状态三态判定（EmitUnpopulated=false：drifted/desired_deployment 零值
-  // 不出现在 JSON——字段缺席即零值语义）。
+  // 状态三态判定（gateway EmitUnpopulated=true：drifted=false/desired_
+  // deployment="" 显式输出——真值判定语义不变："" 与 false 均为假值）。
   let status: { tone: "green" | "red" | "gray"; label: string };
   if (!report?.desired_deployment) {
     status = { tone: "gray", label: "no baseline" };

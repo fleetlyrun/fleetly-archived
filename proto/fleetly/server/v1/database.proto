@@ -358,8 +358,8 @@ message DatabaseVolumeView {
 message DatabaseConnectionView {
   string host = 1;
   int32 port = 2;
-  // PG 有 user/database；Redis 不输出（0 值 + 空串在 EmitUnpopulated=false
-  // 下不出现）。
+  // PG 有 user/database；Redis 为空串/0（gateway EmitUnpopulated=true 下
+  // 显式输出——消费方按空值跳过渲染）。
   string user = 3;
   string database = 4;
   // 掩码 URL（postgres://fleetly:********@<host>:5432/<db> / redis://:********@<host>:6379/0）。

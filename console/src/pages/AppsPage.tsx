@@ -173,8 +173,9 @@ export function AppsPage() {
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("updated");
 
-  // 生成类型口径：空 repeated 字段不出现在 JSON（EmitUnpopulated=false）。
-  // useMemo 包一层：引用稳定，下游筛选 memo 的依赖才不会每渲染刷新。
+  // 生成类型口径：gateway EmitUnpopulated=true 下空 repeated 显式输出 []，
+  // `?? []` 保留为历史响应/测试桩的形态兜底。useMemo 包一层：引用稳定，
+  // 下游筛选 memo 的依赖才不会每渲染刷新。
   const apps = useMemo(() => query.data?.apps ?? [], [query.data]);
 
   const visible = useMemo(() => {

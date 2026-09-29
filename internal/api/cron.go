@@ -92,8 +92,9 @@ func (s *CronService) ListCronRuns(ctx context.Context, req *serverv1.ListCronRu
 	return &serverv1.ListCronRunsResponse{App: app.Name, Runs: out}, nil
 }
 
-// cronRunView 构造台账投影（时间零值不输出——EmitUnpopulated=false 语义下
-// skipped/在途行的 started_at/finished_at 缺省即「未发生」）。
+// cronRunView 构造台账投影（时间零值零值字段不设——skipped/在途行的
+// started_at/finished_at 在 gateway EmitUnpopulated=true 下以 null 输出，
+// 语义仍是「未发生」；前端 timeAgo 对 null 如实回「—」）。
 func cronRunView(r state.CronRun) *serverv1.CronRunView {
 	v := &serverv1.CronRunView{
 		Id:          r.ID,

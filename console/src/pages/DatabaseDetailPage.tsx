@@ -281,10 +281,12 @@ function ConnectionCard({ name }: { name: string }) {
           <>
             <Field label="Host" value={<code className="text-xs">{conn.host}</code>} />
             <Field label="Port" value={<code className="text-xs">{conn.port}</code>} />
-            {conn.user !== undefined ? (
+            {/* EmitUnpopulated=true 下 Redis 的 user/database 显式输出空串
+                （此前缺省不输出）——真值判定跳过空值行，形态与旧口径一致。 */}
+            {conn.user ? (
               <Field label="User" value={<code className="text-xs">{conn.user}</code>} />
             ) : null}
-            {conn.database !== undefined ? (
+            {conn.database ? (
               <Field label="Database" value={<code className="text-xs">{conn.database}</code>} />
             ) : null}
             <Field label="URL" value={<code className="text-xs">{conn.url}</code>} />

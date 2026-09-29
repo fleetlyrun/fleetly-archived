@@ -1445,8 +1445,8 @@ type DatabaseConnectionView struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Host  string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
 	Port  int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	// PG 有 user/database；Redis 不输出（0 值 + 空串在 EmitUnpopulated=false
-	// 下不出现）。
+	// PG 有 user/database；Redis 为空串/0（gateway EmitUnpopulated=true 下
+	// 显式输出——消费方按空值跳过渲染）。
 	User     string `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
 	Database string `protobuf:"bytes,4,opt,name=database,proto3" json:"database,omitempty"`
 	// 掩码 URL（postgres://fleetly:********@<host>:5432/<db> / redis://:********@<host>:6379/0）。

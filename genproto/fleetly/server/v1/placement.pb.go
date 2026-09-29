@@ -711,7 +711,7 @@ func (x *ShowPlacementRequest) GetApp() string {
 type ShowPlacementResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	App   string                 `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
-	// 未绑定时 placement 不输出（EmitUnpopulated=false 语义）。
+	// 未绑定时 placement 为 null（gateway EmitUnpopulated=true 语义）。
 	Placement *PlacementView `protobuf:"bytes,2,opt,name=placement,proto3" json:"placement,omitempty"`
 	// 卷注册表（无卷应用为空集）。
 	Volumes       []*VolumeView `protobuf:"bytes,3,rep,name=volumes,proto3" json:"volumes,omitempty"`

@@ -414,7 +414,7 @@
         },
         "source_git_sha": {
           "type": "string",
-          "title": "git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit\n路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/\u003cbranch\u003e；\nAPI/CLI 直传 compose 的部署为空（EmitUnpopulated=false 语义下不输出）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
+          "title": "git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit\n路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/\u003cbranch\u003e；\nAPI/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下\n显式输出空串，空串即「非 git 来源」）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
         },
         "source_git_ref": {
           "type": "string"

@@ -117,7 +117,8 @@ const banner = `// 本文件由 openapi-typescript 从 genproto/fleetly/server/v
 // （console/scripts/gen-api.mjs，\`pnpm gen:api\`）——不要手改；proto 变更后
 // 重新生成并提交。CI（pr.yml console job）以"再生成无 diff"门禁拦截漂移。
 // 字段名/类型语义：UseProtoNames（snake_case 声明名）+ proto3 JSON 映射
-// （int64 → 字符串；EmitUnpopulated=false → 零值字段缺省，全部属性可选）。
+// （int64 → 字符串；gateway EmitUnpopulated=true → 零值字段显式输出〔标量
+// 零值/null〔unset message 与 Timestamp〕/[]〕，全部属性可选）。
 
 `;
 await mkdir(path.dirname(outPath), { recursive: true });

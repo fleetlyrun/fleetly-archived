@@ -99,9 +99,10 @@ func TestGatewayErrorEnvelopeGolden(t *testing.T) {
 	}
 }
 
-// TestGatewayDegradedEnvelope：无 detail 错误的退化信封——code 留空
-// （marshaler 语义下空值字段不输出）、message 保底、HTTP 由 grpc code 机械
-// 映射（取舍待 T0.5 确认）。
+// TestGatewayDegradedEnvelope：无 detail 错误的退化信封——code 不得是发明
+// 出来的注册码（gateway EmitUnpopulated=true 下空 code 显式输出 ""——2026-09-29
+// JSON 口径反转；「空」语义不变，只是从缺席变显式）、message 保底、HTTP 由
+// grpc code 机械映射（取舍待 T0.5 确认）。
 func TestGatewayDegradedEnvelope(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/system/ping", nil)
@@ -118,7 +119,9 @@ func TestGatewayDegradedEnvelope(t *testing.T) {
 	if _, ok := raw["message"]; !ok {
 		t.Fatalf("degraded envelope must keep message, got %s", rec.Body.String())
 	}
-	if _, ok := raw["code"]; ok {
+	// code 不得是发明的注册码：EmitUnpopulated=true 下空 code 显式输出 ""，
+	// 除此之外（缺席或非空码）都不对。
+	if codeRaw, ok := raw["code"]; ok && string(codeRaw) != `""` {
 		t.Fatalf("degraded envelope must not invent a code, got %s", rec.Body.String())
 	}
 }

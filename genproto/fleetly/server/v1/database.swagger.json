@@ -702,7 +702,7 @@
         },
         "user": {
           "type": "string",
-          "title": "PG 有 user/database；Redis 不输出（0 值 + 空串在 EmitUnpopulated=false\n下不出现）。"
+          "title": "PG 有 user/database；Redis 为空串/0（gateway EmitUnpopulated=true 下\n显式输出——消费方按空值跳过渲染）。"
         },
         "database": {
           "type": "string"

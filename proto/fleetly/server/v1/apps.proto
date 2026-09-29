@@ -185,8 +185,8 @@ message GetAppResponse {
   string project_network = 13;
   // 挂起位投影（AppView.suspended 同款字段；详情头 Stop/Start 按钮的数据源）。
   bool suspended = 14;
-  // 放置绑定（未绑定时不输出——EmitUnpopulated=false 语义下 message 零值
-  // 字段不渲染，读面缺省即「无绑定」）。
+  // 放置绑定（未绑定时以 null 输出——gateway EmitUnpopulated=true 语义下
+  // unset message 字段为 null，读面 null 即「无绑定」）。
   PlacementView placement = 7;
   // 最近部署（created_at 倒序，至多 5 条；派生状态的正交细节）。
   repeated DeploymentView recent_deployments = 8;

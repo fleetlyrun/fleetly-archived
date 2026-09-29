@@ -50,7 +50,8 @@ type DeploymentView struct {
 	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit
 	// 路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/<branch>；
-	// API/CLI 直传 compose 的部署为空（EmitUnpopulated=false 语义下不输出）。
+	// API/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下
+	// 显式输出空串，空串即「非 git 来源」）。
 	// webhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供
 	// AI-Agent/运营核对「这次部署来自哪个 commit」。
 	SourceGitSha  string `protobuf:"bytes,15,opt,name=source_git_sha,json=sourceGitSha,proto3" json:"source_git_sha,omitempty"`

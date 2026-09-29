@@ -63,8 +63,8 @@ func (s *AuditService) ListAudit(ctx context.Context, req *serverv1.ListAuditReq
 }
 
 // auditView 是 state 审计行 → proto 投影（AuditRecord 全字段——含 W3-S1
-// 补披露的 request_id；空串字段按 proto3 零值不输出，gateway JSONPb
-// EmitUnpopulated = false 同口径）。
+// 补披露的 request_id；空串字段经 gateway JSONPb EmitUnpopulated=true
+// 显式输出 ""——2026-09-29 JSON 口径反转）。
 func auditView(r state.AuditRecord) *serverv1.AuditView {
 	v := &serverv1.AuditView{
 		Id:          r.ID,

@@ -324,7 +324,7 @@
         },
         "placement": {
           "$ref": "#/definitions/v1PlacementView",
-          "title": "未绑定时 placement 不输出（EmitUnpopulated=false 语义）。"
+          "title": "未绑定时 placement 为 null（gateway EmitUnpopulated=true 语义）。"
         },
         "volumes": {
           "type": "array",

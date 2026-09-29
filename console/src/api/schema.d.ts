@@ -2,7 +2,8 @@
 // （console/scripts/gen-api.mjs，`pnpm gen:api`）——不要手改；proto 变更后
 // 重新生成并提交。CI（pr.yml console job）以"再生成无 diff"门禁拦截漂移。
 // 字段名/类型语义：UseProtoNames（snake_case 声明名）+ proto3 JSON 映射
-// （int64 → 字符串；EmitUnpopulated=false → 零值字段缺省，全部属性可选）。
+// （int64 → 字符串；gateway EmitUnpopulated=true → 零值字段显式输出〔标量
+// 零值/null〔unset message 与 Timestamp〕/[]〕，全部属性可选）。
 
 export interface paths {
     "/v1/auth/invite:accept": {
@@ -2383,10 +2384,10 @@ export interface components {
             revoked_at?: string;
             /**
              * 属主用户（W2 §2.3 用户化注记）：非空 = 用户 PAT 的属主 id；空 = 平台
-             *     机具令牌（EmitUnpopulated=false 下机具令牌不输出本字段）。
+             *     机具令牌（gateway EmitUnpopulated=true 下机具令牌显式输出空串）。
              */
             user_id?: string;
-            /** 绑定项目（空 = 不绑定，不输出）。 */
+            /** 绑定项目（空 = 不绑定；EmitUnpopulated=true 下显式输出空串）。 */
             project_id?: string;
         };
         TeamsServiceCreateInviteBody: {
@@ -2766,7 +2767,8 @@ export interface components {
             /**
              * git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit
              *     路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/<branch>；
-             *     API/CLI 直传 compose 的部署为空（EmitUnpopulated=false 语义下不输出）。
+             *     API/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下
+             *     显式输出空串，空串即「非 git 来源」）。
              *     webhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供
              *     AI-Agent/运营核对「这次部署来自哪个 commit」。
              */
@@ -4313,8 +4315,8 @@ export interface components {
             /** Format: int32 */
             port?: number;
             /**
-             * PG 有 user/database；Redis 不输出（0 值 + 空串在 EmitUnpopulated=false
-             *     下不出现）。
+             * PG 有 user/database；Redis 为空串/0（gateway EmitUnpopulated=true 下
+             *     显式输出——消费方按空值跳过渲染）。
              */
             user?: string;
             database?: string;

@@ -234,9 +234,9 @@ type TokenView struct {
 	// 已吊销时不输出（列表默认只出在册 token）。
 	RevokedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
 	// 属主用户（W2 §2.3 用户化注记）：非空 = 用户 PAT 的属主 id；空 = 平台
-	// 机具令牌（EmitUnpopulated=false 下机具令牌不输出本字段）。
+	// 机具令牌（gateway EmitUnpopulated=true 下机具令牌显式输出空串）。
 	UserId string `protobuf:"bytes,8,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	// 绑定项目（空 = 不绑定，不输出）。
+	// 绑定项目（空 = 不绑定；EmitUnpopulated=true 下显式输出空串）。
 	ProjectId     string `protobuf:"bytes,9,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -3,9 +3,12 @@
 // `pnpm gen:api` 再生成，CI 以"再生成无 diff"门禁拦漂移——D4-②）。
 //
 // 生成类型的两个口径（与 gateway 实际输出一致，勿按直觉"纠正"）：
-//   - 字段全部可选：gateway JSON marshaler EmitUnpopulated=false，proto3
-//     零值字段不出现在 JSON 输出；
-//   - int64 一律字符串（proto3 JSON 映射），Timestamp 是 RFC3339 字符串。
+//   - 字段全部可选（TS 形态口径）：gateway JSON marshaler
+//     EmitUnpopulated=true（2026-09-29 反转）——proto3 零值字段显式输出
+//     （标量零值 / unset message 与 Timestamp 为 null / 空数组），运行时
+//     字段恒在，类型侧保持可选以兼容历史响应与测试桩；
+//   - int64 一律字符串（proto3 JSON 映射），Timestamp 是 RFC3339 字符串
+//     或 null（零值时刻）。
 //
 // 仅 gateway 传输形态投影（NDJSON result 包裹，stream-types.ts）与页面局部
 // 视图模型保留手写——它们不在 proto 消息面内。
@@ -67,7 +70,7 @@ export type UpdateProjectResponse = Schemas["v1UpdateProjectResponse"];
 // 路径键与 auth.swagger.json 冲突留在 gen-api 清单外，S2 取舍沿用，见
 // gen-api.mjs 头注）。UserView 复用 auth 段的生成类型（同一 proto 消息，
 // Me 投影同源）；其余为 users.proto 消息的手写镜像：Timestamp 为 RFC3339
-// 字符串、零值字段缺省（EmitUnpopulated=false）。
+// 字符串、字段按可选（gateway EmitUnpopulated=true 下零值显式，形态不变）。
 
 export type ListUsersResponse = { users?: UserView[] };
 

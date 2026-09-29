@@ -84,7 +84,7 @@ function ProbeStepRow({
             {step.error}
           </span>
         ) : null}
-        {step.duration_ms !== undefined ? `${step.duration_ms} ms` : null}
+        {Number(step.duration_ms) > 0 ? `${step.duration_ms} ms` : null}
       </span>
     </div>
   );
@@ -115,7 +115,9 @@ export function AcmeSettingsCard() {
   useEffect(() => {
     if (stored && !dirtyRef.current) {
       setForm({
-        provider: stored.dns_provider ?? "none",
+        // EmitUnpopulated=true 下未配置的 provider 显式输出 ""——`||` 让
+        // 空串同样回落 none（`??` 只捕 null/undefined，捕不到零值显式形态）。
+        provider: stored.dns_provider || "none",
         token: "",
         wildcard: stored.wildcard ?? false,
       });
@@ -147,7 +149,8 @@ export function AcmeSettingsCard() {
       dirtyRef.current = false; // 保存即新基线：表单随服务端响应重置。
       if (resp.settings) {
         setForm({
-          provider: resp.settings.dns_provider ?? "none",
+          // `||` 同上：空串显式形态回落 none（见挂载水合注释）。
+          provider: resp.settings.dns_provider || "none",
           token: "",
           wildcard: resp.settings.wildcard ?? false,
         });

@@ -102,7 +102,8 @@ func (s *TokensService) CreateToken(ctx context.Context, req *serverv1.CreateTok
 
 // ListTokens 在册 token 列表（无敏感投影；完整哈希与明文永不回读）：
 // 用户 = 自己的 PAT；平台管理员/机具令牌 = 全部（user_id 区分用户 PAT 与
-// 机具令牌——机具令牌该字段缺省，EmitUnpopulated=false 语义）。
+// 机具令牌——机具令牌该字段为空串，gateway EmitUnpopulated=true 下显式
+// 输出 ""，2026-09-29 JSON 口径反转；消费面按空串/假值判定）。
 func (s *TokensService) ListTokens(ctx context.Context, _ *serverv1.ListTokensRequest) (*serverv1.ListTokensResponse, error) {
 	p, ok := PrincipalFromContext(ctx)
 	if !ok {

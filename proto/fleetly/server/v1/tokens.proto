@@ -98,9 +98,9 @@ message TokenView {
   // 已吊销时不输出（列表默认只出在册 token）。
   google.protobuf.Timestamp revoked_at = 7;
   // 属主用户（W2 §2.3 用户化注记）：非空 = 用户 PAT 的属主 id；空 = 平台
-  // 机具令牌（EmitUnpopulated=false 下机具令牌不输出本字段）。
+  // 机具令牌（gateway EmitUnpopulated=true 下机具令牌显式输出空串）。
   string user_id = 8;
-  // 绑定项目（空 = 不绑定，不输出）。
+  // 绑定项目（空 = 不绑定；EmitUnpopulated=true 下显式输出空串）。
   string project_id = 9;
 }
 

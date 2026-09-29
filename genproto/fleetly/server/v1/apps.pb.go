@@ -335,8 +335,8 @@ type GetAppResponse struct {
 	ProjectNetwork         string `protobuf:"bytes,13,opt,name=project_network,json=projectNetwork,proto3" json:"project_network,omitempty"`
 	// 挂起位投影（AppView.suspended 同款字段；详情头 Stop/Start 按钮的数据源）。
 	Suspended bool `protobuf:"varint,14,opt,name=suspended,proto3" json:"suspended,omitempty"`
-	// 放置绑定（未绑定时不输出——EmitUnpopulated=false 语义下 message 零值
-	// 字段不渲染，读面缺省即「无绑定」）。
+	// 放置绑定（未绑定时以 null 输出——gateway EmitUnpopulated=true 语义下
+	// unset message 字段为 null，读面 null 即「无绑定」）。
 	Placement *PlacementView `protobuf:"bytes,7,opt,name=placement,proto3" json:"placement,omitempty"`
 	// 最近部署（created_at 倒序，至多 5 条；派生状态的正交细节）。
 	RecentDeployments []*DeploymentView `protobuf:"bytes,8,rep,name=recent_deployments,json=recentDeployments,proto3" json:"recent_deployments,omitempty"`

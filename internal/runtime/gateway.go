@@ -33,7 +33,7 @@ import (
 // 挂载集与挂载顺序 = registration.go 登记表的双面条目（IMPL-ARCH-I 收敛
 // ——本文件不再维护第二份清单；表序 = 生产 gRPC 注册序，挂载序随表）。
 // 整体 gRPC-only（表条目无 gateway 注册器）：CronService（E5）、TasksService
-//（T 线 DT-5）。其余挂载面速览：
+// （T 线 DT-5）。其余挂载面速览：
 //   - SystemService（Ping 豁免鉴权；Status/Nodes/Ingress 为 read）
 //   - AppsService / DeploymentsService / RevisionsService / BuildsService
 //   - DriftService / DomainsService / EnvService / PlacementService
@@ -177,13 +177,18 @@ func outgoingHeaderMatcher(key string) (string, bool) {
 
 // newJSONMarshaler 是 gateway 的 JSON marshaler：UseProtoNames 使字段名按
 // proto 声明输出（snake_case，与 buf.gen.yaml 的 json_names_for_fields=false
-// 及 swagger 声明一致）；EmitUnpopulated=false 时零值字段不输出（torchwood
-// CustomMarshaler 同款语义）；DiscardUnknown 兼容客户端多发字段。
+// 及 swagger 声明一致）；EmitUnpopulated=true 时零值字段显式输出（2026-09-29
+// 用户裁决，反转此前的 false 口径——false 下 false/0/""/[] 被省略，客户端
+// 无法区分「字段缺省」与「值就是零」，Console 验收两次踩坑；true 下消息面
+// 字段语义为：标量零值显式、unset message 字段为 null、Timestamp 零值为
+// null）。注意：execrelay/gitserver 的对外事件载荷 marshaler 刻意维持
+// false（对外业务协议，消费方为 torchwood 等，不在本裁决域）。
+// DiscardUnknown 兼容客户端多发字段。
 func newJSONMarshaler() *runtime.JSONPb {
 	return &runtime.JSONPb{
 		MarshalOptions: protojson.MarshalOptions{
 			UseProtoNames:   true,
-			EmitUnpopulated: false,
+			EmitUnpopulated: true,
 		},
 		UnmarshalOptions: protojson.UnmarshalOptions{DiscardUnknown: true},
 	}
@@ -293,10 +298,11 @@ func limitRequestBody(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // writeRequestBodyTooLarge 输出 413 退化信封（与 FZ-2 口径一致：code 空、
-// message 保底，无内部细节）。
+// message 保底，无内部细节）。经 newJSONMarshaler 出——413 信封与全站 REST
+// JSON 同一选项集（EmitUnpopulated=true 下空 code/suggestion 显式输出）。
 func writeRequestBodyTooLarge(w http.ResponseWriter) {
 	env := &sharedv1.ErrorResponse{Message: "request body exceeds limit (32MiB)"}
-	raw, err := protojson.MarshalOptions{UseProtoNames: true, EmitUnpopulated: false}.Marshal(env)
+	raw, err := newJSONMarshaler().Marshal(env)
 	if err != nil {
 		http.Error(w, "request body exceeds limit", http.StatusRequestEntityTooLarge)
 		return

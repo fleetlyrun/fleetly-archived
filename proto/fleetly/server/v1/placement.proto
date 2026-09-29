@@ -170,7 +170,7 @@ message ShowPlacementRequest {
 
 message ShowPlacementResponse {
   string app = 1;
-  // 未绑定时 placement 不输出（EmitUnpopulated=false 语义）。
+  // 未绑定时 placement 为 null（gateway EmitUnpopulated=true 语义）。
   PlacementView placement = 2;
   // 卷注册表（无卷应用为空集）。
   repeated VolumeView volumes = 3;
