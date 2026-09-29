@@ -59,7 +59,7 @@ docker run -d --name fleetlyd --network host --restart unless-stopped \
 | 删栈内 redis → 托管 `twredis`;server/worker label 增补 `twredis` | 同上全托管裁决;地址/密码经 `TORCHWOOD_DATA_REDIS_ADDR/PASSWORD` env 覆盖 config.yaml 字面量 |
 | minio(SILO)留栈内 | 对象存储非数据库,平台无托管模板(DT-8 口径) |
 | 三个 Config 键改短名(config.yaml/runtime.sql/roles.sql),挂载目标路径不变 | 同 64 上限溢出(A1 修复前绕过) |
-| 新增 `grpcbridge`(haproxy:3.1-alpine) | torchwood 的 fleetly 客户端纯明文 gRPC(`insecure.NewCredentials`),控制面 8421 是 TLS;桥在 app 网听明文 8421,TCP 中继 + 上游 `ssl verify none alpn h2 sni str(ctrl.dev.fleetly.run)` 连宿主 advertise:8421。**必须 HAProxy 不能 socat**:fleetlyd 的 grpc-go TLS 服务端要求 ALPN h2,socat OPENSSL 不支持 ALPN——TLS 握手成功后服务端即关连接,明文 gRPC(unary/流式皆然)读 server preface 得 EOF(2026-09-29 实证:CLI 经 socat 中继 unary 复现 EOF;换 HAProxy `alpn h2` 后 unary+BuildFromUpload 流式全通) |
+| **无桥,dispatcher 直连 TLS 控制面**(2026-09-29 用户裁决移除 grpcbridge) | endpoint=`tls-insecure://10.124.0.3:8421`(按 IP 直连无 SAN 跳过校验);dispatcher 镜像=`staging-tls` 叠加镜像(sha-78ea1a4 基座 + TLS 客户端版 dispatcher 二进制;`COPY --chmod=0755`,基座非 root 不能 RUN chmod)。**桥的教训**:fleetlyd 的 grpc-go TLS 服务端要求 ALPN h2——socat OPENSSL 无 ALPN(握手后即关,明文 gRPC EOF preface)、HAProxy 虽可用(`alpn h2`)但属外置中继;终态=客户端原生 TLS(`tls://`/`tls-insecure://` scheme,grpc-go 自动协商 ALPN),torchwood 仓已实现(明文/TLS 双形态兼容) |
 | worker 健康探针 `kill -0 1`(原 `pgrep -x worker`) | fleetly `command` 覆盖 ENTRYPOINT 后 argv[0]=`/usr/local/bin/worker`,pgrep -x 恒 rc=1→健康门永不过;kill -0 1 = 零依赖 PID-1 存活探针(dokploy 形态 argv[0]=worker 不受影响) |
 
 ## 重建配方(scripts/ 为 2026-09-29 实录脚本,凭据全部 VPS 侧生成,不进仓库)

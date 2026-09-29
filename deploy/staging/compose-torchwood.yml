@@ -11,11 +11,11 @@
 #    绕过 swarm config 对象名 64 上限溢出(fleetly-<team>-<prj>-<app>-
 #    config-<name>-<hash8> 公式无长度守卫,原键名 71~73 字符必撞);
 #    挂载目标路径保持原文件名不变。
-# 4. 新增 grpcbridge 服务:alpine/socat TLS 终结桥——torchwood 的 fleetly
-#    客户端是明文 gRPC(dispatcher/daemon.go grpc.WithTransportCredentials
-#    (insecure)),staging 控制面 8421 是 TLS:桥在 app 网听明文 8421,
-#    上游 OPENSSL 连宿主 advertise 10.124.0.3:8421(verify=0,staging 口径)。
-#    TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT 相应指 grpcbridge:8421。
+# 4. dispatcher 直连 TLS 控制面(无桥,2026-09-29 用户裁决移除 grpcbridge):
+#    endpoint = tls-insecure://10.124.0.3:8421(按 IP 直连无 SAN,跳过校验;
+#    fleetlyd TLS 要求 ALPN h2,grpc-go 客户端原生协商——外置桥反而做不到,
+#    socat 无 ALPN 已实证)。dispatcher 镜像 = sha-78ea1a4 基座叠加
+#    TLS 客户端版 dispatcher 二进制(staging 叠加 tag,生产等 CI sha tag)。
 
 name: torchwood
 
@@ -31,35 +31,6 @@ volumes:
   minio_data:
 
 services:
-  # TLS 桥:torchwood 的 fleetly 客户端纯明文 gRPC(insecure),控制面 8421 是
-  # TLS。用 HAProxy TCP 中继(不用 socat:OPENSSL 无 ALPN 支持,fleetlyd 的
-  # grpc-go TLS 服务端要求 ALPN h2,无 ALPN 的 TLS 连接握手后即被关闭——
-  # 2026-09-29 实证:明文 gRPC 经 socat 中继 unary/流式均 EOF preface;HAProxy
-  # server 行 `alpn h2` 显式与上游协商 h2,客户端侧纯 TCP 中继零解析)。
-  grpcbridge:
-    image: haproxy:3.1-alpine
-    command:
-      - sh
-      - -c
-      - |
-        cat > /tmp/haproxy.cfg <<'EOF'
-        global
-          log stdout format raw local0
-        defaults
-          mode tcp
-          timeout connect 5s
-          timeout client 30m
-          timeout server 30m
-        frontend in
-          bind *:8421
-          default_backend fleetlyd
-        backend fleetlyd
-          server ctrl 10.124.0.3:8421 ssl verify none alpn h2 sni str(ctrl.dev.fleetly.run)
-        EOF
-        exec haproxy -db -f /tmp/haproxy.cfg
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 8421"]
-
   minio:
     image: pgsty/silo:RELEASE.2026-09-03T13-18-01Z
     command: ["silo", "server", "/data", "--console-address", ":9001"]
@@ -134,7 +105,9 @@ services:
       start_period: 20s
 
   dispatcher:
-    image: ghcr.io/torchwoodcloud/torchwood:sha-78ea1a4
+    # TLS 客户端版 dispatcher(staging 叠加镜像:sha-78ea1a4 基座 + 新二进制);
+    # server/worker/packer 不消费 fleetly endpoint,维持 sha-78ea1a4。
+    image: ghcr.io/torchwoodcloud/torchwood:staging-tls
     labels:
       fleetly.databases: "twredis"
     command: ["/usr/local/bin/dispatcher"]
@@ -153,7 +126,7 @@ services:
       TORCHWOOD_FUNCTIONS_DISPATCHER_ADDR: ":9070"
       TORCHWOOD_FUNCTIONS_DISPATCHER_MAX_RESIDENT_INSTANCES: "16"
       TORCHWOOD_FUNCTIONS_DOCKER_REGISTRY: "torchwood-funcs"
-      TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT: "grpcbridge:8421"
+      TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT: "tls-insecure://10.124.0.3:8421"
       TORCHWOOD_FUNCTIONS_FLEETLY_TOKEN: ""
       TORCHWOOD_FUNCTIONS_FLEETLY_APP: "torchwood"
       TORCHWOOD_FUNCTIONS_FLEETLY_NETWORK_MEMBERS: "dispatcher,server"
