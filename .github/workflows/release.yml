@@ -25,10 +25,11 @@
 #      VPS 无 cosign 常态，install.sh/upgrade.sh 内嵌公钥验此产物）。secret
 #      缺席时跳过（过渡期，warn 不 fail）；一旦配置，embedded-pubkey gate
 #      强制校验脚本内嵌公钥/指纹与 secret 配对。
-#   5. ghcr 镜像：deploy/Dockerfile.fleetlyd（多阶段，golang 构建层 + alpine
-#      运行层，入口 fleetlyd）→ ghcr.io/fleetlyrun/fleetlyd:<tag>（linux/
-#      amd64；arm64 运行形态走 tarball/安装器，见遗留）+ cosign sign 镜像
-#      （keyless，按 digest 签）。
+#   5. ghcr 镜像：deploy/Dockerfile.fleetlyd（多阶段，golang 构建层 +
+#      console 构建层〔产物烤入 /opt/fleetly/console，2026-09-29 起〕+
+#      alpine 运行层，入口 fleetlyd）→ ghcr.io/fleetlyrun/fleetlyd:<tag>
+#      （linux/amd64；arm64 运行形态走 tarball/安装器，见遗留）+ cosign
+#      sign 镜像（keyless，按 digest 签）。
 #   6. GitHub Release：gh release create 附全部制品 + notes 模板（引擎支持
 #      矩阵 + 安装一条命令 + 验签指引）。
 #   7. arm64 原生冒烟（T0-V2.3）：ubuntu-24.04-arm 原生跑 build + 单测冒烟

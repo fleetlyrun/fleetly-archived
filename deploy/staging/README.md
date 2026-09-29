@@ -9,7 +9,7 @@
 
 | 层 | 形态 |
 |---|---|
-| 控制面 | `fleetlyd` 容器(`--network host --restart unless-stopped`),数据根 host bind `/var/lib/fleetly`,config/console 从 `/opt/fleetly` 挂载;systemd unit 已 disable(回滚路径保留) |
+| 控制面 | `fleetlyd` 容器(`--network host --restart unless-stopped`),数据根 host bind `/var/lib/fleetly`,config 从 `/opt/fleetly` 挂载;**console 烤入镜像**(2026-09-29 起,`/opt/fleetly/console` 不再挂载——镜像更新即 console 更新);systemd unit 已 disable(回滚路径保留) |
 | 业务栈 | app `torchwood`(6 常驻 + 3 init job)与 app `messageloop`(2 常驻),同项目 founder/default,经项目网互通(mlbridge → `torchwood-server:9080`) |
 | 托管库 | `torchwood-pg`(percona-postgresql-18,pgvector 由迁移 000005 自建)、`twredis`(redis-7)、`mlredis`(redis-7) |
 | 域名 | tw-app/tw-grpc/ml-ws/ml-grpc/ml-api `.dev.fleetly.run`(ACME HTTP-01) |
@@ -20,14 +20,18 @@
 2. **数据根 host bind(非命名卷)**:平台把 `/var/lib/fleetly` 下的文件(zot htpasswd、ingress token)以 bind 挂载进 swarm 任务,任务在宿主解析路径——命名卷里宿主路径不存在,任务 Reject;
 3. **镜像带 docker-cli**:buildx `docker-container://` driver 拨 buildkit 需 exec `docker`(原「docker CLI 不进容器」口径早于 buildkit 构建链)。
 
-镜像构建(VPS 上,alpine 运行层 + 预编译二进制):
+镜像构建(VPS 上,alpine 运行层 + 预编译二进制 + console dist——CI/release
+路径走 deploy/Dockerfile.fleetlyd 从源码构建 console 进镜像,staging 跟
+main 故预编译产物直 COPY):
 
 ```sh
-# 二进制:本地 env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/fleetlyd
+# 二进制:本地 env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o fleetlyd ./cmd/fleetlyd
+# console:本地 console/ 下 pnpm install && pnpm build,dist/ 原样上传
 cat > /tmp/rb/img/Dockerfile <<'EOF'
 FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 RUN apk add --no-cache ca-certificates wget docker-cli
 COPY fleetlyd /usr/local/bin/fleetlyd
+COPY console /opt/fleetly/console
 RUN chmod +x /usr/local/bin/fleetlyd && mkdir -p /var/lib/fleetly /etc/fleetly
 VOLUME ["/var/lib/fleetly"]
 WORKDIR /var/lib/fleetly
@@ -38,9 +42,16 @@ docker run -d --name fleetlyd --network host --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/lib/fleetly:/var/lib/fleetly \
   -v /opt/fleetly/etc/config.yaml:/opt/fleetly/etc/config.yaml:ro \
-  -v /opt/fleetly/console:/opt/fleetly/console:ro \
   ghcr.io/fleetlyrun/fleetlyd:<ver> -c /opt/fleetly/etc/config.yaml
 ```
+
+console 更新通道(2026-09-29 收敛):console 随镜像走——**更新 console =
+重建镜像 + 重建容器**,不再有独立的 dist scp 叠加通道;宿主
+`/opt/fleetly/console` 目录保留无用(历史叠加残留,可清理)。config 里
+`console.static_dir: /opt/fleetly/console` 指向的即镜像内烤入目录(未挂
+载时容器内该路径=烤入副本);即使删掉该显式配置,consoleDirOrDefault
+回落(internal/runtime/console_static.go)同样命中——两条路等价,显式
+配置留作口径自文档。
 
 ## 两栈变体与业务仓真源的差异(逐条有因)
 

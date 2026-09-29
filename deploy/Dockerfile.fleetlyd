@@ -1,11 +1,15 @@
 # deploy/Dockerfile.fleetlyd — fleetlyd 容器形态（T2.24 release 制品链）。
 #
-# 多阶段：golang 构建层（CGO 关，-trimpath + 版本注入）+ alpine 运行层
-# （入口 fleetlyd；带 shell 便于排障，distroless 收敛属后续加固）。
+# 多阶段：golang 构建层（CGO 关，-trimpath + 版本注入）+ console 构建层
+#（2026-09-29 console 进镜像——pnpm 构建产物烤入 /opt/fleetly/console，
+# 配合 consoleDirOrDefault 回落：static_dir 未配置时存在即启用，容器形态
+# 开箱即有 /ui/）+ alpine 运行层（入口 fleetlyd；带 shell 便于排障，
+# distroless 收敛属后续加固）。
 #
 # 构建上下文最小集：go.work / go.work.sum / go.mod / go.sum / cmd / internal /
-# genproto / sdk（go.work 三模块闭包；pkg、proto、console、spike 等不在
-# 编译闭包内）。仓库根直接构建亦可（上下文多带无害，只是慢）：
+# genproto / sdk + console/（SPA 源码——独立 node 构建层，与 Go 编译闭包
+# 无关）。仓库根直接构建亦可（上下文多带无害，只是慢；宿主 console/
+# node_modules 若混入上下文，构建层内二次 install 前已剔除）。
 #   docker build -f deploy/Dockerfile.fleetlyd \
 #     --build-arg FLEETLY_VERSION=v0.1.0 -t ghcr.io/fleetlyrun/fleetlyd:v0.1.0 .
 #
@@ -19,6 +23,10 @@
 #     ghcr.io/fleetlyrun/fleetlyd:<tag>
 # （挂宿主 socket = 容器内进程获得宿主 dockerd 的 root 等价权限——v0.1
 # 众所周知的取舍，与主形态一致；socket 收紧属后续安全阶段。）
+#
+# Console（2026-09-29 起）：产物烤在镜像内 /opt/fleetly/console，未配置
+# console.static_dir 即自动启用 /ui/。宿主 bind 挂载同路径可遮蔽烤入副本
+# （staging 早于烤入的 dist 叠加通道即此形态——遮蔽与回落互不冲突）。
 #
 # 配置形态（F3/S20）：缺省**不传配置文件**——回落内置默认（lynx 对「未
 # 显式 -c 且工作目录无 config.yaml」容忍启动）。需要显式配置时挂配置卷并
@@ -47,11 +55,27 @@ RUN CGO_ENABLED=0 GOOS=linux \
       -ldflags "-s -w -X main.version=${FLEETLY_VERSION}" \
       -o /out/fleetlyd ./cmd/fleetlyd
 
+# ── console 构建层（2026-09-29 console 进镜像）：JS 产物与运行平台无关，
+#    钉 BUILDPLATFORM——未来若扩多平台，本层不进 QEMU（node 基镜像钉
+#    digest 同 T0-V2.3 供应链纪律）。pnpm 与 CI 同线（console-smoke.yml
+#    pnpm@10 + node 24）；二次 install 前 rm -rf node_modules：仓库根直构
+#    时宿主 node_modules（含 esbuild 等平台相关二进制）会随上下文混入，
+#    须按 lockfile 重链，CI 干净上下文下该层命中缓存无额外成本。
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS console
+WORKDIR /src/console
+COPY console/package.json console/pnpm-lock.yaml ./
+RUN npm install -g pnpm@10 && pnpm install --frozen-lockfile
+COPY console/ ./
+RUN rm -rf node_modules && pnpm install --frozen-lockfile && pnpm build
+
 FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
 # 排障依赖（swarm/daemon 自检需要的基础工具；docker CLI 不进容器——平台经
 # socket 由 dockerd 服务端执行，容器内不装 docker 客户端以收窄攻击面）。
 RUN apk add --no-cache ca-certificates wget
 COPY --from=build /out/fleetlyd /usr/local/bin/fleetlyd
+# Console 构建产物烤入（consoleDirOrDefault 回落目标；原生形态不安装此
+# 路径——install.sh 无 console 步骤，缺省关闭口径不变）。
+COPY --from=console /src/console/dist /opt/fleetly/console
 # 数据根与安装器/主形态同口径（SQLite/主密钥/构建缓存/日志全在此卷）。
 RUN mkdir -p /var/lib/fleetly /etc/fleetly
 VOLUME ["/var/lib/fleetly"]

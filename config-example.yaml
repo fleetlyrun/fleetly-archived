@@ -273,7 +273,9 @@ webhook:
 # token；数据面恒走 REST /v1（全部 Bearer 鉴权，不因托管放宽）。
 console:
   # SPA 构建产物目录（console/ 下 `pnpm install && pnpm build` 产出
-  # console/dist）。空 = 关闭（缺省；/ui/ 前缀不分派）；启用示例：
+  # console/dist）。空 = 镜像内置目录存在时启用（fleetlyd 容器形态把产物
+  # 烤在 /opt/fleetly/console——2026-09-29 起 console 进镜像，开箱即有
+  # /ui/；原生形态不安装该目录，缺省关闭口径不变）。显式配置示例：
   # static_dir: "./console/dist"
   static_dir: ""
 

@@ -9,7 +9,9 @@ package runtime
 //   - 目录穿越形态（/ui/%2e%2e/...）404，目录外不可达；
 //   - 豁免精确到 /ui/ 前缀：/v1/apps 无 token 仍 401（信封形态）；
 //   - static_dir 缺 index.html → NewHTTPServer fail-fast；
-//   - static_dir 缺省（未启用）→ /ui/ 不分派（退回 gateway mux 404 形态）。
+//   - static_dir 缺省（未启用）→ /ui/ 不分派（退回 gateway mux 404 形态）；
+//   - static_dir 缺省但镜像内置目录存在 → 回落启用（console 进镜像，
+//     2026-09-29——consoleDirOrDefault 语义钉测）。
 
 import (
 	"context"
@@ -190,6 +192,30 @@ func TestGatewayConsoleStaticHosting(t *testing.T) {
 	code, _, _, _ = get("/uix")
 	if code == 200 {
 		t.Fatalf("GET /uix = 200, want non-static dispatch")
+	}
+}
+
+// TestConsoleDirOrDefault 钉 consoleDirOrDefault 语义（2026-09-29 console
+// 进镜像配套）：显式配置恒优先；未配置时回落 baked 目录（存在——含
+// index.html——才启用）；baked 缺 index.html → 空（缺省关闭，原生形态
+// 无此目录行为不变）。
+func TestConsoleDirOrDefault(t *testing.T) {
+	baked := writeConsoleDist(t)
+
+	// 显式配置恒优先（baked 存在也不夺）。
+	if got := consoleDirOrDefault("/data/console", baked); got != "/data/console" {
+		t.Fatalf("consoleDirOrDefault(configured, baked-exists) = %q, want configured", got)
+	}
+
+	// 未配置 + baked 存在 → 回落 baked（容器形态开箱启用）。
+	if got := consoleDirOrDefault("", baked); got != baked {
+		t.Fatalf("consoleDirOrDefault(empty, baked-exists) = %q, want baked dir", got)
+	}
+
+	// 未配置 + baked 缺 index.html → 空（缺省关闭）。
+	empty := t.TempDir()
+	if got := consoleDirOrDefault("", empty); got != "" {
+		t.Fatalf("consoleDirOrDefault(empty, baked-empty) = %q, want empty (default off)", got)
 	}
 }
 

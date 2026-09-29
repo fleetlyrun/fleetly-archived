@@ -1,7 +1,8 @@
 package runtime
 
 // Console 静态托管（T2.21）：gateway 在 /ui/ 前缀托管 Console SPA 构建产物
-// （console.static_dir 指向 console/dist 时启用）。鉴权豁免**精确到 /ui/
+// （console.static_dir 显式指向；未配置时回落镜像内置 consoleBakedDir——
+// 存在才启用，见该常量注记）。鉴权豁免**精确到 /ui/
 // 前缀**（静态资源不要求 token；数据面仍全部走 /v1 鉴权）——本文件是该
 // 豁免的唯一实现位，登记见 gateway.go 的原生端点例外清单。
 
@@ -19,6 +20,25 @@ import (
 // newRootHandler 只把该前缀的请求交给静态 handler，其余路径原样进 gateway
 // mux（无 token 仍 401）。
 const consoleUIPathPrefix = "/ui"
+
+// consoleBakedDir 是容器形态烤入镜像的 Console 构建产物路径（deploy/
+// Dockerfile.fleetlyd 的 console 构建层产出，2026-09-29 起 console 进镜像）。
+// console.static_dir 未显式配置时该目录存在（含 index.html）即启用——容器
+// 形态开箱即有 /ui/；原生形态不安装此目录，「缺省关闭」口径不变。显式配置
+// 恒优先（含显式配置但目录缺失的 fail-fast）。
+const consoleBakedDir = "/opt/fleetly/console"
+
+// consoleDirOrDefault 解析 Console 静态根：显式配置优先；未配置时回落
+// baked 目录（存在才启用）。baked 作参数注入供测试钉语义。
+func consoleDirOrDefault(configured, baked string) string {
+	if configured != "" {
+		return configured
+	}
+	if _, err := os.Stat(filepath.Join(baked, "index.html")); err == nil {
+		return baked
+	}
+	return ""
+}
 
 // consoleInlineThemeScriptHash 是 index.html 内联「防闪主题」脚本的 CSP
 // 静态哈希（sha256-'…'，script-src 白名单项）。背景（2026-09-25 走查）：

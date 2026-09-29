@@ -1032,9 +1032,10 @@ func (p ingressMovePort) DetachAppNetwork(ctx context.Context, team, prj, app st
 // 端点分派（newRootHandler——webhook、GET / 引导页、Console /ui/ 静态
 // 托管与 POST /internal/alerts 告警接收器〔W5-S2〕，例外清单见 gateway.go）；
 // /healthz/liveness 与 /healthz/readiness 由 lynxhttp.Server 自行挂载，与
-// gateway 路由共存（torchwood 同款双面单端口形态）。Console 静态托管仅在
-// console.static_dir 非空时挂载（缺省关闭），目录缺 index.html 时 fail-fast
-// 拒绝启动。
+// gateway 路由共存（torchwood 同款双面单端口形态）。Console 静态托管在
+// console.static_dir 非空时挂载；未配置时回落镜像内置目录（consoleBakedDir
+// ——存在才启用：容器形态开箱即有 /ui/，原生形态无此目录缺省关闭，口径
+// 不变），目录缺 index.html 时 fail-fast 拒绝启动。
 //
 // M4-3：经 WithServerOptions 放宽 WriteTimeout（见 tuneHTTPServer——lynx
 // 缺省 60s 绝对超时会静默掐断 /v1/events/stream 与 logs stream）。
@@ -1051,7 +1052,7 @@ func NewHTTPServer(app lynx.App, cfg *AppConfig, src *gitserver.GitTriggers, ctl
 		return nil, err
 	}
 	var consoleUI http.Handler
-	if dir := cfg.Console.StaticDir; dir != "" {
+	if dir := consoleDirOrDefault(cfg.Console.StaticDir, consoleBakedDir); dir != "" {
 		consoleUI, err = newConsoleUIHandler(dir)
 		if err != nil {
 			return nil, err
