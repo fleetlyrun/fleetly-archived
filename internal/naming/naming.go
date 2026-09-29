@@ -93,7 +93,7 @@ func ServiceName(team, prj, app, service string) (string, error) {
 	if err := validateComponent("service", service); err != nil {
 		return "", err
 	}
-	return joinName(team, prj, app, service), nil
+	return checkJoined("ServiceName", joinName(team, prj, app, service))
 }
 
 // ServiceNameQualified 由三段限定形 app 标识（QualifiedName 产物）与
@@ -111,6 +111,7 @@ func ServiceNameQualified(qualifiedApp, service string) (string, error) {
 // SecretName 返回 Swarm secret 名 `fleetly-<team>-<prj>-<app>-<name>-<hash8>`。
 // hash8 由调用方经 Hash8(内容) 计算——**值轮换即换名换引用**（architecture
 // §2.4 密钥行；desired-hash 以 secret 引用参与，轮换天然触发重部署）。
+// name 段超预算时截断（唯一性由 hash8 尾段承载，capNameSegment 注）。
 func SecretName(team, prj, app, name, hash8 string) (string, error) {
 	if err := validateComponent("team", team); err != nil {
 		return "", err
@@ -127,7 +128,12 @@ func SecretName(team, prj, app, name, hash8 string) (string, error) {
 	if err := validateHash8(hash8); err != nil {
 		return "", err
 	}
-	return joinName(team, prj, app, name, hash8), nil
+	fixed := len(namePrefix) + len(team) + 1 + len(prj) + 1 + len(app) + 1 + 1 + len(hash8)
+	capped, err := capNameSegment("SecretName", fixed, name)
+	if err != nil {
+		return "", err
+	}
+	return joinName(team, prj, app, capped, hash8), nil
 }
 
 // ConfigName 返回 Swarm config 名
@@ -136,6 +142,7 @@ func SecretName(team, prj, app, name, hash8 string) (string, error) {
 // **内容变更即换名换引用**（architecture §2.4 密钥行同款语义：引用进
 // desired-hash，变更随下次部署换挂并触发服务滚动）。config 段是公式内的
 // 固定标识位（name 成分字符集不含 '-' 之外的分隔符，段位无歧义）。
+// name 段超预算时截断（唯一性由 hash8 尾段承载，capNameSegment 注）。
 func ConfigName(team, prj, app, name, hash8 string) (string, error) {
 	if err := validateComponent("team", team); err != nil {
 		return "", err
@@ -152,7 +159,12 @@ func ConfigName(team, prj, app, name, hash8 string) (string, error) {
 	if err := validateHash8(hash8); err != nil {
 		return "", err
 	}
-	return joinName(team, prj, app, "config", name, hash8), nil
+	fixed := len(namePrefix) + len(team) + 1 + len(prj) + 1 + len(app) + 1 + len("config") + 1 + 1 + len(hash8)
+	capped, err := capNameSegment("ConfigName", fixed, name)
+	if err != nil {
+		return "", err
+	}
+	return joinName(team, prj, app, "config", capped, hash8), nil
 }
 
 // VolumeName 返回平台卷名 `fleetly-<app>-<key>-<appid8>`（**v0.3 公式不变**
@@ -171,7 +183,7 @@ func VolumeName(app, key, appID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return joinName(app, key, id8), nil
+	return checkJoined("VolumeName", joinName(app, key, id8))
 }
 
 // NetworkName 返回 app 专属 overlay 网络名（保守补全
@@ -189,7 +201,7 @@ func NetworkName(team, prj, app string) (string, error) {
 	if err := validateComponent("app", app); err != nil {
 		return "", err
 	}
-	return joinName(team, prj, app, "net"), nil
+	return checkJoined("NetworkName", joinName(team, prj, app, "net"))
 }
 
 // NetworkAlias 返回服务在 app 网络内的别名 = compose 服务名（app 内短名
@@ -367,7 +379,10 @@ const cronJobNamePrefix = namePrefix + "cron-"
 // CronJobName 返回一次性 cron job 的 Swarm 服务名
 // `fleetly-cron-<team>-<prj>-<app>-<service>-<ulid8>`（ulid8 = 触发 run 的
 // ULID 前 8 位——同 schedule 串行〔max-concurrent 1〕下的唯一性兜底；前缀
-// 族不变，IsCronJobName 沿用，rbac-teams §4.3 cron 行）。
+// 族不变，IsCronJobName 沿用，rbac-teams §4.3 cron 行）。service 段超预算
+// 时截断：job 名是瞬时对象（创建即追踪、完成即删除），语义由**前缀识别 +
+// process label 归属**承载（jobServiceRefOf 不反解名字——app/service 含 '-'
+// 时本就歧义），截断无引用链风险（capNameSegment 同论证）。
 func CronJobName(team, prj, app, service, runID string) (string, error) {
 	if err := validateComponent("team", team); err != nil {
 		return "", err
@@ -384,7 +399,12 @@ func CronJobName(team, prj, app, service, runID string) (string, error) {
 	if len(runID) < 8 {
 		return "", fmt.Errorf("naming: run id %q shorter than 8 chars", runID)
 	}
-	return cronJobNamePrefix + team + "-" + prj + "-" + app + "-" + service + "-" + runID[:8], nil
+	fixed := len(cronJobNamePrefix) + len(team) + 1 + len(prj) + 1 + len(app) + 1 + 1 + 8
+	capped, err := capNameSegment("CronJobName", fixed, service)
+	if err != nil {
+		return "", err
+	}
+	return cronJobNamePrefix + team + "-" + prj + "-" + app + "-" + capped + "-" + runID[:8], nil
 }
 
 // IsCronJobName 报告 Swarm 服务名是否为一次性 cron job 服务（引擎对账的
@@ -406,7 +426,10 @@ func IsCronJobName(name string) bool {
 const initJobNamePrefix = namePrefix + "init-"
 
 // InitJobName 返回部署期 init job 的 Swarm 服务名
-// `fleetly-init-<team>-<prj>-<app>-<service>-<deployid8>`（DT-4）。
+// `fleetly-init-<team>-<prj>-<app>-<service>-<deployid8>`（DT-4）。service
+// 段超预算时截断——瞬时对象、前缀识别 + label 归属（CronJobName 同论证；
+// 该公式固定开销最大，13 字符 team/prj + 常规 app/service 即触 64 上限，
+// 2026-09-29 staging 真机 + 单测夹具两度实证）。
 func InitJobName(team, prj, app, service, deploymentID string) (string, error) {
 	if err := validateComponent("team", team); err != nil {
 		return "", err
@@ -424,7 +447,12 @@ func InitJobName(team, prj, app, service, deploymentID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return initJobNamePrefix + team + "-" + prj + "-" + app + "-" + service + "-" + id8, nil
+	fixed := len(initJobNamePrefix) + len(team) + 1 + len(prj) + 1 + len(app) + 1 + 1 + len(id8)
+	capped, err := capNameSegment("InitJobName", fixed, service)
+	if err != nil {
+		return "", err
+	}
+	return initJobNamePrefix + team + "-" + prj + "-" + app + "-" + capped + "-" + id8, nil
 }
 
 // IsInitJobName 报告 Swarm 服务名是否为部署期 init job 服务（对账删除
@@ -467,7 +495,7 @@ func DBServiceName(team, prj, name, service string) (string, error) {
 	if err := validateComponent("service", service); err != nil {
 		return "", err
 	}
-	return dbNamePrefix + team + "-" + prj + "-" + name + "-" + service, nil
+	return checkJoined("DBServiceName", dbNamePrefix+team+"-"+prj+"-"+name+"-"+service)
 }
 
 // DBNetworkName 返回库实例专属共享 overlay 网络名
@@ -483,7 +511,7 @@ func DBNetworkName(team, prj, name string) (string, error) {
 	if err := validateComponent("name", name); err != nil {
 		return "", err
 	}
-	return dbNamePrefix + team + "-" + prj + "-" + name + "-net", nil
+	return checkJoined("DBNetworkName", dbNamePrefix+team+"-"+prj+"-"+name+"-net")
 }
 
 // DBVolumeName 返回库数据卷名 `fleetly-db-<name>-<key>-<id8>`（**v0.3 公式
@@ -500,11 +528,12 @@ func DBVolumeName(name, key, instanceID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return dbNamePrefix + name + "-" + key + "-" + id8, nil
+	return checkJoined("DBVolumeName", dbNamePrefix+name+"-"+key+"-"+id8)
 }
 
 // DBSecretName 返回库 secret 名 `fleetly-db-<team>-<prj>-<name>-<secret>-<hash8>`
 // （hash8 = 值 sha256 前 8——值轮换即换名换引用，app secret 同纪律）。
+// secret 段超预算时截断（唯一性由 hash8 尾段承载，capNameSegment 注）。
 func DBSecretName(team, prj, name, secret, hash8 string) (string, error) {
 	if err := validateComponent("team", team); err != nil {
 		return "", err
@@ -521,7 +550,12 @@ func DBSecretName(team, prj, name, secret, hash8 string) (string, error) {
 	if err := validateHash8(hash8); err != nil {
 		return "", err
 	}
-	return dbNamePrefix + team + "-" + prj + "-" + name + "-" + secret + "-" + hash8, nil
+	fixed := len(dbNamePrefix) + len(team) + 1 + len(prj) + 1 + len(name) + 1 + 1 + len(hash8)
+	capped, err := capNameSegment("DBSecretName", fixed, secret)
+	if err != nil {
+		return "", err
+	}
+	return dbNamePrefix + team + "-" + prj + "-" + name + "-" + capped + "-" + hash8, nil
 }
 
 // IsDbServiceName 报告 Swarm 服务名是否为库族服务（fleetly-db- 前缀——
@@ -551,6 +585,9 @@ const dbJobNamePrefix = namePrefix + "dbjob-"
 // `fleetly-dbjob-<instance>-<purpose>-<ulid8>`（purpose = backup/verify/
 // restore/prune/rotate 语义段——rotate 为 IMPL-ARCH-F F-2 起凭据轮换 job
 // 的归宿，此前误落 fleetly-db- 库服务族；ulid8 = run ULID 前 8 位）。
+// purpose 段超预算时截断——瞬时对象、前缀识别 + label 归属（CronJobName
+// 同论证；jobsWithPurpose 按「-purpose-」包含匹配，截断后仍含全量语义段的
+// 短名照常命中，超长名截断点固定在 purpose 内不引入歧义段）。
 func DBJobName(instance, purpose, runID string) (string, error) {
 	if err := validateComponent("instance", instance); err != nil {
 		return "", err
@@ -561,7 +598,12 @@ func DBJobName(instance, purpose, runID string) (string, error) {
 	if len(runID) < 8 {
 		return "", fmt.Errorf("naming: run id %q shorter than 8 chars", runID)
 	}
-	return dbJobNamePrefix + instance + "-" + purpose + "-" + runID[:8], nil
+	fixed := len(dbJobNamePrefix) + len(instance) + 1 + 1 + 8
+	capped, err := capNameSegment("DBJobName", fixed, purpose)
+	if err != nil {
+		return "", err
+	}
+	return dbJobNamePrefix + instance + "-" + capped + "-" + runID[:8], nil
 }
 
 // IsDBJobName 报告 Swarm 服务名是否为库一次性 job 服务（清扫/采集面的
@@ -678,6 +720,46 @@ func ReservedTeamSlugReason(slug string) string {
 // joinName 以 '-' 连接命名成分。
 func joinName(parts ...string) string {
 	return namePrefix + strings.Join(parts, "-")
+}
+
+// maxObjectNameLen 是 Swarm 对象名长度上限（docker API：「only 64
+// [a-zA-Z0-9-_.] characters allowed」——service/network/volume/secret/config
+// 统一 64）。2026-09-29 staging 真机实证：3 段化命名 + 带扩展名的 config 键
+// （messageloop/mlbridge.yaml=65、torchwood/bootstrap-runtime.sql=73）撞破
+// 上限，swarm 在 config create 报 InvalidArgument，部署以
+// E_RUNTIME_UNAVAILABLE 失败——公式此前无总长守卫。
+const maxObjectNameLen = 64
+
+// errNameTooLong 构造统一超长错误（点名公式、实际长度与上限）。
+func errNameTooLong(formula, joined string) error {
+	return fmt.Errorf("naming: %s produces %q at %d chars (swarm object name limit is %d); shorten the user-controlled name segments", formula, joined, len(joined), maxObjectNameLen)
+}
+
+// checkJoined 是可寻址名族（Service/Network/Volume 及其 DB 系、Cron/Init
+// job 服务名——被调用方/CLI/对账按名引用）的长度守卫：**只报错不截断**。
+// 截断会切断引用链（用户与平台对同一对象失去共同可计算的名字），超长是
+// 用户命名问题，应在入口显式失败而非在 apply 期撞 swarm 拒绝。
+func checkJoined(formula, joined string) (string, error) {
+	if len(joined) > maxObjectNameLen {
+		return "", errNameTooLong(formula, joined)
+	}
+	return joined, nil
+}
+
+// capNameSegment 是内容寻址名族（Config/Secret/DBSecret——尾段 hash8 承载
+// 唯一性，name 段只是可读位）的长度守卫：按预算截断 name 段使总长 ≤64。
+// fixedLen = 公式中除 name 外的全部字符数（含分隔符与 hash8 尾段）；截断后
+// 同名不同内容仍由 hash8 区分（内容寻址），无新增碰撞面。预算 <1（team/
+// prj/app slug 本身顶满）显式报错——此时任何 name 都放不下。
+func capNameSegment(formula string, fixedLen int, name string) (string, error) {
+	budget := maxObjectNameLen - fixedLen
+	if budget < 1 {
+		return "", fmt.Errorf("naming: %s fixed segments already occupy %d of the %d-char swarm limit; no room for the name segment", formula, fixedLen, maxObjectNameLen)
+	}
+	if len(name) <= budget {
+		return name, nil
+	}
+	return name[:budget], nil
 }
 
 // validateComponent 校验命名成分：非空、不含命名分隔符 '-' 之外的非法字符

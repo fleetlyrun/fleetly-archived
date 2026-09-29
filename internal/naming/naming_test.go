@@ -398,3 +398,155 @@ func TestReservedTeamSlugs(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigNameCapsAtSwarmLimit 内容寻址名族的 64 上限守卫(2026-09-29
+// staging 真机回归:两个真实撞例——messageloop/mlbridge.yaml 原始拼接 65 字
+// 符、torchwood/bootstrap-runtime.sql 73 字符,swarm config create 直接
+// InvalidArgument)。断言:①两撞例产物 ≤64 且以 hash8 尾段收尾、固定段完
+// 整;②确定性(同输入同输出);③内容寻址语义不变——同名不同 hash8 仍互异;
+//④短名产物与既有公式逐字一致(截断只在超预算时发生)。
+func TestConfigNameCapsAtSwarmLimit(t *testing.T) {
+	const h = "0123abcd"
+	cases := []struct {
+		team, prj, app, name string
+	}{
+		{"founder", "default", "messageloop", "mlbridge.yaml"},
+		{"founder", "default", "torchwood", "bootstrap-runtime.sql"},
+	}
+	for _, tc := range cases {
+		got, err := ConfigName(tc.team, tc.prj, tc.app, tc.name, h)
+		if err != nil {
+			t.Fatalf("ConfigName(%q,%q,%q,%q): %v", tc.team, tc.prj, tc.app, tc.name, err)
+		}
+		if len(got) > 64 {
+			t.Fatalf("ConfigName(%q) = %q at %d chars, exceeds the 64-char swarm limit", tc.name, got, len(got))
+		}
+		if !strings.HasPrefix(got, "fleetly-"+tc.team+"-"+tc.prj+"-"+tc.app+"-config-") {
+			t.Fatalf("ConfigName(%q) = %q, fixed prefix segments damaged", tc.name, got)
+		}
+		if !strings.HasSuffix(got, "-"+h) {
+			t.Fatalf("ConfigName(%q) = %q, hash8 tail lost (content addressing broken)", tc.name, got)
+		}
+		again, err := ConfigName(tc.team, tc.prj, tc.app, tc.name, h)
+		if err != nil || again != got {
+			t.Fatalf("ConfigName not deterministic: %q vs %q (err %v)", got, again, err)
+		}
+	}
+	other, err := ConfigName("founder", "default", "messageloop", "mlbridge.yaml", "4567bcde")
+	if err != nil {
+		t.Fatalf("ConfigName(other hash): %v", err)
+	}
+	same, err := ConfigName("founder", "default", "messageloop", "mlbridge.yaml", h)
+	if err != nil {
+		t.Fatalf("ConfigName(same hash): %v", err)
+	}
+	if other == same {
+		t.Fatalf("distinct content hashes produced the same config name %q: content addressing broken by capping", other)
+	}
+	short, err := ConfigName("a", "b", "c", "d", h)
+	if err != nil {
+		t.Fatalf("ConfigName(short): %v", err)
+	}
+	if want := "fleetly-a-b-c-config-d-" + h; short != want {
+		t.Fatalf("ConfigName(short) = %q, want %q (short names must keep the exact formula)", short, want)
+	}
+}
+
+// TestSecretNameCapsAtSwarmLimit 内容寻址 secret 名族同款守卫(app 与库两系)。
+func TestSecretNameCapsAtSwarmLimit(t *testing.T) {
+	const h = "0123abcd"
+	long := strings.Repeat("s", 60)
+	got, err := SecretName("team", "prj", "app", long, h)
+	if err != nil {
+		t.Fatalf("SecretName(long): %v", err)
+	}
+	if len(got) > 64 || !strings.HasSuffix(got, "-"+h) {
+		t.Fatalf("SecretName(long) = %q: must be ≤64 with the hash8 tail intact", got)
+	}
+	dbGot, err := DBSecretName("team", "prj", "dbinst", long, h)
+	if err != nil {
+		t.Fatalf("DBSecretName(long): %v", err)
+	}
+	if len(dbGot) > 64 || !strings.HasSuffix(dbGot, "-"+h) {
+		t.Fatalf("DBSecretName(long) = %q: must be ≤64 with the hash8 tail intact", dbGot)
+	}
+	short, err := SecretName("a", "b", "c", "d", h)
+	if err != nil {
+		t.Fatalf("SecretName(short): %v", err)
+	}
+	if want := "fleetly-a-b-c-d-" + h; short != want {
+		t.Fatalf("SecretName(short) = %q, want %q", short, want)
+	}
+}
+
+// TestAddressableNameLengthGuards 可寻址名族(被调用方/CLI/对账按名引用)
+// 超长显式报错——不截断(截断会切断引用链),错误点名公式与 64 上限;短名
+// 不受影响(既有 golden 测试覆盖)。瞬时 job 名(cron/init/dbjob)是第三类:
+// 前缀识别 + label 归属、名字不参与反解——service/purpose 段截断( ≤64),
+// 单独断言。
+func TestAddressableNameLengthGuards(t *testing.T) {
+	longSlug := strings.Repeat("n", 50)
+	longApp := strings.Repeat("a", 50)
+	cases := []struct {
+		name string
+		call func() (string, error)
+	}{
+		{"ServiceName", func() (string, error) { return ServiceName("team", "prj", longApp, "web") }},
+		{"NetworkName", func() (string, error) { return NetworkName("team", "prj", longApp) }},
+		{"VolumeName", func() (string, error) { return VolumeName("app", longSlug, "01M3N588") }},
+		{"DBServiceName", func() (string, error) { return DBServiceName("team", "prj", longSlug, "postgres") }},
+		{"DBNetworkName", func() (string, error) { return DBNetworkName("team", "prj", longSlug) }},
+		{"DBVolumeName", func() (string, error) { return DBVolumeName(longSlug, "data", "01M3N588") }},
+	}
+	for _, tc := range cases {
+		got, err := tc.call()
+		if err == nil {
+			t.Fatalf("%s returned %q (len %d): overflow past the 64-char swarm limit must error", tc.name, got, len(got))
+		}
+		if !strings.Contains(err.Error(), "swarm object name limit") {
+			t.Fatalf("%s error = %v: must name the swarm object name limit", tc.name, err)
+		}
+	}
+	ok, err := ServiceName("team", "prj", "app", "web")
+	if err != nil || ok != "fleetly-team-prj-app-web" {
+		t.Fatalf("ServiceName(short) = %q, err %v: short names must keep the exact formula", ok, err)
+	}
+}
+
+// TestJobNameCapsAtSwarmLimit 瞬时 job 名族截断:超预算时 service/purpose 段
+// 收短、id8 尾段与前缀族完整;固定段本身顶满(预算 <1)显式报错;短名逐字
+// 不变。三公式固定开销不同(cron/init 四段、dbjob 三段),夹具按各自预算取。
+func TestJobNameCapsAtSwarmLimit(t *testing.T) {
+	cron, err := CronJobName("team", "prj", strings.Repeat("a", 30), "web", "0123456789")
+	if err != nil {
+		t.Fatalf("CronJobName(long): %v", err)
+	}
+	if len(cron) > 64 || !strings.HasPrefix(cron, "fleetly-cron-team-prj-") || !strings.HasSuffix(cron, "-01234567") {
+		t.Fatalf("CronJobName(long) = %q: must be ≤64 with prefix family and id8 tail intact", cron)
+	}
+	init, err := InitJobName("team", "prj", strings.Repeat("a", 30), "web", "0123456789")
+	if err != nil {
+		t.Fatalf("InitJobName(long): %v", err)
+	}
+	if len(init) > 64 || !strings.HasPrefix(init, "fleetly-init-team-prj-") || !strings.HasSuffix(init, "-01234567") {
+		t.Fatalf("InitJobName(long) = %q: must be ≤64 with prefix family and id8 tail intact", init)
+	}
+	job, err := DBJobName(strings.Repeat("n", 39), "backup", "0123456789")
+	if err != nil {
+		t.Fatalf("DBJobName(long): %v", err)
+	}
+	if len(job) > 64 || !strings.HasPrefix(job, "fleetly-dbjob-") || !strings.HasSuffix(job, "-01234567") {
+		t.Fatalf("DBJobName(long) = %q: must be ≤64 with prefix family and id8 tail intact", job)
+	}
+	if _, err := CronJobName("team", "prj", strings.Repeat("a", 60), "web", "0123456789"); err == nil ||
+		!strings.Contains(err.Error(), "no room for the name segment") {
+		t.Fatalf("CronJobName(pathological) error = %v: fixed segments filling the limit must error explicitly", err)
+	}
+	short, err := InitJobName("acme", "prod", "cronapp", "migrate", "01JABCDEFGHJKMNPQRSTVWX")
+	if err != nil {
+		t.Fatalf("InitJobName(short): %v", err)
+	}
+	if want := "fleetly-init-acme-prod-cronapp-migrate-01JABCDE"; short != want {
+		t.Fatalf("InitJobName(short) = %q, want %q", short, want)
+	}
+}

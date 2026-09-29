@@ -27,10 +27,14 @@ func SeedProject(t *testing.T, st *state.Store) state.Project {
 
 // MustSeedProject 是 SeedProject 的无 t 形态（测试表驱动构造 helper）。
 func MustSeedProject(st *state.Store) state.Project {
-	// slug 源 = ULID 的整段随机区（第 11~26 字符）——Make() 在同毫秒内是
-	// 单调递增形态，只有尾部字符演化为可靠差异；取全随机区（16 字符）保
-	// 证同毫秒连发不撞 slug（team slug 全局 UNIQUE）。
-	suffix := strings.ToLower(ulid.Make().String())[10:26]
+	// slug 源 = ULID 的随机区（第 11~22 字符，12 字符 ≈ 60 位随机）——Make()
+	// 在同毫秒内是单调递增形态，只有尾部字符演化为可靠差异；12 字符保证同
+	// 毫秒连发不撞 slug（team slug 全局 UNIQUE）。**不取到 26 位**：夹具团队
+	// /项目 slug 是三段命名公式的 team/prj 段，17 字符（t/p + 16 随机）会把
+	// 库服务名等拼过 swarm 64 上限（fleetly-db-<t>-<p>-pg-secret-postgres =
+	// 65，2026-09-29 命名长度守卫落地时暴露——真 swarm 本就拒绝该名，fake
+	// 引擎不校验长度把非法掩盖了）；夹具必须产出现实可命名的形态。
+	suffix := strings.ToLower(ulid.Make().String())[10:22]
 	team, err := st.CreateTeam(context.Background(), state.TeamWrite{
 		Slug: "t" + suffix, Name: "fixture team", CreatedBy: "fixture",
 	})
