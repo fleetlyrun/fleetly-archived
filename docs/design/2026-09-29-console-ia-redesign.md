@@ -120,6 +120,48 @@ runtime 面)/ **Tasks**(running n)。Application 卡收编 ID/lifecycle/times;�
 - **页面终态 = Deploy 卡(单方式)+ Deployment history 表**——与 dokploy 的
   Deployments 页签(触发 URL+历史列表)同构,方式选择负担归零。
 
+### 4.7 三轮:Overview/Deployments 对齐 dokploy General/Deployments(2026-09-29)
+
+用户以 dokploy 真机截图(General 页签=Deploy Settings 快捷动作+Provider 源配置;
+Deployments 页签=webhook URL+历史列表)提出「基本功能要对齐」。对齐面:
+
+- **Overview = 部署入口**(对齐 dokploy General 的「打开应用即见怎么部署」):
+  新增 **Deploy settings 快捷动作卡**(SectionCard,锚点 `deploy-settings`)——
+  **Redeploy**=重放当前 active revision(POST /rollbacks 带
+  `target_revision_id`,与历史行内回滚同管线;服务端把重放统一建模为
+  kind=rollback 部署,历史如实呈现);**Open terminal**=Terminal 页签直达;
+  无 active revision 时禁用+卡内指路 Deploy 卡;平台管理员 P0-3 只读说明由
+  本卡承载。**Deploy 卡(单方式+方式 pills)自 Deployments 页上移随迁**为独立
+  组件 `components/app-deploy-card.tsx`(全部触发面 testid 原样保留;TERMINAL
+  词表/webhookReceiverUrl/CopyValueRow 单点导出复用)。
+- **Deployments = 纯历史面**(对齐 dokploy Deployments):历史卡换 SectionCard;
+  顶部 **Redeploy webhook URL 行**(admin+,锚点 `history-webhook-url`,值=
+  接收端 URL 按业务名寻址——与 Webhook pane 同一单点拼装;读失败呈中性说明
+  非 alert);**时长列**(dokploy 每行耗时徽章同构,锚点 `deployment-duration`)
+  ——终态行=created_at→updated_at(state 层自注 updated_at 恒重盖、是「终态
+  写入时刻的最近似代理」,internal/state/deployments.go;含排队等待,title
+  如实说明口径),进行中行=已流逝时间(随轮询节拍刷新);**Cancel queued**
+  (dokploy Cancel Queues 同构,锚点 `deployments-cancel-queued`)——非终态
+  行计数入钮,确认框列明,逐条调 CancelDeployment,部分 409(已切流/终态,
+  服务端取消受限语义)如实汇报成败计数不静默关框。
+- **webhook 读面的 Me 就绪门**:挂载即拉的面只看 canAdminResources 会在能力
+  门 fail-open 窗口(Me 未达)内发出注定 403 的请求——`useMeQuery` 导出,
+  enabled/渲染双叠 `isSuccess` 门(useTeamCapabilities 头注口径的补丁)。
+- **测试布局**:Deploy 卡 11 用例随迁至新文件 `AppOverviewPage.deploy.test.tsx`
+  (路由 /apps/:name)+ Deploy settings 卡 5 新用例(Redeploy 载荷/无 revision
+  禁用/失败信封/P0-3/viewer 退场);AppDeploymentsPage.test 重写(时长列/
+  批量取消/webhook 行/developer 不发 webhook 读请求);AppOverviewPage.test
+  P0-3 断言联动(readonly-note ≥4、装配守卫)。
+
+**对齐差距挂账(后端无面,不做假)**:应用级 Stop/Start(仅 DB 有
+Suspend/Resume、Task 有 Stop——引擎需要 suspended 语义,收敛循环须绕行);
+per-app Autodeploy 开关(gitserver push/webhook 入队路径需要布尔位+RPC);
+部署行 commit message(gitserver 需读 commit 对象落列);单条部署的构建日志
+查看(BuildView 与 Deployment 无反向关联键——Builds 页头注已认);Clear
+deployments/删单行(部署行兼审计与回滚基线,revisions 保留窗 5 次成功);
+Fresh Volumes/Watch Paths/Submodules(dokploy 构建域概念,fleetly 拉源模型
+无对应物)。
+
 ## 5. 后端新读面:RuntimeService
 
 引擎端口 `Substrate.TaskList/ServiceList` 已存在(`internal/engine/ports.go:298-317`),
@@ -165,9 +207,12 @@ Overview 测试的 fetch stub 对未知 URL 走 GetApp 兜底——Overview 上�
 ## 8. 落地范围与挂账
 
 **本提交落地**:RuntimeService 后端面 + Containers 页 + Overview 摘要化/Compose 卡 +
-Deployments 每行 Compose + SectionCard 组件 + 页签重排。
+Deployments 每行 Compose + SectionCard 组件 + 页签重排;三轮(§4.7):Deploy settings
+卡 + Deploy 卡上移 Overview + Deployments 历史化(时长列/批量取消/webhook URL 行)。
 
 **挂账(不做)**:平台级 Docker 实况页(全量容器/镜像/daemon 事件,dokploy Docker 页
 形态,v0.4 候选);Containers 页的行级生命周期动作(restart/scale——扩缩已有 Scaling 卡,
 重启语义需引擎新原语);logs 按任务选择器(现 logs 面按 app,任务级过滤挂 E6 后续);
-DatabaseDetailPage 的容器实况(库实例状态已有读面)。
+DatabaseDetailPage 的容器实况(库实例状态已有读面);§4.7 尾列的 dokploy 对齐差距
+(app Stop/Start、Autodeploy 开关、部署行 commit message、单条部署日志、Clear
+deployments——各有后端缺口注记)。

@@ -29,6 +29,20 @@ export function formatTime(iso: string | undefined): string {
   return d.toLocaleString();
 }
 
+// 时段量的操作者可读形态（部署耗时等）。入参毫秒；负数/非有限值 = 无从
+// 计算，按「—」呈现而非 0s（不把缺数据渲染成瞬时完成）。
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
 // 字节量的操作者可读形态（备份台账 size_bytes——proto int64 在 JSON 面是
 // 字符串，调用方负责归一；0/缺失 = 未记录，按「—」呈现而非 0 B）。
 export function formatBytes(value: string | number | undefined): string {

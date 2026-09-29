@@ -2,7 +2,9 @@
 // 归一化快照现读——cron 服务如实标注 scheduled（不冒充长驻态），长驻服务
 // 不做状态冒充；cron 区块（台账 + 手动触发）挂载于概览页。平台管理员双门
 //（P0-3 残余面收口）：cron 触发 / metrics 开关 / 扩缩策略写钮隐藏、原位
-// 只读说明；非管理员 owner 零变化（防回归）。
+// 只读说明；非管理员 owner 零变化（防回归）。部署入口区（§4.7）的专测在
+// AppOverviewPage.deploy.test.tsx——本文件只钉装配守卫（owner 见 Deploy
+// settings + Deploy 卡；平台管理员说明态 + 无写钮）。
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -213,11 +215,12 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
     setToken("flt_test");
     renderOverviewInTeamContext(true);
 
-    // 说明（cron 区块 + 项目网络卡 + 扩缩策略卡 = 3 处资源面只读说明；
-    // metrics 卡不在内——其写面是平台设置，平台管理员正是有权方）。
+    // 说明（cron 区块 + 项目网络卡 + 扩缩策略卡 + deploy settings 卡 = 4 处
+    // 资源面只读说明；metrics 卡不在内——其写面是平台设置，平台管理员正是
+    // 有权方）。
     await waitFor(() => {
       const notes = screen.getAllByTestId("platform-readonly-note");
-      expect(notes.length).toBeGreaterThanOrEqual(3);
+      expect(notes.length).toBeGreaterThanOrEqual(4);
       expect(notes[0]).toHaveTextContent(
         "Platform administrators have read-only access to resources",
       );
@@ -228,6 +231,9 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
     expect(screen.getByTestId("metrics-mode-toggle")).toBeInTheDocument();
     expect(screen.queryByTestId("metrics-mode-readonly-note")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add policy" })).not.toBeInTheDocument();
+    // 部署入口区（§4.7）：Deploy 卡随能力门关门退场，Redeploy 钮同退。
+    expect(screen.queryByTestId("deploy-card")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("redeploy-button")).not.toBeInTheDocument();
     // 读面骨架不塌：服务清单 + cron 台账照常。
     await waitFor(() =>
       expect(screen.getByTestId("cron-runs-list")).toBeInTheDocument(),
@@ -249,6 +255,11 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
       "Platform administrator required",
     );
     expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
+    // 部署入口区装配守卫（§4.7）：owner 见 Deploy settings（Redeploy 可用
+    // ——active revision 在）+ 单方式 Deploy 卡。
+    expect(screen.getByTestId("deploy-settings")).toBeInTheDocument();
+    expect(screen.getByTestId("redeploy-button")).toBeEnabled();
+    expect(screen.getByTestId("deploy-card")).toBeInTheDocument();
   });
 });
 

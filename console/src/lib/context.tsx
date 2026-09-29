@@ -82,7 +82,10 @@ const TeamProjectContext = createContext<TeamProjectContextValue>(NeutralContext
 
 // Me 投影查询（provider / useTeamCapabilities / useIsPlatformAdmin 三处
 // 同键共享缓存——同 key 去重，不会多发请求；选项必须一致地静默失败）。
-function useMeQuery() {
+// 导出给「挂载即拉、且按能力门收窄」的读面做 Me 就绪门控：能力门 fail-open
+// 窗口（Me 未达）内不发起注定 403 的请求——只看 canAdminResources 会在
+// fail-open 期误发（2026-09-29 Deployments 页 webhook URL 行实证）。
+export function useMeQuery() {
   return useQuery({
     queryKey: ["auth", "me"],
     queryFn: () => me(),

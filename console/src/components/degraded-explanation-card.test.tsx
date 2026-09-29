@@ -149,7 +149,9 @@ describe("DegradedExplanationCard surfaces", () => {
     const card = await screen.findByTestId("degraded-explanation-card");
     expect(card.textContent).toContain("Why is this app degraded?");
     expect(card.textContent).toContain("substrate");
-    expect(screen.getByRole("link").getAttribute("href")).toContain("/events?q=");
+    // 卡内作用域查询：Overview 页面上还有 Deploy settings 卡的 terminal
+    // 链接（§4.7），全局 getByRole("link") 不再唯一。
+    expect(card.querySelector("a")?.getAttribute("href")).toContain("/events?q=");
   });
 });
 
