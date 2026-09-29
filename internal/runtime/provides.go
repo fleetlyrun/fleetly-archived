@@ -84,6 +84,7 @@ var ProviderSet = wire.NewSet(
 	NewRevisionsService,
 	NewBuildsService,
 	NewDriftService,
+	NewRuntimeService,
 	NewDomainsService,
 	NewEnvService,
 	NewLogsService,
@@ -722,6 +723,12 @@ func NewBuildsService(cfg *AppConfig, st *state.Store, q *build.Queue) *api.Buil
 // NewDriftService 构造漂移面服务（T2.18；复用引擎对账原语）。
 func NewDriftService(st *state.Store, eng *engine.Engine) *api.DriftService {
 	return api.NewDriftService(st, eng)
+}
+
+// NewRuntimeService 构造运行实况面服务（2026-09-29 Console IA 重设计；
+// 引擎观测端口上抛，只读投影）。
+func NewRuntimeService(st *state.Store, eng *engine.Engine) *api.RuntimeService {
+	return api.NewRuntimeService(st, eng)
 }
 
 // NewSystemService 构造系统/集群观察面服务（T2.18 起 SystemService 实现在

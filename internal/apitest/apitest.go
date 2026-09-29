@@ -265,9 +265,12 @@ func start(t *testing.T, opts startOptions) *Env {
 		"RevisionsService":   api.NewRevisionsService(st),
 		"BuildsService":      api.NewBuildsService(st, buildQueue, uploads),
 		"DriftService":       api.NewDriftService(st, eng),
-		"DomainsService":     api.NewDomainsService(st, nil),
-		"EnvService":         api.NewEnvService(st, box),
-		"LogsService":        api.NewLogsService(st, mgr),
+		// 运行实况面（2026-09-29 Console IA 重设计）：eng 的假底座承接
+		// ServiceList/TaskList（同 drift 面的装配形态）。
+		"RuntimeService": api.NewRuntimeService(st, eng),
+		"DomainsService": api.NewDomainsService(st, nil),
+		"EnvService":     api.NewEnvService(st, box),
+		"LogsService":    api.NewLogsService(st, mgr),
 		// metrics 面（E6 W5-S3）：alerts.mode 前置门的 CLI 驱动面（mb/mm nil =
 		// status 部署态/节点比如实报 unset/0 的降级形态，与生产 nil-safety 同语义）。
 		"MetricsService": api.NewMetricsService(st),

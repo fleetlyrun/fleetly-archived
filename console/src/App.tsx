@@ -36,6 +36,7 @@ const lazyPage = (load: () => Promise<{ [k: string]: unknown }>, name: string) =
 const AppsPage = lazyPage(() => import("@/pages/AppsPage"), "AppsPage");
 const AppDetailLayout = lazyPage(() => import("@/pages/AppDetailLayout"), "AppDetailLayout");
 const AppOverviewPage = lazyPage(() => import("@/pages/AppOverviewPage"), "AppOverviewPage");
+const AppContainersPage = lazyPage(() => import("@/pages/AppContainersPage"), "AppContainersPage");
 const AppDeploymentsPage = lazyPage(() => import("@/pages/AppDeploymentsPage"), "AppDeploymentsPage");
 const AppBuildsPage = lazyPage(() => import("@/pages/AppBuildsPage"), "AppBuildsPage");
 const AppLogsPage = lazyPage(() => import("@/pages/AppLogsPage"), "AppLogsPage");
@@ -117,6 +118,9 @@ function AuthedRoutes() {
           <Route path="/apps" element={<AppsPage />} />
           <Route path="/apps/:name" element={<AppDetailLayout />}>
             <Route index element={<AppOverviewPage />} />
+            {/* Containers 紧随 Overview（2026-09-29 IA 裁决：运行真相第二
+                优先——对齐 dokploy 把 Containers 放中部显眼位）。 */}
+            <Route path="containers" element={<AppContainersPage />} />
             <Route path="deployments" element={<AppDeploymentsPage />} />
             <Route path="builds" element={<AppBuildsPage />} />
             <Route path="logs" element={<AppLogsPage />} />

@@ -806,6 +806,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/apps/{app}/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RuntimeService_ShowAppRuntime"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/git/keys": {
         parameters: {
             query?: never;
@@ -3047,6 +3063,63 @@ export interface components {
             desired_deployment?: string;
             drifted?: boolean;
             services?: components["schemas"]["v1ServiceDriftView"][];
+        };
+        /**
+         * ServiceRuntimeView 是单服务的运行实况投影：
+         *       - mode: replicated | global（cron/init 一次性 job 服务是快照模板，
+         *         不物化长驻服务——decodeSpecs 期望集恒为长驻集，任务台账在 cron-runs
+         *         读面，本面不混入）；
+         *       - declared_replicas：compose deploy.replicas（global 恒 0）；
+         *       - actual_replicas：state=running 且 desired_state=running 的任务数；
+         *       - missing：期望集有而 Swarm 无此服务（absent——与 drift missing 同判）。
+         */
+        v1ServiceRuntimeView: {
+            name?: string;
+            image?: string;
+            mode?: string;
+            /** Format: uint64 */
+            declared_replicas?: string;
+            /** Format: uint64 */
+            actual_replicas?: string;
+            /** 底座 UpdateStatus 投影（''/updating/paused/completed + 消息）。 */
+            update_state?: string;
+            update_message?: string;
+            missing?: boolean;
+            tasks?: components["schemas"]["v1ServiceTaskView"][];
+            /**
+             * compose 服务名（期望集内取 spec 的 fleetly.process label；期望集外
+             *     的实况多余服务无对应键，留空）——Console 按它与快照服务清单对位
+             *     （name 是 swarm 全名，跨端拼装公式不做第二份）。
+             */
+            service?: string;
+        };
+        /**
+         * ServiceTaskView 是单任务实况投影（engine TaskState 的契约形态；State/
+         *     DesiredState 逐字镜像底座任务状态词表 new/pending/running/failed/
+         *     complete/shutdown/rejected/...——running 且 desired_state=running 的任务
+         *     即「实际运行的容器」。命名带 Service 前缀：包内 tasks.proto 的 TaskView
+         *     是程序化动态工作载荷面（DT-5）的既有消息，两者域不同不可混用）。
+         */
+        v1ServiceTaskView: {
+            id?: string;
+            /** Format: int32 */
+            slot?: number;
+            state?: string;
+            desired_state?: string;
+            error?: string;
+            /**
+             * 任务 spec 镜像引用（新旧版本判据；与服务的 image 比对可见滚动中的
+             *     新旧并存）。
+             */
+            image?: string;
+            /** Format: date-time */
+            timestamp?: string;
+        };
+        v1ShowAppRuntimeResponse: {
+            app?: string;
+            /** 期望态来源部署（空 = 无成功部署记录——服务集仅实况集）。 */
+            desired_deployment?: string;
+            services?: components["schemas"]["v1ServiceRuntimeView"][];
         };
         v1AddGitKeyRequest: {
             /** OpenSSH authorized_keys 单行形态（ssh-ed25519/ssh-rsa/ecdsa-sha2-*）。 */
@@ -6515,6 +6588,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["v1SetDriftConvergeResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    RuntimeService_ShowAppRuntime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ShowAppRuntimeResponse"];
                 };
             };
             /** @description An unexpected error response. */

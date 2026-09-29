@@ -42,6 +42,9 @@ const SPEC_FILES = [
   // ——类型随清单进来但无端点封装。
   "builds.swagger.json",
   "drift.swagger.json",
+  // runtime 随 2026-09-29 Console IA 重设计（Containers 页签）进清单：
+  // RuntimeService 读面（ShowAppRuntime）是运行实况面的数据源。
+  "runtime.swagger.json",
   // gitkeys 随 P1-8（git push 通道可发现性，2026-09-25 审查 backlog #11）进
   // 清单：GitKeysService 用户自服务三 RPC（Add/List/Remove）是 GitKeys 页的
   // 数据源。scope 登记 read，真授权在 handler 内（gitkeys.go 用户化语义）。

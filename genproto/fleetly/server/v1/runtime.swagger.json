@@ -1,0 +1,182 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "fleetly/server/v1/runtime.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "RuntimeService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/apps/{app}/runtime": {
+      "get": {
+        "operationId": "RuntimeService_ShowAppRuntime",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ShowAppRuntimeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/v1ErrorResponse"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RuntimeService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "v1ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "title": "稳定错误码字符串（如 \"E_COMPOSE_INVALID\"），注册表校验只增。"
+        },
+        "message": {
+          "type": "string",
+          "title": "人读错误信息（面向运维/集成方，不承诺文案稳定）。"
+        },
+        "stage": {
+          "type": "string",
+          "title": "失败所处管线阶段（如 resolve / build / deploy / serve；勿与部署子状态\nphase 混用——该字段 2026-09-20 命名审查由 phase 更名 stage）。"
+        },
+        "deployment_id": {
+          "type": "string",
+          "title": "关联的部署 ID（无关联时为空）。"
+        },
+        "suggestion": {
+          "type": "string",
+          "title": "可执行的修复建议（面向用户展示）。"
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "结构化附加上下文（machine-readable 键值对）。"
+        },
+        "docs": {
+          "type": "string",
+          "title": "相关文档 URL（错误码文档锚点）。"
+        }
+      },
+      "title": "ErrorResponse 是 fleetly 对外错误信封的唯一契约定义（发布专项 §2.7、\n架构 D21）：gateway HTTPErrorHandler（阶段 3 落地）将 gRPC 错误统一渲染\n为本结构，snake_case JSON 输出；code 与 T0.2 错误码注册表（唯一真源，\n只增不复用）对齐。"
+    },
+    "v1ServiceRuntimeView": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "declared_replicas": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "actual_replicas": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "update_state": {
+          "type": "string",
+          "title": "底座 UpdateStatus 投影（''/updating/paused/completed + 消息）。"
+        },
+        "update_message": {
+          "type": "string"
+        },
+        "missing": {
+          "type": "boolean"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceTaskView"
+          }
+        },
+        "service": {
+          "type": "string",
+          "title": "compose 服务名（期望集内取 spec 的 fleetly.process label；期望集外\n的实况多余服务无对应键，留空）——Console 按它与快照服务清单对位\n（name 是 swarm 全名，跨端拼装公式不做第二份）。"
+        }
+      },
+      "title": "ServiceRuntimeView 是单服务的运行实况投影：\n  - mode: replicated | global（cron/init 一次性 job 服务是快照模板，\n    不物化长驻服务——decodeSpecs 期望集恒为长驻集，任务台账在 cron-runs\n    读面，本面不混入）；\n  - declared_replicas：compose deploy.replicas（global 恒 0）；\n  - actual_replicas：state=running 且 desired_state=running 的任务数；\n  - missing：期望集有而 Swarm 无此服务（absent——与 drift missing 同判）。"
+    },
+    "v1ServiceTaskView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "slot": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "state": {
+          "type": "string"
+        },
+        "desired_state": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string",
+          "title": "任务 spec 镜像引用（新旧版本判据；与服务的 image 比对可见滚动中的\n新旧并存）。"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "ServiceTaskView 是单任务实况投影（engine TaskState 的契约形态；State/\nDesiredState 逐字镜像底座任务状态词表 new/pending/running/failed/\ncomplete/shutdown/rejected/...——running 且 desired_state=running 的任务\n即「实际运行的容器」。命名带 Service 前缀：包内 tasks.proto 的 TaskView\n是程序化动态工作载荷面（DT-5）的既有消息，两者域不同不可混用）。"
+    },
+    "v1ShowAppRuntimeResponse": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string"
+        },
+        "desired_deployment": {
+          "type": "string",
+          "title": "期望态来源部署（空 = 无成功部署记录——服务集仅实况集）。"
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceRuntimeView"
+          }
+        }
+      }
+    }
+  }
+}

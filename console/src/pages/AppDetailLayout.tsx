@@ -16,8 +16,13 @@ import { PillTabs } from "@/components/pill-tabs";
 import { StateBadge } from "@/components/state-badge";
 import { timeAgo } from "@/lib/utils";
 
+// 页签序（2026-09-29 IA 重排，设计 docs/design/2026-09-29-console-ia-
+// redesign.md §4.1）：Overview → Containers（运行真相第二优先，对齐
+// dokploy）→ Deployments/Builds（变更史）→ Logs → Env/Secrets/Configs
+//（配置三族相邻）→ Domains → Terminal（工具位殿后）。
 const TABS = [
   { key: "", label: "Overview" },
+  { key: "containers", label: "Containers" },
   { key: "deployments", label: "Deployments" },
   { key: "builds", label: "Builds" },
   { key: "logs", label: "Logs" },

@@ -162,6 +162,13 @@ export type FieldDiffView = Schemas["v1FieldDiffView"];
 export type ConvergeDriftResponse = Schemas["v1ConvergeDriftResponse"];
 export type SetDriftConvergeResponse = Schemas["v1SetDriftConvergeResponse"];
 
+// ── runtime（应用运行实况面，2026-09-29 Console IA 重设计；
+// proto fleetly/server/v1/runtime.proto）─────────────────────────────────
+
+export type ShowAppRuntimeResponse = Schemas["v1ShowAppRuntimeResponse"];
+export type ServiceRuntimeView = Schemas["v1ServiceRuntimeView"];
+export type ServiceTaskView = Schemas["v1ServiceTaskView"];
+
 // ── revisions ────────────────────────────────────────────────────────────
 
 export type RevisionView = Schemas["v1RevisionView"];

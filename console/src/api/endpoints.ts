@@ -47,6 +47,7 @@ import type {
   SetAppSourceResponse,
   SetAppWebhookSecretResponse,
   ShowAppWebhookResponse,
+  ShowAppRuntimeResponse,
   ListAppDomainsResponse,
   CreateAppDomainResponse,
   UpdateAppDomainResponse,
@@ -623,6 +624,20 @@ export function setDriftConvergence(app: string, enabled: boolean) {
   return api<SetDriftConvergeResponse>(
     `/apps/${encodeURIComponent(app)}/drift/convergence`,
     { method: "PUT", json: { enabled } },
+  );
+}
+
+// ── runtime（应用运行实况面，2026-09-29 Console IA 重设计；
+// proto fleetly/server/v1/runtime.proto）────────────────────────────────
+// scope 登记 read（所有角色可读）。即时投影：服务集 = 期望集（最近
+// succeeded 部署快照）∪ 实况集（受管长驻服务），每服务附全量任务（含
+// 历史——desired_state=remove/shutdown 的旧任务仍在列表）。cron/init 一次
+// 性 job 服务不物化长驻服务，本面不混入（任务台账在 cron-runs 读面）。
+
+/** 应用运行实况（实际运行的任务/容器水位——Containers 页签数据源）。 */
+export function getAppRuntime(app: string) {
+  return api<ShowAppRuntimeResponse>(
+    `/apps/${encodeURIComponent(app)}/runtime`,
   );
 }
 

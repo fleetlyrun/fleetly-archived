@@ -1,7 +1,11 @@
-// 概览页：基本信息 + 服务清单（cron 服务标注 scheduled——compose 声明但
-// 非长驻，不冒充长驻态）+ 放置/卷概览（服务拓扑明细在 revision spec）+
-// cron 区块（运行台账 + 手动触发）+ Danger Zone（应用删除）。卡片分区：
-// Application / Placement / Services / Volumes / Scheduled jobs / Danger Zone。
+// 概览页（2026-09-29 IA 重构，设计 docs/design/2026-09-29-console-ia-
+// redesign.md §4.2）：顶部运营摘要 StatCard 条（派生状态 / 服务水位
+//〔声明 vs 实况成对，runtime 面缺位时降级为声明值并如实标注〕/ 运行任务
+// 数）+ 分区卡（运营真相 → 配置面 → 危险面）：Application / 项目网 /
+// Placement / Services / Volumes / Compose（实际生效快照）/ Cron（运行
+// 台账 + 手动触发）/ Metrics / Scaling / Danger Zone。Drift 卡迁至
+// Containers 页（对账域同页）；cron 服务标注 scheduled——compose 声明但
+// 非 long-running，不冒充长驻态。
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Boxes, Layers, MapPin, PackageOpen } from "lucide-react";
@@ -11,19 +15,21 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   deleteApp,
   getApp,
+  getAppRuntime,
   getPlacement,
   getRevisionSpec,
   listRevisions,
 } from "@/api/endpoints";
 import { errorEnvelopeFrom } from "@/api/errors";
 import { timeAgo } from "@/lib/utils";
-import { AppDriftCard } from "@/components/app-drift-card";
+import { AppComposeCard } from "@/components/app-compose-card";
 import { AppMetricsCard } from "@/components/app-metrics-card";
 import { AppProjectNetworkCard } from "@/components/app-project-network-card";
 import { AppScalingCard } from "@/components/app-scaling-card";
 import { CronSection } from "@/components/cron-section";
 import { DegradedExplanationCardLive } from "@/components/degraded-explanation-card";
 import { EnvelopeAlert } from "@/components/envelope-alert";
+import { StatCard } from "@/components/stat-card";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -197,6 +203,14 @@ export function AppOverviewPage() {
     queryKey: ["placement", name],
     queryFn: () => getPlacement(name),
   });
+  // 运行实况（2026-09-29）：摘要条的服务水位/任务数来源——与 Containers
+  // 页同 key 同拍。容错：响应缺 services 字段（未加载完/代理降级）→ 按
+  // 「实况未知」降级为声明值显示（不把未加载渲染成空清单——W2-3 教训）。
+  const runtimeQuery = useQuery({
+    queryKey: ["runtime", name],
+    queryFn: () => getAppRuntime(name),
+    refetchInterval: 5000,
+  });
 
   // 服务清单：最近 active revision 的归一化快照（与 cron 区块同源同查询）。
   const revisionsQuery = useQuery({
@@ -214,19 +228,91 @@ export function AppOverviewPage() {
   const services = extractServiceNames(specQuery.data?.compose);
   const hasCron = services !== null && services.some((s) => s.isCron);
 
+  // 摘要统计：声明侧取自快照（长驻服务；global 按每节点 1 计）；实况侧
+  //（running 水位与任务数）只在 runtime 面可用时呈现。
+  const runtimeServices = runtimeQuery.data?.services;
+  const longRunning = (services ?? []).filter((s) => !s.isCron);
+  const declaredTotal = longRunning.reduce(
+    (n, s) => n + (s.replicas === "global" ? 1 : Number(s.replicas ?? 1)),
+    0,
+  );
+  let runningTotal: number | null = null;
+  let runningTasks: number | null = null;
+  if (runtimeServices) {
+    runningTotal = 0;
+    runningTasks = 0;
+    for (const svc of runtimeServices) {
+      if (svc.missing) continue;
+      // uint64 经 proto3 JSON 是字符串——计数前归一。
+      if (Number(svc.actual_replicas ?? 0) > 0) runningTotal += 1;
+      for (const t of svc.tasks ?? []) {
+        if (t.state === "running" && t.desired_state === "running") runningTasks += 1;
+      }
+    }
+  }
+
   const app = appQuery.data;
   const placement = placementQuery.data?.placement;
   const volumes = placementQuery.data?.volumes ?? [];
 
+  // 实况水位注记（Services 卡叠加列）：按 compose 服务名与 runtime 行对位
+  //（runtime.service；兼容旧字段形态按 swarm 全名直配）。runtime 缺位返回
+  // 空串（只显声明值，不伪造水位）。
+  const runningWatermark = (composeName: string): string => {
+    if (!runtimeServices) return "";
+    const svc = runtimeServices.find(
+      (v) => v.service === composeName || (!v.service && v.name === composeName),
+    );
+    if (!svc) return "";
+    if (svc.missing) return " · absent";
+    return ` · ${svc.actual_replicas ?? 0} running`;
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div className="space-y-4">
+      {/* 运营摘要条（dokploy Home 同构 StatCard）：状态/水位/任务数。 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" data-testid="overview-summary">
+        <StatCard
+          label="Derived state"
+          value={app ? <StateBadge state={app.derived_state ?? ""} /> : undefined}
+          sub={app ? `lifecycle: ${app.lifecycle}` : undefined}
+        />
+        <StatCard
+          label="Services"
+          value={
+            runningTotal !== null
+              ? `${runningTotal} / ${declaredTotal}`
+              : declaredTotal > 0
+                ? declaredTotal
+                : "0"
+          }
+          sub={
+            runningTotal !== null
+              ? "running / declared"
+              : longRunning.length > 0
+                ? "declared (runtime unavailable)"
+                : "no services declared"
+          }
+        />
+        <StatCard
+          label="Running tasks"
+          value={runningTasks !== null ? runningTasks : "—"}
+          sub={
+            runningTasks !== null
+              ? "live container instances"
+              : "runtime unavailable"
+          }
+        />
+      </div>
+
       {/* degraded 一等 UI（W5-S2）：派生状态 degraded 时常驻解释卡（事件
           订阅只在 degraded 态挂载——ready 零额外流）。 */}
       {app?.derived_state === "degraded" ? (
-        <div className="md:col-span-2">
-          <DegradedExplanationCardLive app={name} />
-        </div>
+        <DegradedExplanationCardLive app={name} />
       ) : null}
+      {/* 摘要卡之后的分区回归两列网格（运营真相半宽卡 ×2 并排；全宽卡
+          md:col-span-2）。 */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <Card>
         <CardHeader className="flex-row items-center gap-2 space-y-0 border-b pb-3">
           <Layers aria-hidden className="h-4 w-4 text-muted-foreground" />
@@ -285,12 +371,7 @@ export function AppOverviewPage() {
         </CardContent>
       </Card>
 
-      {/* Drift 卡（backlog #9，2026-09-25 审查 §3 P1-5）：运行域漂移读面
-          （全角色）+ Converge now（deploy 面）+ 自动收敛 opt-in 开关
-          （admin 面）——紧随 Placement 卡。 */}
-      <div className="md:col-span-2">
-        <AppDriftCard app={name} />
-      </div>
+      {/* Drift 卡迁至 Containers 页（2026-09-29：对账域与任务实况同页）。 */}
 
       <Card className="md:col-span-2">
         <CardHeader className="flex-row items-center gap-2 space-y-0 border-b pb-3">
@@ -335,13 +416,17 @@ export function AppOverviewPage() {
                       )}
                     </TableCell>
                     {/* 声明副本数常驻显示（W5-S3 挂账收敛；compose 缺省 1，
-                        global = 每节点一任务。实际每副本水位在 Resources 卡）。 */}
+                        global = 每节点一任务）。runtime 面可用时叠加实况水位
+                        （running n / absent）——声明 vs 实况成对出现，不单报
+                        声明值冒充实况（2026-09-29 IA 裁决 §6-3）。实际每副本
+                        水位明细在 Containers 页。 */}
                     <TableCell>
                       {s.isCron ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
                         <span className="text-xs" data-testid="service-replicas">
                           {s.replicas === "global" ? "global (per node)" : s.replicas}
+                          {runningWatermark(s.name)}
                         </span>
                       )}
                     </TableCell>
@@ -384,6 +469,12 @@ export function AppOverviewPage() {
         </Card>
       ) : null}
 
+      {/* Compose 卡（2026-09-29 IA 重设计 §4.4「实际生效的 compose 文件」）：
+          active revision 归一化快照渲染 + Copy——env 只有 key:hash 如实披露。 */}
+      <div className="md:col-span-2">
+        <AppComposeCard app={name} />
+      </div>
+
       {hasCron ? <CronSection app={name} /> : null}
 
       {/* 资源卡（E6 W5-S3）：mode=on → 容器曲线 + 每副本水位；unset →
@@ -409,6 +500,7 @@ export function AppOverviewPage() {
           用户看到的标题名。 */}
       <div className="md:col-span-2">
         <DangerZoneCard name={name} displayName={app?.name ?? name} />
+      </div>
       </div>
     </div>
   );

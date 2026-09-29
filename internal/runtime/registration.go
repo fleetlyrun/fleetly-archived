@@ -116,6 +116,10 @@ var ServiceRegistrations = []ServiceRegistration{
 		serverv1.RegisterBuildsServiceHandlerFromEndpoint),
 	mountedService("DriftService", serverv1.RegisterDriftServiceServer,
 		serverv1.RegisterDriftServiceHandlerFromEndpoint),
+	// 运行实况面（2026-09-29 Console IA 重设计，runtime.proto）：引擎观测
+	// 端口（ServiceList/TaskList）按 app 上抛的只读投影。
+	mountedService("RuntimeService", serverv1.RegisterRuntimeServiceServer,
+		serverv1.RegisterRuntimeServiceHandlerFromEndpoint),
 	mountedService("DomainsService", serverv1.RegisterDomainsServiceServer,
 		serverv1.RegisterDomainsServiceHandlerFromEndpoint),
 	mountedService("EnvService", serverv1.RegisterEnvServiceServer,
@@ -176,7 +180,7 @@ var ServiceRegistrations = []ServiceRegistration{
 }
 
 // RegisterGRPCServices 把服务装配集经登记表全量注册到 gRPC registrar
-//（grpc.go 生产装配与 internal/apitest 测试装配共用——注册本体单点）。
+// （grpc.go 生产装配与 internal/apitest 测试装配共用——注册本体单点）。
 //
 // instances = 服务短名 → 服务实现（生产侧为 wire 供给的实例；测试侧为
 // 注入确定性假端口的构造）。表 ⇆ 装配集双向对账：表有条目而装配集缺实例、

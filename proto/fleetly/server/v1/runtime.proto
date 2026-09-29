@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package fleetly.server.v1;
+
+option go_package = "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1;serverv1";
+
+import "buf/validate/validate.proto";
+import "fleetly/annotations/v1/annotations.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// 文件级 swagger 声明：default 错误响应引用 shared 的 ErrorResponse 信封
+//（与 buf.gen.yaml 的 disable_default_errors=true 配合）。与 system.proto
+// 同款惯例，逐文件声明。
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  responses: {
+    key: "default"
+    value: {
+      description: "An unexpected error response."
+      schema: { json_schema: { ref: ".fleetly.shared.v1.ErrorResponse" } }
+    }
+  }
+};
+
+// RuntimeService 是应用运行实况面（2026-09-29 Console IA 重设计，设计
+// docs/design/2026-09-29-console-ia-redesign.md §5）：把引擎观测底座已有的
+// ServiceList/TaskList（internal/engine/ports.go Substrate 端口）按 app 上抛
+// 为只读投影——此前该实况只被引擎观测循环内部消费，Console 无「实际运行的
+// 容器」可见面。独立成 service 的理由与 DriftService 同款：运行实况横跨
+// deployments 期望快照与 Swarm 实况的对账域，不是部署资源行的 CRUD。
+//
+// ShowAppRuntime 是即时投影（不写事件不收敛）：服务集 = 期望集（最近
+// succeeded 部署快照，声明副本经活覆盖钉入）∪ 实况集（受管长驻服务，
+// 一次性 job 豁免）；每服务附全部任务（含历史——swarm task 语义，旧任务
+// 下线后仍在列表，desired_state=remove 标注）。env 等敏感值不出投影
+// （任务/服务投影只含镜像/状态/时间戳族字段）。
+service RuntimeService {
+  rpc ShowAppRuntime(ShowAppRuntimeRequest) returns (ShowAppRuntimeResponse) {
+    option (google.api.http) = { get: "/v1/apps/{app}/runtime" };
+    option (fleetly.annotations.v1.scope) = "read";
+  }
+}
+
+message ShowAppRuntimeRequest {
+  string app = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// ServiceTaskView 是单任务实况投影（engine TaskState 的契约形态；State/
+// DesiredState 逐字镜像底座任务状态词表 new/pending/running/failed/
+// complete/shutdown/rejected/...——running 且 desired_state=running 的任务
+// 即「实际运行的容器」。命名带 Service 前缀：包内 tasks.proto 的 TaskView
+// 是程序化动态工作载荷面（DT-5）的既有消息，两者域不同不可混用）。
+message ServiceTaskView {
+  string id = 1;
+  int32 slot = 2;
+  string state = 3;
+  string desired_state = 4;
+  string error = 5;
+  // 任务 spec 镜像引用（新旧版本判据；与服务的 image 比对可见滚动中的
+  // 新旧并存）。
+  string image = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// ServiceRuntimeView 是单服务的运行实况投影：
+//   - mode: replicated | global（cron/init 一次性 job 服务是快照模板，
+//     不物化长驻服务——decodeSpecs 期望集恒为长驻集，任务台账在 cron-runs
+//     读面，本面不混入）；
+//   - declared_replicas：compose deploy.replicas（global 恒 0）；
+//   - actual_replicas：state=running 且 desired_state=running 的任务数；
+//   - missing：期望集有而 Swarm 无此服务（absent——与 drift missing 同判）。
+message ServiceRuntimeView {
+  string name = 1;
+  string image = 2;
+  string mode = 3;
+  uint64 declared_replicas = 4;
+  uint64 actual_replicas = 5;
+  // 底座 UpdateStatus 投影（''/updating/paused/completed + 消息）。
+  string update_state = 6;
+  string update_message = 7;
+  bool missing = 8;
+  repeated ServiceTaskView tasks = 9;
+  // compose 服务名（期望集内取 spec 的 fleetly.process label；期望集外
+  // 的实况多余服务无对应键，留空）——Console 按它与快照服务清单对位
+  //（name 是 swarm 全名，跨端拼装公式不做第二份）。
+  string service = 10;
+}
+
+message ShowAppRuntimeResponse {
+  string app = 1;
+  // 期望态来源部署（空 = 无成功部署记录——服务集仅实况集）。
+  string desired_deployment = 2;
+  repeated ServiceRuntimeView services = 3;
+}

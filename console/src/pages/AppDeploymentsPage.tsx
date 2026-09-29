@@ -1,7 +1,9 @@
 // 部署页：部署动作（粘贴/上传 compose → POST Deploy → 跟踪到终态）、
 // 部署历史（状态徽章含 blocked_waiting/observing 等中间态；失败行展示
 // code + verdict + recovery 同信封形态）、回滚（选 revision → Rollback）、
-// 字段级 diff（行内 What changed 展开，对比上一部署的归一化快照，T0-V2.4）。
+// 字段级 diff（行内 What changed 展开，对比上一部署的归一化快照，T0-V2.4）、
+// 每行 View compose（该部署 revision 的实际生效快照对话框，2026-09-29
+// IA 重设计 §4.4——历史每一版的 compose 可回看）。
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,6 +35,7 @@ import {
 } from "@/api/endpoints";
 import { errorEnvelopeFrom } from "@/api/errors";
 import type { ComposeWarning, DeploymentView } from "@/api/types";
+import { ComposeDialog } from "@/components/app-compose-card";
 import { DeploymentDiff } from "@/components/deployment-diff";
 import { DeploymentFailureAlert, EnvelopeAlert } from "@/components/envelope-alert";
 import { StateBadge } from "@/components/state-badge";
@@ -797,6 +800,8 @@ function DeploymentRow({
       void queryClient.invalidateQueries({ queryKey: ["deployments", app] });
     },
   });
+  // View compose 对话框（2026-09-29）：该部署 revision 的实际生效快照。
+  const [composeOpen, setComposeOpen] = useState(false);
   const { canDeploy } = useTeamCapabilities();
   const cancellable = canDeploy && !TERMINAL.has(d.status ?? "");
   const showState =
@@ -845,14 +850,25 @@ function DeploymentRow({
             {/* 字段级 diff 展开（T0-V2.4）：仅带 revision 的行可展开——失败/
                 进行中行没有快照，展开也无从对比。 */}
             {d.revision_id ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-expanded={expanded}
-                onClick={onToggle}
-              >
-                {expanded ? "Hide changes" : "What changed"}
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={expanded}
+                  onClick={onToggle}
+                >
+                  {expanded ? "Hide changes" : "What changed"}
+                </Button>
+                {/* 该版实际生效 compose（历史回看，2026-09-29 §4.4）。 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid="deployment-compose"
+                  onClick={() => setComposeOpen(true)}
+                >
+                  Compose
+                </Button>
+              </>
             ) : null}
             {cancellable ? (
               <Button
@@ -875,6 +891,13 @@ function DeploymentRow({
           </TableCell>
         </TableRow>
       ) : null}
+      <ComposeDialog
+        app={app}
+        deploymentId={d.id ?? ""}
+        revisionId={d.revision_id ?? undefined}
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+      />
     </>
   );
 }
