@@ -29,8 +29,8 @@ const (
 )
 
 // dbTemplateTestAdapter 是 DatabaseTemplatePort 的测试替身：按设计 §2.5
-// 键集表独立实现（生产适配 = internal/runtime 的 dbTemplatePort 薄委托
-// dbtemplate，其键集正确性由 dbtemplate_test.go golden 钉死）。
+// 键集表独立实现（生产适配 = internal/dbtemplate 的 EngineTemplatePort
+// 薄委托，其键集正确性由 dbtemplate_test.go golden 钉死）。
 type dbTemplateTestAdapter struct{}
 
 func (dbTemplateTestAdapter) EnvPrefix(instance string) string {

@@ -53,7 +53,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | `substrate` | Swarm/Docker 适配器 | 隐式实现 engine 端口（services.go / networks.go） |
 | `dutydocker` | 受管组件 duty/部署器的 Docker API 共享消费面（六包适配拷贝的收编单点，2026-09-29 C1） | `Client` + `ServiceSnapshot`（dutydocker.go / service.go / objects.go） |
 | `api` | gRPC + grpc-gateway 服务面：proto→state/engine 编排 | genproto 契约 + 包内消费端口 15 个 |
-| `runtime` | composition root：Bootstrap + Wire 装配全部服务 | provides.go（内联小 adapter 见评审挂账） |
+| `runtime` | composition root：Bootstrap + Wire 装配全部服务 | provides.go（api 端口绑定/跨模块桥的内联 adapter 属装配本职；engine 端口的适配已归属主包——substrate/ingress.RoutePublisher/dbtemplate.EngineTemplatePort/metrics，2026-09-29 C6） |
 | `placement` | 有状态放置解析/绑定生命周期 | `Resolver.Resolve/Apply/Preflight` |
 | `ingress` | Traefik 路由面（每节点 global+集中下发） | 自有 dockerClient 端口；实现 `engine.RoutePublisher` |
 | `database` | 托管数据库「第二引擎」：自有收敛循环+`EnterDbPhase` | adapters.go |

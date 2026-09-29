@@ -414,28 +414,12 @@ func NewIngressManager(app lynx.App, cfg *AppConfig, st *state.Store, sb *secret
 	return mgr, cleanup, nil
 }
 
-// ingressPublisher 是 engine.RoutePublisher 的载荷转换适配器：引擎侧
-// RoutePublishInput（核心类型）→ ingress.PublishInput（适配器类型）。
-// 方向纪律：核心不感知适配器类型，转换只在此处。
-type ingressPublisher struct {
-	m *ingress.Manager
-}
-
-func (p ingressPublisher) PublishRoutes(ctx context.Context, in engine.RoutePublishInput) error {
-	out := ingress.PublishInput{AppID: in.AppID, AppName: in.AppName, TeamSlug: in.TeamSlug, PrjSlug: in.PrjSlug}
-	for _, svc := range in.Declared {
-		out.Declared = append(out.Declared, ingress.ServiceRoutes{
-			Service: svc.Service, Port: svc.Port, Domains: svc.Domains,
-		})
-	}
-	return p.m.PublishRoutes(ctx, out)
-}
-
 // NewEngine 构建发布引擎（T2-5a：状态机/对账/窗口语义；治理参数取 engine.*
 // 配置节，缺省回落文档默认）。底座服务/任务面由 substrate.Client 隐式实现
 // engine.Substrate + engine.ImageChecker（适配器方向：substrate → engine
-// 核心接口）；路由发布端口由 ingress.Manager 经载荷适配实现（T2.15——
-// 健康门后挂点）。mb 是 VM 回环查询消费端（W5-S1 自动扩缩评估器的数据面
+// 核心接口）；路由发布端口由 ingress.RoutePublisher 承载（属主包适配，
+// 2026-09-29 评审 C6 归位——载荷翻译在 internal/ingress/routepublisher.go，
+// 装配层只接线）。mb 是 VM 回环查询消费端（W5-S1 自动扩缩评估器的数据面
 // ——经 WithMetricsQuerier 注入 engine.MetricsQuerier 端口；nil = 扩缩
 // duty 空转，装配形态诚实空转不冒充运行态）。
 func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Client, pl *placement.Resolver, box *secrets.Box, m *ingress.Manager, bm *statebackup.Manager, lm *logs.Manager, mb *metrics.Backend) *engine.Engine {
@@ -461,7 +445,7 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 	settings.ControlGRPCAddr = controlGRPCAddr
 	settings.ControlTLSName = controlTLSName
 	return engine.NewEngine(settings, st, sc, sc, pl, box, app.Logger()).
-		WithRoutePublisher(ingressPublisher{m: m}).
+		WithRoutePublisher(ingress.NewRoutePublisher(m)).
 		// 备份挂钩（T2.22）：每次部署成功后异步触发一次热备快照
 		// （kind=post_deploy；失败只落台账/审计/组件三面红，不影响部署）。
 		WithPostDeployHook(bm.RunPostDeploy).
@@ -469,9 +453,9 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 		// 提升 pending 时触发；回调只做缓存删除，非阻塞）。
 		WithEnvChangedHook(lm.InvalidateRedaction).
 		// E4 managed-databases：库模板连接信息端口（fleetly.databases 引用
-		// 面的物化键值与前缀唯一定义点在 dbtemplate——渲染投影消费
-		// engine.ServiceSpec，dbtemplate 在 engine 之上，只能装配层注入）。
-		WithDatabaseTemplate(dbTemplatePort{}).
+		// 面的物化键值与前缀唯一定义点在 dbtemplate——属主包适配
+		// EngineTemplatePort，2026-09-29 评审 C6 归位，装配层只接线）。
+		WithDatabaseTemplate(dbtemplate.EngineTemplatePort{}).
 		// E4 W4-S4：Swarm secret 确保端口（compose secrets 注入链的底座
 		// 原语——ensure 幂等由 substrate.Client.EnsureSecret 承载）。
 		WithSecretEnsurer(sc).
@@ -494,17 +478,6 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 		// duty，网络对账不判罚）。
 		WithNetworkSubstrate(sc).
 		WithPlatformNetworks(state.RustfsNetworkName, ingress.RegistryNetworkName)
-}
-
-// dbTemplatePort 是引擎对库模板连接信息面的装配层适配（engine.DatabaseTemplatePort；
-// 薄委托到 dbtemplate.EnvPrefix / dbtemplate.ConnectionVars——前缀与连接串
-// 键值的唯一定义点保持单源）。
-type dbTemplatePort struct{}
-
-func (dbTemplatePort) EnvPrefix(instance string) string { return dbtemplate.EnvPrefix(instance) }
-
-func (dbTemplatePort) ConnectionVars(templateID, instance, password string) (map[string]string, error) {
-	return dbtemplate.ConnectionVars(templateID, instance, password)
 }
 
 // NewLogsManager 构建日志管线管理器（T2.20：采集/Follow/History/清理；
