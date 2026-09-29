@@ -20,6 +20,8 @@
 | [0013](0013-container-form-control-plane-reachability.md) | 容器形态三适配；控制面地址物化；`grpc://` scheme | 已接受（staging 落库） | staging 真机 0da7e82/2053e1b、observability D-W5-4 |
 | [0014](0014-backup-ordering-recovery-semantics.md) | 备份等序原则；恢复期禁止自动收敛（只读观察） | 已接受（v0.1 落地） | state-model D-STM-6/7 |
 | [0015](0015-compose-controlled-subset.md) | Compose 受控子集：白名单只增不减、受管字段拒绝不静默覆盖 | 已接受（v0.1 落地） | remediation C3、compose golden |
+| [0016](0016-no-transition-write-point-constructor.md) | 状态机写点不抽统一构造器（四线零命中语义刻意相异） | 已接受（裁决：不抽象） | 2026-09-29 评审 C2 调查 |
+| [0017](0017-move-orchestration-stays-in-api.md) | move 跨模块编排留在 api 服务面（事务/机制已各归其位） | 已接受（裁决：不迁移） | 2026-09-29 评审 C5 调查 |
 
 ## 状态语义
 
