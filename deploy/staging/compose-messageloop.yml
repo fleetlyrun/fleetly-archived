@@ -1,0 +1,66 @@
+# MessageLoop × mlbridge —— fleetly staging 演练形态(2026-09-29)
+# 基于 messageloop 仓库 docker/fleetly/docker-compose.yml(sha 41aebd8)的
+# 托管数据库变体,差异仅三处(其余逐字保留):
+# 1. 删栈内 redis 服务与 redis_data 卷:改用 fleetly 托管库实例 mlredis
+#    (redis-7 模板)——本目录仅存 staging,不改仓库真源;
+# 2. 两服务加 label fleetly.databases: mlredis(E4 引用声明):发布引擎
+#    挂接库共享网 fleetly-db-<team>-<prj>-mlredis-net,库侧网络别名
+#    =实例名 mlredis;物化 env FLEETLY_DB_MLREDIS_*(URL/HOST/PORT/
+#    PASSWORD)自动注入两服务;
+# 3. broker/session redis 地址指 mlredis:6379(别名);密码经平台 env
+#    注入(fleetly env set,值=databases reveal,不落仓库/对话)。
+# 已知边界(如实):托管 redis-7 模板无 AOF 选项(P2-9 挂账)——broker
+# streams 历史与 ml2:broker:epoch 不跨重启持久;staging 演练形态,生产
+# 割接仍按 cutover-runbook §3(AOF 栈内卷)或等 AOF 选项落地。
+name: messageloop
+
+configs:
+  mlcfg:
+    external: true
+
+services:
+  messageloop:
+    image: ghcr.io/messageloopio/messageloop:sha-b009c71
+    command: ["/usr/local/bin/messageloop", "--config", "/etc/messageloop/mlbridge.yaml"]
+    configs:
+      - source: mlcfg
+        target: /etc/messageloop/mlbridge.yaml
+    expose:
+      - "9080"
+      - "9090"
+      - "9091"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      start_period: 15s
+    labels:
+      fleetly.databases: "mlredis"
+    environment:
+      MESSAGELOOP_SERVER_REQUIRE_AUTH: "true"
+      MESSAGELOOP_SERVER_HTTP_ADDR: "127.0.0.1:8080"
+      MESSAGELOOP_SERVER_API_ADDR: "0.0.0.0:9091"
+      MESSAGELOOP_TRANSPORT_WEBSOCKET_ADDR: "0.0.0.0:9080"
+      MESSAGELOOP_TRANSPORT_WEBSOCKET_PATH: "/ws"
+      MESSAGELOOP_TRANSPORT_GRPC_ADDR: "0.0.0.0:9090"
+      MESSAGELOOP_TRANSPORT_WEBSOCKET_COMPRESSION: "true"
+      MESSAGELOOP_SERVER_HEARTBEAT_IDLE_TIMEOUT: "300s"
+      MESSAGELOOP_SERVER_RPC_TIMEOUT: "30s"
+      MESSAGELOOP_BROKER_TYPE: "redis"
+      MESSAGELOOP_BROKER_REDIS_ADDR: "mlredis:6379"
+      MESSAGELOOP_BROKER_REDIS_STREAM_APPROXIMATE: "true"
+      MESSAGELOOP_BROKER_REDIS_STREAM_MAX_LENGTH: "10000"
+      MESSAGELOOP_TRANSPORT_WEBSOCKET_ALLOW_ALL_ORIGINS: "true"
+
+  mlbridge:
+    image: ghcr.io/messageloopio/mlbridge:sha-39d254d
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9070"]
+    labels:
+      fleetly.databases: "mlredis"
+    environment:
+      MLBRIDGE_LISTEN: "0.0.0.0:9070"
+      MLBRIDGE_MESSAGELOOP_API_ADDR: "messageloop:9091"
+      MLBRIDGE_REDIS_ADDR: "mlredis:6379"
+      MLBRIDGE_WRITE_THROUGH_ENABLED: "true"
+      MLBRIDGE_WRITE_THROUGH_DATABASE: "messageloop"
+      MLBRIDGE_WRITE_THROUGH_COLLECTION: "messages"
+      MLBRIDGE_WRITE_THROUGH_CHANNELS: '["**"]'
