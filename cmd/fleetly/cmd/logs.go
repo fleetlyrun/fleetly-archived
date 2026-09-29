@@ -321,7 +321,7 @@ func parseWindowDuration(s string) (time.Duration, error) {
 
 // logsBackendCmd 实现 `fleetly logs backend <show|set>`（E6 W5-S1，设计
 // §2.2）：show 输出后端模式/是否显式设置/部署态/ingest streak/丢弃计数；
-// set 切换 backend（保存即生效——duty 收敛部署或移除，数据卷保留）。
+// set 切换 backend（保存即生效——后台收敛部署或移除，数据卷保留）。
 type logsBackendCmd struct {
 	sub *commands.App
 }
@@ -435,7 +435,7 @@ func (c *logsBackendSetCmd) Run(ctx context.Context, env *commands.Environment, 
 		}
 		v := resp.GetView()
 		_, err = fmt.Fprintf(env.Stdout,
-			"backend set to %s (deployment: %s; the duty converges the managed service shortly)\n",
+			"backend set to %s (deployment: %s; the manager converges the managed service shortly)\n",
 			v.GetBackend(), v.GetDeployment())
 		return err
 	})

@@ -15,7 +15,7 @@ import (
 // 缺省语义（D-W0-6：90 天可调）：audit.retention_days 未显式设置时**本层
 // 不投影数值**（RetentionDays=0、Set=false）——生效值回落链在消费方裁决：
 // platform_settings > config state.audit_retention_days > 缺省 90（janitor
-// 的审计清理 duty 是唯一消费点，见 janitor.go 的每拍现读）。本层只诚实
+// 的审计清理步是唯一消费点，见 janitor.go 的每拍现读）。本层只诚实
 // 投影「未设置」与「显式设置」之别（logsettings 同款区分面）。
 //
 // 保存动作落审计 audit.retention_changed（既有 settings 先例的审计动作

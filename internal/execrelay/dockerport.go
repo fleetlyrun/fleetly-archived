@@ -1,18 +1,18 @@
 package execrelay
 
-// duty 的 Docker API 消费面（2026-09-29 架构评审 C1 起收编进
-// internal/dutydocker：连接构造/服务写原语/实况投影由共享适配层唯一承载
+// relay 部署收敛面的 Docker API 窄端口（2026-09-29 架构评审 C1 起收编进
+// internal/dockerapi：连接构造/服务写原语/实况投影由共享适配层唯一承载
 // ——此前本包自持一份逐字同构的 dutyDockerClient，六包同构拷贝的收编对象
-// 之一）。本文件只保留消费方窄端口与包内哨兵；端口面按 relay duty 需要
+// 之一）。本文件只保留消费方窄端口与包内哨兵；端口面按 relay 部署需要
 // 裁剪：服务收敛 + secret 原语 + 网络/Info 投影，无卷/无任务面。第三方
 // （moby/swarm）类型不出本包的端口消费面——swarm.ServiceSpec 是部署器构
 // 造载荷，只进不出（出口只有投影与 error）；实况投影与 Info 投影是共享
-// 类型（dutydocker.ServiceSnapshot / InfoSnapshot）——消费方只读自己比对
+// 类型（dockerapi.ServiceSnapshot / InfoSnapshot）——消费方只读自己比对
 // 用到的字段。
 //
-// 服务写幂等语义由 duty 收敛层保证（inspect → 比对 → create/update）。
-// swarm 未就绪返回哨兵 ErrNotSwarmReady（duty 退避重试——各包哨兵同语义
-// 刻意不共享类型）。
+// 服务写幂等语义由收敛层保证（inspect → 比对 → create/update）。
+// swarm 未就绪返回哨兵 ErrNotSwarmReady（收敛循环退避重试——各包哨兵同
+// 语义刻意不共享类型）。
 
 import (
 	"context"
@@ -20,21 +20,21 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 )
 
-// ErrNotSwarmReady 表示本机不是 active swarm manager（duty 可重试态）。
-var ErrNotSwarmReady = errors.New("docker engine is not an active swarm manager (execrelay duty)")
+// ErrNotSwarmReady 表示本机不是 active swarm manager（收敛循环可重试态）。
+var ErrNotSwarmReady = errors.New("docker engine is not an active swarm manager (execrelay manager)")
 
-// dutyDocker 是 duty 对 Docker API 的最小消费面（*dutydocker.Client 以方
-// 法集超集满足；测试假件在本包注入）。
-type dutyDocker interface {
-	// Info 报告 swarm 状态投影（active 位由 duty 判定并映射包内哨兵）。
-	Info(ctx context.Context) (dutydocker.InfoSnapshot, error)
+// dockerPort 是 relay 部署收敛对 Docker API 的最小消费面（*dockerapi.Client
+// 以方法集超集满足；测试假件在本包注入）。
+type dockerPort interface {
+	// Info 报告 swarm 状态投影（active 位由收敛层判定并映射包内哨兵）。
+	Info(ctx context.Context) (dockerapi.InfoSnapshot, error)
 	// ServiceInspect 按名取服务实况；缺失返回 Exists=false（不是错误——
 	// 「不存在」是收敛的正常输入）。
-	ServiceInspect(ctx context.Context, name string) (dutydocker.ServiceSnapshot, error)
-	// ServiceCreate 创建服务（duty 保证仅缺失时调用）。
+	ServiceInspect(ctx context.Context, name string) (dockerapi.ServiceSnapshot, error)
+	// ServiceCreate 创建服务（调用方保证仅缺失时调用）。
 	ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error
 	// ServiceUpdate 以乐观令牌推进服务（version 取自先前的 ServiceInspect）。
 	ServiceUpdate(ctx context.Context, name string, version uint64, spec swarm.ServiceSpec) error
@@ -48,7 +48,7 @@ type dutyDocker interface {
 	// inspect 兜回 ID。data 只进创建载荷，绝不进日志/错误文本。
 	SecretEnsure(ctx context.Context, name string, data []byte, labels map[string]string) (string, error)
 	// NetworkName 把服务实况里的网络挂载目标（创建期 "host" 被归一为网络
-	// ID）解析回网络名（幂等比对的同锚面）。解析失败返回错误，duty 退避
-	// 重试不误判漂移。
+	// ID）解析回网络名（幂等比对的同锚面）。解析失败返回错误，收敛循环
+	// 退避重试不误判漂移。
 	NetworkName(ctx context.Context, target string) (string, error)
 }

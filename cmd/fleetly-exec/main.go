@@ -8,7 +8,7 @@
 // 指数退避重连（1s→30s）、15s ping keepalive；注册帧自报容器 hostname
 // （控制面经底座 task 反查 NodeID——成员发现零自研）。
 //
-// 配置全部经 env（duty 渲染 spec 时注入——单一事实源在 internal/execrelay
+// 配置全部经 env（部署收敛渲染 spec 时注入——单一事实源在 internal/execrelay
 // spec.go）：
 //
 //	FLEETLY_CONTROL_ADDR        控制面 host:port（native HTTP 面——必填）

@@ -38,7 +38,7 @@ const (
 	DatabaseDegraded DatabaseState = "degraded"
 	// DatabasePaused 暂停（scale 0，保留服务与卷；引用方连不上是诚实暴露）。
 	DatabasePaused DatabaseState = "paused"
-	// DatabaseDeleting 删除受理（tombstone 第一拍；reap duty 幂等重试）。
+	// DatabaseDeleting 删除受理（tombstone 第一拍；reap 步幂等重试）。
 	DatabaseDeleting DatabaseState = "deleting"
 	// DatabaseDeleted reap 完成（受管对象移除；名字保留期占用）。
 	DatabaseDeleted DatabaseState = "deleted"
@@ -585,7 +585,7 @@ func (t *Tx) SetDatabaseLastError(ctx context.Context, id, reason string) error 
 }
 
 // SetDatabaseDeleteVolumes 是事务内的卷处置选择落位（delete API 受理：与
-// →deleting 转移、审计同一事务——reap duty 读到的处置选择与 tombstone
+// →deleting 转移、审计同一事务——reap 步读到的处置选择与 tombstone
 // 第一拍原子一致，跨重启存续）。
 func (t *Tx) SetDatabaseDeleteVolumes(ctx context.Context, id string, deleteVolumes bool) error {
 	if _, err := t.GetDatabaseInstance(ctx, id); err != nil {

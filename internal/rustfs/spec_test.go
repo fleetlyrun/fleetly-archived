@@ -13,7 +13,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -21,11 +21,11 @@ func testCreds() credentials {
 	return credentials{AccessKey: "ACCESSKEY20CHARS1234", SecretKey: "0123456789abcdef0123456789abcdef01234567"}
 }
 
-// inspectOf 把期望 spec 投影为实况形态（dutydocker.snapshotOf 同构的消费
+// inspectOf 把期望 spec 投影为实况形态（dockerapi.snapshotOf 同构的消费
 // 面子集——真实 ServiceInspect 的测试内镜像；投影口径一致由 TestSpecEqualPaths
 // 的正路径钉住）。
-func inspectOf(spec swarm.ServiceSpec) (dutydocker.ServiceSnapshot, error) {
-	out := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+func inspectOf(spec swarm.ServiceSpec) (dockerapi.ServiceSnapshot, error) {
+	out := dockerapi.ServiceSnapshot{Exists: true, Version: 1}
 	cs := spec.TaskTemplate.ContainerSpec
 	if cs == nil {
 		return out, errors.New("nil ContainerSpec")
@@ -171,35 +171,35 @@ func TestSpecEqualPaths(t *testing.T) {
 		t.Fatal("identical spec must compare equal")
 	}
 
-	drift := func(m func(s *dutydocker.ServiceSnapshot)) bool {
+	drift := func(m func(s *dockerapi.ServiceSnapshot)) bool {
 		mutated := cur
 		m(&mutated)
 		return specEqual(mutated, desired)
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.Image = "rustfs/rustfs:other" }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.Image = "rustfs/rustfs:other" }) {
 		t.Error("image drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.Env = []string{"RUSTFS_ADDRESS=:9999"} }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.Env = []string{"RUSTFS_ADDRESS=:9999"} }) {
 		t.Error("env drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.Mounts = []mount.Mount{{Source: "other-volume"}} }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.Mounts = []mount.Mount{{Source: "other-volume"}} }) {
 		t.Error("volume drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.Networks = []string{"net-2"} }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.Networks = []string{"net-2"} }) {
 		t.Error("network drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) {
+	if drift(func(s *dockerapi.ServiceSnapshot) {
 		s.Constraints = []string{"node.labels.fleetly.node-id == n_OTHER"}
 	}) {
 		t.Error("constraint drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.Replicas = 2 }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.Replicas = 2 }) {
 		t.Error("replica drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) { s.MemoryBytes = 128 << 20 }) {
+	if drift(func(s *dockerapi.ServiceSnapshot) { s.MemoryBytes = 128 << 20 }) {
 		t.Error("memory limit drift not detected")
 	}
-	if drift(func(s *dutydocker.ServiceSnapshot) {
+	if drift(func(s *dockerapi.ServiceSnapshot) {
 		s.SecretNames = []string{accessSecretName(c) + "old", secretSecretName(c)}
 	}) {
 		t.Error("credential rotation (secret name change) not detected")

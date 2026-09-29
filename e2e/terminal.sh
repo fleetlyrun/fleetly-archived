@@ -10,7 +10,7 @@
 #   登录直拉（CI 的 GITHUB_TOKEN 自动具备 packages:read）；无 → 匿名直拉
 #   （2026-09-24 实证匿名可读，本地复跑路径），拉取失败仍诚实 fatal。
 #
-#   T-1  relay duty 收敛：fleetly-exec global 服务 running（每节点一任务）。
+#   T-1  relay 收敛管理器收敛：fleetly-exec global 服务 running（每节点一任务）。
 #   T-2  terminal status RPC：enabled + relay 已连接（nodes_connected ≥ 1
 #        ——反向常连 + 成员发现的端到端证据）。
 #   T-3  受管应用部署成功（fleetly.app label 容器就位——会话目标的资格面）。
@@ -32,7 +32,7 @@
 #   - 空闲 10min / 硬上限 30min 由单测注入缝钉死（e2e 不等真实时限）；
 #   - 集群 token 错误拒在单测钉死（e2e 不伪造 secret 重启 relay）；
 #   - terminal.enabled=false 的 E_TERMINAL_DISABLED 面：同一 swarm 上不可
-#     起第二个禁用终端的 fleetlyd（其 duty 会移除 T-1 依赖的服务）——单测
+#     起第二个禁用终端的 fleetlyd（其收敛管理器会移除 T-1 依赖的服务）——单测
 #     覆盖，e2e 不做。
 #
 # 断言风格与 e2e/control-plane-tls.sh 一致（T-x: PASS/FAIL 行 + TERM_FAIL
@@ -61,7 +61,7 @@ BR_NET=fleetly-t-br
 BR_SUBNET=10.220.0.0/24
 DIND=fleetly-t-e2e-dind
 # Go 常量 DefaultExecRelayImage 的逐字形态（tag@digest 全引用——真实 pull
-# 落 RepoDigests 后 duty 的钉定引用才可解析）。
+# 落 RepoDigests 后收敛管理器的钉定引用才可解析）。
 EXEC_IMAGE='ghcr.io/fleetlyrun/fleetly-exec:v0.2.0-exec.1@sha256:4de40017c620b55b76048c3369f64b3a747c875a4f7bf21ac8c6f88bc4b0793b'
 
 APP=termapp
@@ -335,7 +335,7 @@ FOUNDER_PRJ=default
 FOUNDER_PROJECT="$FOUNDER_TEAM/$FOUNDER_PRJ"
 tl 'founder registered (platform admin); machine token minted; project context '"$FOUNDER_PROJECT"
 
-# ───────── T-1: relay duty 收敛（global 服务 running）
+# ───────── T-1: relay 收敛管理器收敛（global 服务 running）
 t1_running() {
     msh 'docker service ls --filter name=fleetly-exec --format "{{.Replicas}}" 2>/dev/null' | grep -q '^1/1$'
 }

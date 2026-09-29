@@ -15,7 +15,7 @@ import (
 )
 
 // alert_rules（B 线 W5 设计 §2.2，D-V3W5-1，v0.3 W5-S2）：Prometheus 告警
-// 规则的平台权威态——vmalert rule 文件的渲染源（internal/metrics duty 消费
+// 规则的平台权威态——vmalert rule 文件的渲染源（internal/metrics 管理器消费
 // 渲染）。CRUD 原语 + 校验 + 审计 alerting.rule_changed（同事务
 // fail-closed）；**零事件**（告警全链不经事件流——防回环红线，设计 §2.3；
 // 可见面 = 审计 + API/CLI/Console）。

@@ -8,7 +8,7 @@ package engine
 //	S3_SECRET_ACCESS_KEY / S3_PATH_STYLE（词表 §5.4，只增）
 //
 // 值来源：external = 设置值直出（secret 密文解密）；rustfs = 服务端派生
-// 端点 + 平台托管凭据（E3-5 duty 生成，envelope 解密）。仅带 label 的服务
+// 端点 + 平台托管凭据（E3-5 rustfs 管理器生成，envelope 解密）。仅带 label 的服务
 // 注入（单桶单凭据共享——D-S3-10）；同键覆盖走 W_ENV_PLATFORM_OVERRIDE
 // 既有警告（system > platform > 文件层既定序）。
 //
@@ -41,10 +41,10 @@ import (
 )
 
 // errS3WaitingRustfsCredentials 是 rustfs 托管凭据尚未备便的可重试哨兵
-//（mode=rustfs 刚保存、duty 尚未跑完生成拍）：部署停留 preparing 下一拍
+//（mode=rustfs 刚保存、rustfs 管理器尚未跑完生成拍）：部署停留 preparing 下一拍
 // 重试（预算由既有 preparing 看门狗守门——与 swarm 未就绪同型暂态）。
 var errS3WaitingRustfsCredentials = errors.New(
-	"s3 injection: managed rustfs credentials not provisioned yet (the platform duty provisions them within a minute of enabling rustfs mode)")
+	"s3 injection: managed rustfs credentials not provisioned yet (the rustfs manager provisions them within a minute of enabling rustfs mode)")
 
 // s3SystemVars 是注入键的固定词表（§5.4：六键恒注入——键集确定 = 快照
 // 与 desired-hash 确定；空值如实注入，消费方按值裁决）。
@@ -107,7 +107,7 @@ func (e *Engine) resolveS3Injection(ctx context.Context, spec *compose.Spec) (va
 			return nil, false, errorf("E_RUNTIME_UNAVAILABLE", "failed to load managed rustfs credentials: %v", lerr)
 		}
 		if !found {
-			return nil, false, errS3WaitingRustfsCredentials // 可重试：duty 生成拍未到
+			return nil, false, errS3WaitingRustfsCredentials // 可重试：生成拍未到
 		}
 		accessPlain, derr := e.box.Decrypt([]byte(accessCT))
 		if derr != nil {

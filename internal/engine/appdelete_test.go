@@ -1,6 +1,6 @@
 package engine
 
-// H10/MG-3（B6）：app 删除生命周期第二拍的回收 duty 回归测试。
+// H10/MG-3（B6）：app 删除生命周期第二拍的回收步回归测试。
 //   - 完整收敛：deleting 应用 → 受管服务全部移除 → lifecycle=deleted +
 //     app.deleted 事件与 app.deleted 审计落库；
 //   - 底座瞬态（ServiceList 失败）：不落 app 终态，下拍重试成功；
@@ -131,7 +131,7 @@ func TestReapDeletingAppsRetriesAfterTransientServiceList(t *testing.T) {
 }
 
 // TestReapDeletingAppsWaitsForInFlightDeployment 在途部署让位：发布对账会
-// 重建被删服务，duty 必须等部署终态后再收敛（本拍跳过不误删）。
+// 重建被删服务，回收步必须等部署终态后再收敛（本拍跳过不误删）。
 func TestReapDeletingAppsWaitsForInFlightDeployment(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()

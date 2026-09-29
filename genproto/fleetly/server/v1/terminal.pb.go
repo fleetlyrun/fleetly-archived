@@ -192,7 +192,7 @@ func (*GetTerminalStatusRequest) Descriptor() ([]byte, []int) {
 
 type GetTerminalStatusResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 终端功能是否启用（config terminal.enabled；false = duty 不部署 relay，
+	// 终端功能是否启用（config terminal.enabled；false = 不部署 relay，
 	// CreateTerminalTicket 报 E_TERMINAL_DISABLED）。
 	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	// fleetly-exec relay 服务部署态（global 服务在位与否）。

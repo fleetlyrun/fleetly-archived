@@ -13,7 +13,7 @@ import (
 
 // MetricsService 实现 server.v1.MetricsService（E6 观测专项设计 §4，W5-S3；
 // D-W5-2 opt-in）：PromQL 查询（透传——操作员工具，设计 §4.2 诚实口径）、
-// 栈状态视图（N/M nodes reporting）与模式切换（set 即生效——duty 收敛由
+// 栈状态视图（N/M nodes reporting）与模式切换（set 即生效——后台收敛由
 // metrics.Manager 常驻循环承载，本面只落设置）。mb/mm 可为 nil（测试/精简
 // 装配形态——查询如实报后端不可用，status 的部署态/节点比如实报 unknown/
 // 0）。
@@ -22,7 +22,7 @@ type MetricsService struct {
 	st *state.Store
 	// mb 是 VM 查询消费端（nil = 未装配——SearchMetrics 如实报不可用）。
 	mb *metrics.Backend
-	// mm 是 metrics duty 管理器（nil = 未装配——status 部署态 unknown）。
+	// mm 是 metrics 收敛管理器（nil = 未装配——status 部署态 unknown）。
 	mm *metrics.Manager
 	// nodesTotal 是集群节点总数供给（观测缓存投影；nil = 0——单测形态）。
 	nodesTotal func(ctx context.Context) (int, error)
@@ -42,7 +42,7 @@ func (s *MetricsService) WithRetentionDays(days int) *MetricsService {
 	return s
 }
 
-// WithBackend 注入 VM 消费端与 duty 管理器（链式装配，nil 合法）。
+// WithBackend 注入 VM 消费端与收敛管理器（链式装配，nil 合法）。
 func (s *MetricsService) WithBackend(mb *metrics.Backend, mm *metrics.Manager) *MetricsService {
 	s.mb = mb
 	s.mm = mm
@@ -187,7 +187,7 @@ func (s *MetricsService) retentionDays() int {
 }
 
 // SetMetricsMode 切换 metrics 模式（unset | on）：设置保存 + 审计 + 事件
-// 同事务（state 层 fail-closed）；duty 下一拍按新值收敛（三件部署或移除，
+// 同事务（state 层 fail-closed）；收敛循环下一拍按新值收敛（三件部署或移除，
 // 数据卷保留）。返回保存后的状态视图。
 func (s *MetricsService) SetMetricsMode(ctx context.Context, req *serverv1.SetMetricsModeRequest) (*serverv1.SetMetricsModeResponse, error) {
 	// 平台面写门（v0.3 W3-S2 扩全，rbac-teams §3.2「全局设置 → 仅平台管理

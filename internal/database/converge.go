@@ -23,7 +23,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -262,9 +262,9 @@ func (m *Manager) ensureService(ctx context.Context, name string, spec serviceSp
 }
 
 // taskRunning 报告任务是否期望 running（当前代——旧代任务 desired=shutdown
-// 不计；共享观测 dutydocker.TaskObservation 无方法面，判定以小函数内聚——
+// 不计；共享观测 dockerapi.TaskObservation 无方法面，判定以小函数内聚——
 // 原本包 TaskObservation.running 的语义逐字迁址）。
-func taskRunning(t dutydocker.TaskObservation) bool {
+func taskRunning(t dockerapi.TaskObservation) bool {
 	return t.DesiredState == string(swarm.TaskStateRunning)
 }
 

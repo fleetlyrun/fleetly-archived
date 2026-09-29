@@ -670,7 +670,7 @@ type GetAlertsStatusResponse struct {
 	// 生效模式：unset | on（缺省 unset；set 区分「缺省生效」）。
 	Mode    string `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`
 	ModeSet bool   `protobuf:"varint,2,opt,name=mode_set,json=modeSet,proto3" json:"mode_set,omitempty"`
-	// vmalert 服务部署态（mode=on 且 exists=false = duty 收敛中——过渡态）。
+	// vmalert 服务部署态（mode=on 且 exists=false = 后台收敛中——过渡态）。
 	VmalertExists bool   `protobuf:"varint,3,opt,name=vmalert_exists,json=vmalertExists,proto3" json:"vmalert_exists,omitempty"`
 	VmalertImage  string `protobuf:"bytes,4,opt,name=vmalert_image,json=vmalertImage,proto3" json:"vmalert_image,omitempty"`
 	// 平台规则数。

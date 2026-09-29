@@ -112,7 +112,7 @@ func TestAppNameOccupiedWhileDeleting(t *testing.T) {
 }
 
 // TestListAppsByLifecycle 按生命周期位查询（H10/MG-3：引擎 deleting 回收
-// duty 的候选集——只返回指定位的应用，空集返回空切片语义）。
+// 回收步的候选集——只返回指定位的应用，空集返回空切片语义）。
 func TestListAppsByLifecycle(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
@@ -153,7 +153,7 @@ func TestListAppsByLifecycle(t *testing.T) {
 }
 
 // TestTxMarkAppDeletedTransactional 事务内 tombstone 第二拍（H10/MG-3：
-// 引擎 duty 与终局事件/审计同事务的组合原语）——非法迁移（active 直达
+// 引擎收敛步与终局事件/审计同事务的组合原语）——非法迁移（active 直达
 // deleted）在事务形态下同样被拒，事务整体回滚。
 func TestTxMarkAppDeletedTransactional(t *testing.T) {
 	st := newTestStore(t)
@@ -189,7 +189,7 @@ func TestTxMarkAppDeletedTransactional(t *testing.T) {
 	if got.Lifecycle != LifecycleDeleted || got.DeletedAt.IsZero() {
 		t.Fatalf("lifecycle = %s deleted_at zero=%v, want deleted with stamp", got.Lifecycle, got.DeletedAt.IsZero())
 	}
-	// 重复迁移（deleted → deleted）被拒：duty 重放的幂等跳过依据。
+	// 重复迁移（deleted → deleted）被拒：收敛步重放的幂等跳过依据。
 	if err := st.InTx(ctx, func(tx *Tx) error {
 		return tx.MarkAppDeleted(ctx, app.ID)
 	}); !errors.Is(err, ErrInvalidLifecycleTransition) {

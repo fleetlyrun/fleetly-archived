@@ -82,9 +82,9 @@ func (s *Store) ListActiveApps(ctx context.Context) ([]App, error) {
 }
 
 // ListAppsByLifecycle 返回指定生命周期状态位的全部应用（created_at 升序；
-// H10/MG-3：引擎 deleting 回收 duty 的候选集查询——tombstone 第二拍的
+// H10/MG-3：引擎 deleting 回收步 的候选集查询——tombstone 第二拍的
 // 执行者据此发现待收敛应用）。lifecycle 必须是 AppLifecycle 词表值，
-// 调用方（引擎 duty）直接传常量，本函数不做词表校验（空集 = 无待收敛）。
+// 调用方（引擎收敛循环）直接传常量，本函数不做词表校验（空集 = 无待收敛）。
 func (s *Store) ListAppsByLifecycle(ctx context.Context, lifecycle AppLifecycle) ([]App, error) {
 	const q = `SELECT ` + appScanCols + ` ` + appScanFrom + ` WHERE a.lifecycle = ? ORDER BY a.created_at ASC, a.id ASC`
 	rows, err := s.db.QueryContext(ctx, q, string(lifecycle))

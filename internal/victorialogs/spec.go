@@ -33,7 +33,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -58,7 +58,7 @@ const (
 	// 门 FZ-9 挂账——先测 idle 再定）。
 	memoryLimitBytes = int64(128) << 20
 
-	// retryInterval 是 duty 收敛失败的退避缺省（rustfs duty 同款注入缝）。
+	// retryInterval 是 收敛失败的退避缺省（rustfs 管理器同款注入缝）。
 	retryInterval = 30 * time.Second
 	// scanInterval 是已收敛后的漂移复检周期。
 	scanInterval = 60 * time.Second
@@ -174,7 +174,7 @@ func listenArg() string {
 // specEqual 幂等比对（镜像/参数/挂载/网络/约束/副本/限额——服务的全部
 // 执行面都由期望 spec 权威表达；label 不参与，服务名即身份。参数含
 // -httpListenAddr 回环监听——零公网面不变量漂移必被本比对捕获）。
-func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

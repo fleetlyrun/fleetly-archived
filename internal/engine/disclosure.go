@@ -16,7 +16,7 @@ package engine
 //  2. disclosure / writeDisclosure / discloseTx / discloseOnce —— 事件 +
 //     审计同事务配对（fail-closed：任一失败整体回滚，不产生只有事件没有
 //     审计的半程披露）；discloseOnce 叠加「首见才落库、事务成功才标记」。
-//  3. scanGate —— tick duty 的频控节拍门（到期判定 + 推进一份逻辑）。
+//  3. scanGate —— tick 步的频控节拍门（到期判定 + 推进一份逻辑）。
 //
 // 事件码只增纪律：本文件不持有任何事件码/审计 action 字符串字面量——
 // 全部由各 face 的披露载荷构造点沿用既有注册码。读错不结论的瞬态守卫
@@ -33,7 +33,7 @@ import (
 // ── seen 记忆（once 语义 + 恢复清零）────────────────────────────────────────
 
 // disclosureSet 是「披露一次」的进程内记忆（键 = 对账对象：网络名/服务名/
-// appID/策略键）。零值即可用（记忆为空）。非并发安全：只在对账 duty 的
+// appID/策略键）。零值即可用（记忆为空）。非并发安全：只在对账步 的
 // 调用栈上使用（tick goroutine 专用，与收敛前的裸 map 同纪律）。
 type disclosureSet struct {
 	seen map[string]bool
@@ -123,7 +123,7 @@ func (e *Engine) discloseOnce(ctx context.Context, set *disclosureSet, key strin
 
 // ── 30s 节拍门 ─────────────────────────────────────────────────────────────
 
-// scanGate 是 tick duty 的频控节拍门（此前 6 个 xxxNextAt time.Time 字段的
+// scanGate 是 tick 步的频控节拍门（此前 6 个 xxxNextAt time.Time 字段的
 // 单点：到期判定 + 推进一份逻辑）。零值即刻到期——重启即清零 = 重启后
 // 立即扫一拍的既有语义。tick goroutine 专用（Run 单 goroutine 驱动，无
 // 并发访问）。恢复重试门（recoveryNextAt）不在此列：它是「登记待重试时
@@ -136,7 +136,7 @@ type scanGate struct {
 
 // due 报告本拍是否执行：force 直通（测试与诊断显式入口）；非 force 形态
 // 未到期返回 false（闸不推进）。到期即推进到 now+interval（force 拍同样
-// 推进——与收敛前各 duty 的形态一致）。
+// 推进——与收敛前各步的形态一致）。
 func (g *scanGate) due(now time.Time, force bool, interval time.Duration) bool {
 	if !force && now.Before(g.nextAt) {
 		return false

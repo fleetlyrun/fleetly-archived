@@ -21,7 +21,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -32,7 +32,7 @@ import (
 type fakeDocker struct {
 	active bool
 
-	services map[string]dutydocker.ServiceSnapshot
+	services map[string]dockerapi.ServiceSnapshot
 	removed  []string
 	updated  []string
 
@@ -44,7 +44,7 @@ type fakeDocker struct {
 
 	volumes map[string]bool
 
-	tasks map[string][]dutydocker.TaskObservation
+	tasks map[string][]dockerapi.TaskObservation
 
 	// failRemove 让服务移除失败一次（幂等重试路径）。
 	failRemove map[string]int
@@ -68,30 +68,30 @@ type fakeDocker struct {
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
 		active:     true,
-		services:   map[string]dutydocker.ServiceSnapshot{},
+		services:   map[string]dockerapi.ServiceSnapshot{},
 		networks:   map[string]bool{},
 		netUsed:    map[string]int{},
 		secrets:    map[string][]byte{},
 		volumes:    map[string]bool{},
-		tasks:      map[string][]dutydocker.TaskObservation{},
+		tasks:      map[string][]dockerapi.TaskObservation{},
 		failRemove: map[string]int{},
 	}
 }
 
-func (f *fakeDocker) Info(context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: f.active}, nil
+func (f *fakeDocker) Info(context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: f.active}, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	s, ok := f.services[name]
 	if !ok {
-		return dutydocker.ServiceSnapshot{}, nil
+		return dockerapi.ServiceSnapshot{}, nil
 	}
 	return s, nil
 }
 
 func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
-	f.services[spec.Name] = dutydocker.ServiceSnapshot{
+	f.services[spec.Name] = dockerapi.ServiceSnapshot{
 		Exists:   true,
 		Version:  1,
 		Labels:   spec.Labels,
@@ -102,7 +102,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 
 func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spec swarm.ServiceSpec) error {
 	f.updated = append(f.updated, name)
-	f.services[name] = dutydocker.ServiceSnapshot{
+	f.services[name] = dockerapi.ServiceSnapshot{
 		Exists:   true,
 		Version:  2,
 		Labels:   spec.Labels,
@@ -170,7 +170,7 @@ func (f *fakeDocker) VolumeRemove(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *fakeDocker) TaskList(_ context.Context, service string) ([]dutydocker.TaskObservation, error) {
+func (f *fakeDocker) TaskList(_ context.Context, service string) ([]dockerapi.TaskObservation, error) {
 	return f.tasks[service], nil
 }
 
@@ -244,7 +244,7 @@ func newHarness(t *testing.T) *harness {
 		st, box, fakePlacement{node: "n_node"}, fd, slog.New(slog.DiscardHandler))
 	mgr.upgradeWatch = 100 * time.Millisecond // 升级健康门观察窗（单测短窗）
 	// now 钉定到本日 12:30 UTC 的确定性形态：缺省备份计划 hour_utc=3 的
-	// 调度 duty 会在真实 03:xx UTC（本地 UTC+8 的 11 点档）萡入测试时给
+	// 调度步会在真实 03:xx UTC（本地 UTC+8 的 11 点档）萡入测试时给
 	// ready 实例触发计划备份、占用操作互斥，后续收敛拍整体让位——2026-09-22
 	// W5-S1 验收门复现的定时炸弹（其余时刻全绿故 W4 门未暴露）。需要窗口
 	// 语义的测试显式设置 h.now（TestBackupSchedulingWindowAndPrune）。
@@ -378,7 +378,7 @@ func (h *harness) beatRun() {
 	h.mgr.beat(ctx)
 }
 
-func (h *harness) setTasks(service string, tasks ...dutydocker.TaskObservation) {
+func (h *harness) setTasks(service string, tasks ...dockerapi.TaskObservation) {
 	h.docker.tasks[service] = tasks
 }
 
@@ -387,7 +387,7 @@ func (h *harness) setTasks(service string, tasks ...dutydocker.TaskObservation) 
 func TestProvisionToReady(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-main", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 
@@ -439,7 +439,7 @@ func TestProvisionToReady(t *testing.T) {
 func TestProvisionHealthGateFailure(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-bad", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "rejected", DesiredState: "running",
 		Err:   "image postgres:16@sha256:... not found",
 		Image: inst.ImageDigest,
@@ -462,7 +462,7 @@ func TestProvisionHealthGateFailure(t *testing.T) {
 		state.DatabaseFailed, state.DatabaseProvisioning); err != nil {
 		t.Fatalf("retry transition: %v", err)
 	}
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -492,7 +492,7 @@ func TestProvisionTimeout(t *testing.T) {
 func TestSuspendResume(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("redis-main", dbtemplate.TemplateRedis7)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -537,12 +537,12 @@ func TestSuspendResume(t *testing.T) {
 func TestDegradedRecovered(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-watch", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
 
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "failed", DesiredState: "running",
 		Err: "task: non-zero exit (1)", Image: inst.ImageDigest,
 	})
@@ -551,7 +551,7 @@ func TestDegradedRecovered(t *testing.T) {
 		t.Fatalf("state = %s, want degraded", got.State)
 	}
 
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -565,7 +565,7 @@ func TestDegradedRecovered(t *testing.T) {
 func TestReapDefaultKeepsVolumes(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-del", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -605,7 +605,7 @@ func TestReapDefaultKeepsVolumes(t *testing.T) {
 func TestReapDeleteVolumes(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-purge", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -641,7 +641,7 @@ func TestReapDeleteVolumes(t *testing.T) {
 func TestReapRetriesIdempotently(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-stuck", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -668,7 +668,7 @@ func TestReapRetriesIdempotently(t *testing.T) {
 func TestCredentialPlaintextNeverLeaks(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-secret", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()
@@ -692,7 +692,7 @@ func TestCredentialPlaintextNeverLeaks(t *testing.T) {
 func TestDesiredHashStable(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-idem", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{
 		State: "running", DesiredState: "running", Image: inst.ImageDigest,
 	})
 	h.beatRun()

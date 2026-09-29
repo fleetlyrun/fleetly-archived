@@ -1,6 +1,6 @@
 package state
 
-// 锚定 duty（multi-node §2.7/D-MN-8，E1-6）单测：worker 身份铸造（label
+// 锚定循环（multi-node §2.7/D-MN-8，E1-6）单测：worker 身份铸造（label
 // + ref + 审计 + node.joined）、从 label 反建 ref（L1/L2 恢复等序）、冲突
 // 不自动消解（审计 + 警示，映射与卷不动）、node.* 差分事件（joined/down/
 // up/removed/availability_changed 逐转移）。node.joined/up 等事件名为注册
@@ -62,7 +62,7 @@ func toCached(nodes []SubstrateNode) []CachedNode {
 	return out
 }
 
-// newAnchorHarness 构造锚定 duty 测试环境（真实 store + fakeDocker）。
+// newAnchorHarness 构造锚定循环测试环境（真实 store + fakeDocker）。
 func newAnchorHarness(t *testing.T) (*ClusterAnchor, *Store, *fakeDocker) {
 	t.Helper()
 	st := newTestStore(t)

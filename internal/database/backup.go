@@ -2,7 +2,7 @@ package database
 
 // 备份编排与调度（managed-databases §2.6/§5.4 的 S5 落地）：TriggerBackup
 // 异步受理（API 快回，job 数分钟级）→ runBackup 同步链（材料解析 → 备份
-// job → 回读校验 → 台账 → 事件 → 保留对齐）；调度 duty 挂收敛拍（per 实
+// job → 回读校验 → 台账 → 事件 → 保留对齐）；调度步挂收敛拍（per 实
 // 例计划：interval/hour_utc/keep，平台缺省 24h/7 份/03:00 UTC——§5.4 配置
 // 键的常量形态，adapters.go）。
 //
@@ -195,7 +195,7 @@ func (m *Manager) resolveBackupTarget(ctx context.Context) (backupTarget, error)
 		}
 		t.AccessKeyID, t.SecretKey, t.Region = in.AccessKeyID, string(plain), in.Region
 	case state.S3ModeRustfs:
-		// 托管派生端点 + 平台单桶 + path-style；托管凭据（rustfs duty 生成
+		// 托管派生端点 + 平台单桶 + path-style；托管凭据（rustfs 管理器生成
 		// 落库）——未备便显式失败，上传轨同口径的诚实红。
 		t.Repository = "s3:" + state.RustfsEndpointURL + "/" + state.RustfsBucketName + "/" + dbRepoPathSuffix
 		t.PathStyle = true
@@ -205,7 +205,7 @@ func (m *Manager) resolveBackupTarget(ctx context.Context) (backupTarget, error)
 			return backupTarget{}, fmt.Errorf("database: load rustfs credentials: %w", lerr)
 		}
 		if !found {
-			return backupTarget{}, errors.New("database: managed rustfs credentials not provisioned yet (the rustfs duty provisions them shortly after s3.mode=rustfs is saved)")
+			return backupTarget{}, errors.New("database: managed rustfs credentials not provisioned yet (the rustfs manager provisions them shortly after s3.mode=rustfs is saved)")
 		}
 		accessPlain, aerr := m.box.Decrypt([]byte(accessCT))
 		if aerr != nil {
@@ -391,12 +391,12 @@ func (m *Manager) pruneBackups(ctx context.Context, inst *state.DatabaseInstance
 	}
 }
 
-// dutyBackupScheduling 是收敛拍尾部的调度 duty（§5.4 per 实例计划）：对每
+// scheduleBackups 是收敛拍尾部的备份调度步（§5.4 per 实例计划）：对每
 // 个 ready|degraded 且计划启用的实例——now 落在 hour_utc 日窗小时内、且最
 // 近一份 daily 备份早于 interval → 异步触发 kind=daily。失败不被窗口反复
 // 重放：进程内记每次尝试时刻，间隔未到不重试（重启重记——窗口内至多多试
 // 一次，红色事件诚实披露，无静默丢失）。
-func (m *Manager) dutyBackupScheduling(ctx context.Context, rows []state.DatabaseInstance) {
+func (m *Manager) scheduleBackups(ctx context.Context, rows []state.DatabaseInstance) {
 	now := m.now().UTC()
 	for i := range rows {
 		inst := &rows[i]
@@ -413,7 +413,7 @@ func (m *Manager) dutyBackupScheduling(ctx context.Context, rows []state.Databas
 		}
 		fresh, err := m.lastDailyBackupFresh(ctx, inst.ID, plan.intervalHours, now)
 		if err != nil {
-			m.log.Warn("database: backup duty deferred (ledger read)", "instance", inst.Name, "error", err)
+			m.log.Warn("database: backup scheduling deferred (ledger read)", "instance", inst.Name, "error", err)
 			continue
 		}
 		m.dailyAttempt[inst.ID] = now
@@ -424,7 +424,7 @@ func (m *Manager) dutyBackupScheduling(ctx context.Context, rows []state.Databas
 			continue // 操作互斥（备份/恢复/升级在途）：本窗让位，下窗重判
 		}
 		m.opsWG.Add(1)
-		//nolint:gosec // G118：调度 tick 循环派生后台备份，刻意脱离 tick ctx（duty 生命周期自管）
+		//nolint:gosec // G118：调度 tick 循环派生后台备份，刻意脱离 tick ctx（调度步生命周期自管）
 		go func(inst state.DatabaseInstance) {
 			defer m.opsWG.Done()
 			defer m.endOp(inst.ID)

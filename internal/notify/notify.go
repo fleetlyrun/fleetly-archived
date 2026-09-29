@@ -591,7 +591,7 @@ func isCursorExpired(err error) bool {
 // CheckHealth 实现 system status 的 notifications 组件（设计 §5.2）：
 // 无启用端点的连续终败 = 绿；有启用端点最近终态 = failed 即红（Error 带
 // 端点名与最近错误）。检查自带 3s 预算（CheckHealth 无 ctx 形态，metrics
-// duty 同款）。
+// 管理器同款）。
 func (m *Manager) CheckHealth() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

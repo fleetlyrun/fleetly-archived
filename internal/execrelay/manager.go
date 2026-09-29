@@ -1,18 +1,18 @@
 package execrelay
 
-// 托管 relay duty 管理器（控制面收敛循环——internal/victorialogs Manager
+// relay 部署收敛管理器（控制面收敛循环——internal/victorialogs Manager
 // 同款形态）：terminal.enabled=true 时幂等部署/收敛 global 服务
 // fleetly-exec（集群 token 的 Swarm secret 确保与哈希落 meta 同拍完成）；
 // false 时移除服务（secret 与 meta 哈希保留——重启用同一 token 身份，免
 // 全集群 relay 换证）。常驻收敛循环由服务壳承载；**无差分事件**——事件注
-// 册表只增，本域仅 terminal.opened/closed（hub 发出），duty 收敛只日志。
+// 册表只增，本域仅 terminal.opened/closed（hub 发出），收敛只日志。
 //
-// 集群 token 供给（设计 §2.1「平台 duty 生成/轮换/分发」的落地口径）：
+// 集群 token 供给（设计 §2.1 平台侧生成/轮换/分发的落地口径）：
 // 首拍生成 48B crypto/rand → hex，创建 Swarm secret，sha256 哈希落 meta
 //（认证比对真源——控制面永不持明文）；后续拍只验 secret 在位，缺失（swarm
 // 状态丢失）才重生成换哈希并触发服务更新（relay 任务重启领新 secret）。
-// **用户面轮换不做**（runbook 记运维路径：删 secret + 清 meta 哈希 → duty
-// 下一拍重生成换证）。
+// **用户面轮换不做**（runbook 记运维路径：删 secret + 清 meta 哈希 → 收敛
+// 循环下一拍重生成换证）。
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -31,10 +31,10 @@ import (
 // 态的自有预算，victorialogs 同款）。
 const settingsLoadTimeout = 3 * time.Second
 
-// Manager 是托管 relay duty 管理器。
+// Manager 是 relay 部署收敛管理器。
 type Manager struct {
 	store  *state.Store
-	docker dutyDocker
+	docker dockerPort
 	log    *slog.Logger
 	// enabled 是功能开关（terminal.enabled 静态配置——装配期注入）。
 	enabled bool
@@ -51,9 +51,9 @@ type Manager struct {
 	advertiseOverride string
 }
 
-// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
+// NewManager 构造 relay 部署收敛管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, enabled bool, httpPort, tlsName string, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := dutydocker.New("")
+	dc, err := dockerapi.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,7 +62,7 @@ func NewManager(store *state.Store, enabled bool, httpPort, tlsName string, log 
 }
 
 // NewManagerWithDocker 以注入端口构造（单测）。
-func NewManagerWithDocker(store *state.Store, enabled bool, httpPort, tlsName string, dc dutyDocker, log *slog.Logger) *Manager {
+func NewManagerWithDocker(store *state.Store, enabled bool, httpPort, tlsName string, dc dockerPort, log *slog.Logger) *Manager {
 	return &Manager{store: store, docker: dc, log: log, enabled: enabled, httpPort: httpPort, tlsName: tlsName}
 }
 
@@ -108,13 +108,13 @@ func (m *Manager) Run(ctx context.Context) error {
 	}
 }
 
-// 收敛节奏（victorialogs duty 同款缺省）。
+// 收敛节奏（victorialogs 同款缺省）。
 const (
 	retryIntervalDefault = 30 * time.Second
 	scanIntervalDefault  = 60 * time.Second
 )
 
-// Ensure 执行一拍收敛。可重试错误显式返回（duty 退避）。
+// Ensure 执行一拍收敛。可重试错误显式返回（收敛循环退避）。
 func (m *Manager) Ensure(ctx context.Context) error {
 	if !m.enabled {
 		return m.removeIfPresent(ctx)
@@ -244,8 +244,8 @@ func (m *Manager) removeIfPresent(ctx context.Context) error {
 }
 
 // CheckHealth 是 system status 组件检查器（execrelay）的部署面：功能关闭
-// = 无所欠恒绿；开启时 relay 服务应在位——缺失即收敛未完成（duty 会继续
-// 收敛，红是过渡态的如实表达）。与 victorialogs 组件同口径。
+// = 无所欠恒绿；开启时 relay 服务应在位——缺失即收敛未完成（收敛循环会
+// 继续，红是过渡态的如实表达）。与 victorialogs 组件同口径。
 func (m *Manager) CheckHealth() error {
 	if !m.enabled {
 		return nil
@@ -257,7 +257,7 @@ func (m *Manager) CheckHealth() error {
 		return fmt.Errorf("execrelay: service inspect: %w", err)
 	}
 	if !cur.Exists {
-		return fmt.Errorf("execrelay: terminal.enabled=true but service %s is not deployed yet (duty converging)", ExecRelayServiceName)
+		return fmt.Errorf("execrelay: terminal.enabled=true but service %s is not deployed yet (convergence in progress)", ExecRelayServiceName)
 	}
 	return nil
 }

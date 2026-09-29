@@ -2,7 +2,7 @@ package api
 
 // TasksService 实现 server.v1.TasksService（T 线 DT-5 / IMPL-T2-1）：程序化
 // 动态工作负载面。API 面职责 = 受理/校验/投影/停止/删除 + 配额 fail-closed；
-// 状态收敛（底座服务 create/remove、TTL 回收、孤儿对账）由引擎 tick duty
+// 状态收敛（底座服务 create/remove、TTL 回收、孤儿对账）由引擎 tick 收敛循环
 // 承载（唯一写点纪律）。
 //
 // 结构性禁令（DT-5）：**本服务的请求面不存在任何网络 attach 入参**——

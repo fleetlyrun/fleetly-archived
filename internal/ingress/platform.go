@@ -1,6 +1,6 @@
 package ingress
 
-// 平台证书 duty（E1-3；E1 多节点设计 §2.4 Bootstrap 次序 + D-MN-6）：
+// 平台证书控制器（E1-3；E1 多节点设计 §2.4 Bootstrap 次序 + D-MN-6）：
 // base_domain 非空时，启动即确保平台证书签发（多 SAN 一张：ctrl/registry/
 // console.<base>，一次签发覆盖三子域、续期同批），重试直至成功——证书就
 // 续前 provider endpoint 维持明文 8422（Traefik 容忍期只有挑战面在用），
@@ -35,7 +35,7 @@ const platformCertApp = "_fleetly-platform"
 const platformCertRetryInterval = 30 * time.Second
 
 // PlatformDomains 返回平台证书的**基础** SAN 域名集（D-MN-6：ctrl/registry/
-// console.<base>）。base_domain 为空时无意义（duty 不启动）。公网子域开关
+// console.<base>）。base_domain 为空时无意义（控制器不启动）。公网子域开关
 // （E3-6，s3.public_exposed）开启时实际签发集条件增第四 SAN s3.<base>——
 // 生产签发路径走 platformDomainsWithS3（期望态函数，现读 s3 设置）；本函数
 // 是基础集（诊断/测试出口），不读设置。
@@ -76,7 +76,7 @@ func (m *Manager) PlatformTLSCertificate() (*tls.Certificate, error) {
 
 // PlatformCertPaths 返回平台证书的落盘文件路径（cert/key PEM，cert_dir
 // 真源——路径公式单源在 certStore）。控制面 TLS platform 模式（V2-8）的
-// 证书读取入口；E7 §3.3 的 exec relay duty（S6）同样经此取路径下发给
+// 证书读取入口；E7 §3.3 的 exec relay 管理器（S6）同样经此取路径下发给
 // relay 任务做拨号参数。base_domain 为空返回错误（无平台证书可言——调用
 // 方先以 ConfigTLSEnabled/自身配置门禁把关）。
 func (m *Manager) PlatformCertPaths() (certFile, keyFile string, err error) {
@@ -139,7 +139,7 @@ func (m *Manager) ensurePlatformCertificate(ctx context.Context, renewing bool) 
 	return pair, nil
 }
 
-// runPlatformCertDuty 是平台证书 duty 的常驻循环（Manager.Run 启动的独立
+// runPlatformCertController 是平台证书控制器 的常驻循环（Manager.Run 启动的独立
 // goroutine；ctx 取消返回）：
 //
 //	未就绪/进窗 → 签发（重试退避 platformRetryInterval，默认 ~30s）；
@@ -148,12 +148,12 @@ func (m *Manager) ensurePlatformCertificate(ctx context.Context, renewing bool) 
 //
 // 次序保证（设计 §2.4）：本循环不阻塞 sweep——Traefik 部署与挑战面在证书
 // 就绪前照常收敛（容忍期），签发成功后 endpoint 才翻转。
-func (m *Manager) runPlatformCertDuty(ctx context.Context) {
+func (m *Manager) runPlatformCertController(ctx context.Context) {
 	if !m.ConfigTLSEnabled() {
 		return
 	}
 	if !m.cfg.ACME.ACMEEnabled() {
-		m.log.Warn("ingress: platform certificate duty inert (acme disabled; the 8423 TLS config face will not become available)")
+		m.log.Warn("ingress: platform certificate controller inert (acme disabled; the 8423 TLS config face will not become available)")
 		return
 	}
 	retry := m.platformRetryInterval
@@ -257,7 +257,7 @@ func (m *Manager) obtainOnce(ctx context.Context, app string, domains []string) 
 	return m.obtainFn(ctx, app, user, domains)
 }
 
-// sleepCtx 可取消休眠（duty 循环的退避/守望载体；ctx 取消返回 false）。
+// sleepCtx 可取消休眠（控制器循环的退避/守望载体；ctx 取消返回 false）。
 func sleepCtx(ctx context.Context, d time.Duration) bool {
 	t := time.NewTimer(d)
 	defer t.Stop()

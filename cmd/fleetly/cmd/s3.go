@@ -268,11 +268,11 @@ func (c *s3TestCmd) Run(ctx context.Context, env *commands.Environment, args []s
 }
 
 // s3StatusCmd 实现 `fleetly s3 status`（E3-5）：状态总览——mode/端点/桶/
-// 托管服务部署态（duty 收敛快照，经 system status 的 objectstore.rustfs
+// 托管服务部署态（后台收敛快照，经 system status 的 objectstore.rustfs
 // 组件投影）/诚实口径文案（D-S3-8 裁决：本机 RustFS = 便捷层非灾备，三面
 // 常驻——本命令是 CLI 面）。凭据指纹：external 模式回存内 secret 指纹；
 // rustfs 模式凭据为平台托管（envelope 加密存内部键、明文永不回读——读面
-// 无指纹位，指针文案指向 duty 日志的生成指纹）。
+// 无指纹位，指针文案指向管理器日志的生成指纹）。
 type s3StatusCmd struct {
 	jsonOut bool
 	conn    connFlags
@@ -380,7 +380,7 @@ func (c *s3StatusCmd) Run(ctx context.Context, env *commands.Environment, args [
 			b.WriteString("object storage is not configured (s3.mode=unset); services declaring label " +
 				"fleetly.s3=true will be refused at deploy planning time.\n")
 		}
-		// 托管服务部署态（duty 收敛快照）：各模式都输出一行——unset/external
+		// 托管服务部署态（后台收敛快照）：各模式都输出一行——unset/external
 		// = not deployed（无所欠）；rustfs = converged 或收敛中的诚实红。
 		if deployment != "" {
 			fmt.Fprintf(&b, "deployment: %s\n", deployment)

@@ -236,7 +236,7 @@ func TestResolveS3InjectionSentinels(t *testing.T) {
 		t.Fatalf("err = %v, want E_S3_NOT_CONFIGURED", err)
 	}
 
-	// rustfs 且托管凭据未备便 → 可重试哨兵（duty 生成拍未到的暂态）。
+	// rustfs 且托管凭据未备便 → 可重试哨兵（生成拍未到的暂态）。
 	if err := h.store.SaveS3Settings(ctx, state.S3Settings{Mode: state.S3ModeRustfs}, state.S3SaveOptions{Actor: "system"}); err != nil {
 		t.Fatalf("save rustfs mode: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestResolveS3InjectionSentinels(t *testing.T) {
 		t.Fatalf("rustfs without creds: err=%v, want retryable sentinel", err)
 	}
 
-	// 凭据备便（模拟 duty 已生成）→ 派生端点 + 解密后的托管凭据。
+	// 凭据备便（模拟 rustfs 管理器已生成）→ 派生端点 + 解密后的托管凭据。
 	actCT, err := h.box.Encrypt([]byte("AK-plain-managed"))
 	if err != nil {
 		t.Fatalf("encrypt: %v", err)

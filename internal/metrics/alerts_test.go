@@ -1,6 +1,6 @@
 package metrics
 
-// vmalert 组件（metrics 栈第四件，W5-S2，D-V3W5-1）的 duty 单测：alerts.mode
+// vmalert 组件（metrics 栈第四件，W5-S2，D-V3W5-1）的收敛管理器单测：alerts.mode
 // on/off 的收敛与清场、规则 config 内容寻址换版（增删换——scrape config 同
 // 款）、vmalert spec 参数钉定（datasource/notifier/basicAuth/rule/求值周期
 // ——flag 形态经镜像 -help 实测）、未装配接收器面的显式失败、规则渲染的

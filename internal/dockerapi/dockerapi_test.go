@@ -1,4 +1,4 @@
-package dutydocker
+package dockerapi
 
 // 纯函数单测：投影提取的穷尽矩阵（snapshotOf/taskObservationsOf/
 // readyNodeAddresses——原散在各包不可直测的翻译层，收编后经纯函数直测；

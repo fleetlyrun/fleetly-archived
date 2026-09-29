@@ -4,7 +4,7 @@
 //
 // 两个职责面：
 //
-//  1. duty（本文件 + spec.go + docker.go，victorialogs/rustfs manager 同款
+//  1. 收敛管理器（本文件 + spec.go + docker.go，victorialogs/rustfs manager 同款
 //     形态）：设置驱动——metrics.mode=on 时幂等部署/收敛三件 Swarm 服务
 //     （钉版镜像、VM 卷钉 manager、三件全部 host 网络任务；VM 进程原生
 //     回环监听〔查询面零公网面，D-W5-4 等价承载〕、采集器绑 0.0.0.0——
@@ -19,7 +19,7 @@
 //     PromQL 透传（操作员工具，不做查询沙箱——诚实口径设计 §4.2）、
 //     /api/v1/query_range 查询与 /health 健康拨测。
 //
-// 与 victorialogs duty 的差异（设计裁决的落地）：opt-in（缺省关——未显式
+// 与 victorialogs 管理器的差异（设计裁决的落地）：opt-in（缺省关——未显式
 // 设置过 metrics.mode 的库不部署任何东西，验收标准「mode=unset 零新增常
 // 驻」）；三件服务 + 抓取 config 对象的联动收敛；抓取面（cAdvisor/
 // node_exporter 在位即被 VM 抓——无 hub 直推链路）。
@@ -35,7 +35,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -64,7 +64,7 @@ func (c Config) Normalize() Config {
 	return c
 }
 
-// Manager 是托管 metrics 三件套 duty 管理器。
+// Manager 是托管 metrics 三件套收敛管理器。
 type Manager struct {
 	store  *state.Store
 	docker dockerPort
@@ -84,9 +84,9 @@ type Manager struct {
 	notifier notifierConfig
 }
 
-// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
+// NewManager 构造收敛管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, retentionDays int, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := dutydocker.New("")
+	dc, err := dockerapi.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -189,14 +189,14 @@ func (m *Manager) converge(ctx context.Context) error {
 	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
-	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
+	// manager 平台 ID（meta 单值真源；identity 铸造尚未完成时显式失败
 	// 退避重试——约束引用空 ID 会得到永不调度的任务，宁缺毋错）。
 	platformID, err := m.store.GetMeta(ctx, state.MetaKeyPlatformNodeID)
 	if err != nil {
 		return fmt.Errorf("metrics: read platform node id: %w", err)
 	}
 	if platformID == "" {
-		return errors.New("metrics: platform node id not ensured yet (identity duty pending; the pin constraint requires it)")
+		return errors.New("metrics: platform node id not ensured yet (identity bootstrap pending; the pin constraint requires it)")
 	}
 	// ⓪ Ready 节点集（动态 targets 的源头——每拍重算，advertise 地址
 	//    VPC/LAN 直连，不依赖 overlay 数据面）。空集 = 异常态显式失败
@@ -503,7 +503,7 @@ func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload m
 type ComponentStatus struct {
 	Name string
 	// Exists 报告服务是否在位（mode=on 且 Exists=false = 部署中/未部署
-	// ——duty 退避收敛中）。
+	// ——收敛循环退避收敛中）。
 	Exists bool
 	// Image 是实况镜像引用（不在位为空）。
 	Image string
@@ -546,9 +546,9 @@ func (m *Manager) VMAlertStatus(ctx context.Context) (ComponentStatus, error) {
 
 // CheckHealth 是 system status 组件检查器（metrics）的部署面：mode 非 on
 // = 无所欠（健康——opt-in 缺省零常驻，验收标准 7）；mode=on 时三件应在位
-// ——缺失即收敛未完成（duty 会继续收敛，红是过渡态的如实表达）。VM 健康
+// ——缺失即收敛未完成（收敛循环会继续收敛，红是过渡态的如实表达）。VM 健康
 // 拨测在位后执行：不可达即红（查询面降级，采集面不受影响——诚实口径）。
-// W5-S2：alerts.mode=on 时 vmalert 亦应在位（同 duty 收敛，缺失=过渡红）；
+// W5-S2：alerts.mode=on 时 vmalert 亦应在位（同收敛循环收敛，缺失=过渡红）；
 // alerts off 时 vmalert 无所欠。
 func (m *Manager) CheckHealth() error {
 	ctx, cancel := context.WithTimeout(context.Background(), settingsLoadTimeout)
@@ -574,7 +574,7 @@ func (m *Manager) CheckHealth() error {
 			return fmt.Errorf("metrics: service inspect %s: %w", name, err)
 		}
 		if !cur.Exists {
-			return fmt.Errorf("metrics: metrics.mode=on but service %s is not deployed yet (duty converging)", name)
+			return fmt.Errorf("metrics: metrics.mode=on but service %s is not deployed yet (convergence in progress)", name)
 		}
 	}
 	if m.health != nil {

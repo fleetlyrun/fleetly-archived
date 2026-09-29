@@ -74,7 +74,7 @@ func TestIngressSettingsPassesConfigTLSAddr(t *testing.T) {
 }
 
 // TestIngressSettingsPassesBaseDomain base_domain 透传（E1-3）：非空原样
-// 进入 ingress.Config（启用 8423 TLS 面 + 平台证书 duty 的判定输入）；空 =
+// 进入 ingress.Config（启用 8423 TLS 面 + 平台证书控制器的判定输入）；空 =
 // 单节点形态（ingress 侧零行为差异）。
 func TestIngressSettingsPassesBaseDomain(t *testing.T) {
 	setCfg := AppConfig{BaseDomain: "example.com"}

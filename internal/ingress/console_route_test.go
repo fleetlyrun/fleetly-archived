@@ -23,8 +23,8 @@ func TestPlatformConsoleRoute(t *testing.T) {
 	}
 
 	m.cfg.BaseDomain = "example.test"
-	// advertise 未定（EnsureTraefik 未跑过）：无地址可指，不追加——duty
-	// 收敛链在 EnsureTraefik 之后重发布，最终一致。
+	// advertise 未定（EnsureTraefik 未跑过）：无地址可指，不追加——控制
+	// 器收敛链在 EnsureTraefik 之后重发布，最终一致。
 	if _, ok := m.platformConsoleRoute(); ok {
 		t.Fatal("console route must be absent before advertise is known")
 	}

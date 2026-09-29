@@ -20,9 +20,9 @@ type ExecService struct {
 	st *state.Store
 	// hub 是终端 hub（ticket 表/连接表/会话表的持有者）。
 	hub *execrelay.Hub
-	// duty 是 relay duty 管理器（status 面的部署态投影；nil = 未装配——
+	// relay 是 relay 部署收敛管理器（status 面的部署态投影；nil = 未装配——
 	// 如实报 not deployed）。
-	duty *execrelay.Manager
+	relay *execrelay.Manager
 }
 
 // NewExecService 构造 ExecService。
@@ -30,9 +30,9 @@ func NewExecService(st *state.Store, hub *execrelay.Hub) *ExecService {
 	return &ExecService{st: st, hub: hub}
 }
 
-// WithDutyManager 注入 relay duty 管理器（链式装配；nil 合法）。
-func (s *ExecService) WithDutyManager(m *execrelay.Manager) *ExecService {
-	s.duty = m
+// WithRelayManager 注入 relay 部署收敛管理器（链式装配；nil 合法）。
+func (s *ExecService) WithRelayManager(m *execrelay.Manager) *ExecService {
+	s.relay = m
 	return s
 }
 
@@ -78,8 +78,8 @@ func (s *ExecService) GetTerminalStatus(ctx context.Context, _ *serverv1.GetTerm
 		NodesConnected: int32(s.hub.NodesConnected()), //nolint:gosec // G115：节点计数，量级极小
 		ActiveSessions: int32(s.hub.ActiveSessions()), //nolint:gosec // G115：会话计数，量级极小
 	}
-	if s.duty != nil {
-		dep, err := s.duty.DeploymentStatus(ctx)
+	if s.relay != nil {
+		dep, err := s.relay.DeploymentStatus(ctx)
 		if err != nil {
 			return nil, err
 		}

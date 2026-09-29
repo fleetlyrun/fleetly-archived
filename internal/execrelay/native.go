@@ -253,7 +253,7 @@ func terminalErrorFor(err error) (int, string) {
 	case errors.Is(err, ErrNoRunningTask):
 		return CloseNoTarget, "the target service has no running task"
 	case errors.Is(err, ErrNoRelayConnection):
-		return CloseNoTarget, "the exec relay is not connected for the target node (duty converging)"
+		return CloseNoTarget, "the exec relay is not connected for the target node (relay still converging)"
 	default:
 		return CloseInternal, "terminal session could not be opened"
 	}

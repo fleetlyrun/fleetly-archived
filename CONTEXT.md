@@ -39,7 +39,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | **披露（disclosure）** | 持续形态只报一次、恢复清零、事件+审计同事务、节拍门——全引擎一份骨架 | `internal/engine/disclosure.go` |
 | **归属（ownership）** | 三段限定形 `fleetly-<team>-<prj>-<app>` 的过滤单点；手写 label 过滤被守卫禁止 | `internal/engine/ownership.go` + `internal/naming` |
 | **受管组件（managed component）** | 平台自部署的平台级服务（ingress/zot/VictoriaLogs/vmalert/rustfs/metrics/exec-relay），各自有部署与收敛循环 | `internal/{ingress,imageregistry,victorialogs,rustfs,metrics,execrelay}` |
-| **dutydocker** | 受管组件部署器/收敛 duty 对 Docker API 的共享消费面：`ServiceSnapshot` 投影超集 + 幂等 ensure/remove 原语的唯一实现（2026-09-29 架构评审 C1 收编——此前六包各持一份逐字拷贝的 realDockerClient；各包保留窄端口与哨兵，moby 止步于此与 substrate 两处） | `internal/dutydocker` |
+| **dockerapi** | 受管组件部署器/收敛循环对 Docker API 的共享消费面：`ServiceSnapshot` 投影超集 + 幂等 ensure/remove 原语的唯一实现（2026-09-29 架构评审 C1 收编——此前六包各持一份逐字拷贝的 realDockerClient；各包保留窄端口与哨兵，moby client 连接面止步于此与 substrate 等白名单四包，mobyscan 扫描守卫强制；原名 dutydocker，2026-09-29 更名） | `internal/dockerapi` |
 | **守卫（guard test）** | 枚举/源码扫描/AST/docs 扫描型红线测试；「穷尽性从提交者记性搬进 CI 枚举守卫」 | 各包 `*_test.go`（清单见 §5） |
 | **task-group 网** | Tasks 函数实例的租户项目长活网络；per-task 动态 attach 明令禁止 | `internal/engine/projectnetwork.go`（ADR-0010） |
 | **Outbox** | 事件与业务写同事务落 `events` 表；通知投递器经游标轮询，不建进程内总线 | `internal/state/events.go` |
@@ -51,7 +51,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | `state` | SQLite 权威态+观测缓存+事件/审计/迁移；四套状态机写点 | `Store`/`Tx` 门面（store.go，按实体分 50+ 文件） |
 | `engine` | 发布引擎：状态机/收敛原语/健康门/观察窗/漂移/伸缩/回滚 | `Engine` 构造器+`With*` 可选端口（engine.go / ports.go） |
 | `substrate` | Swarm/Docker 适配器 | 隐式实现 engine 端口（services.go / networks.go） |
-| `dutydocker` | 受管组件 duty/部署器的 Docker API 共享消费面（六包适配拷贝的收编单点，2026-09-29 C1） | `Client` + `ServiceSnapshot`（dutydocker.go / service.go / objects.go） |
+| `dockerapi` | 受管组件部署器/收敛循环的 Docker API 共享消费面（六包适配拷贝的收编单点，2026-09-29 C1；原名 dutydocker） | `Client` + `ServiceSnapshot`（dockerapi.go / service.go / objects.go） |
 | `api` | gRPC + grpc-gateway 服务面：proto→state/engine 编排 | genproto 契约 + 包内消费端口 15 个 |
 | `runtime` | composition root：Bootstrap + Wire 装配全部服务 | provides.go（api 端口绑定/跨模块桥的内联 adapter 属装配本职；engine 端口的适配已归属主包——substrate/ingress.RoutePublisher/dbtemplate.EngineTemplatePort/metrics，2026-09-29 C6） |
 | `placement` | 有状态放置解析/绑定生命周期 | `Resolver.Resolve/Apply/Preflight` |
@@ -76,7 +76,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 4. **注册表只增不复用**：errcode/eventcode 构造期 panic + golden + usage 扫描三链咬合（ADR-0011）。
 5. **Compose 白名单只增不减**；受管字段拒绝不静默覆盖（ADR-0015）。
 
-**守卫测试清单**（动这些面时白名单要保鲜）：`TestNoConvergenceOutsidePrimitive`、`TestNoHandWrittenAppLabelFilters`、`TestNoBareTaskStatusWrites`、`TestOwnershipAnchorConstantsCoveredByPredicate`、`TestMethodScopeRegistryCoversDescriptor`、`TestActiveImplDocsReferenceExistingTests`（impldocscan）、`TestGoldenSnapshot`（errcode/eventcode）、usage 反向扫描、投影契约腿（`testsupport.ServiceProjectionPairs` 契约表——engine fake 投影面与 substrate 纯翻译层咬同一张表，spec/state 加字段不入表即红）；CI 级另有 deadcode 门禁（豁免需持理由入 `internal/testdata/deadcode-allow.txt`）、antipattern-grep、buf breaking、wire generate-sync、console schema.d.ts 漂移门。
+**守卫测试清单**（动这些面时白名单要保鲜）：`TestNoConvergenceOutsidePrimitive`、`TestNoHandWrittenAppLabelFilters`、`TestNoBareTaskStatusWrites`、`TestOwnershipAnchorConstantsCoveredByPredicate`、`TestMethodScopeRegistryCoversDescriptor`、`TestActiveImplDocsReferenceExistingTests`（impldocscan）、`TestGoldenSnapshot`（errcode/eventcode）、usage 反向扫描、投影契约腿（`testsupport.ServiceProjectionPairs` 契约表——engine fake 投影面与 substrate 纯翻译层咬同一张表，spec/state 加字段不入表即红）、`TestMobyClientConfinedToGateways`（mobyscan——moby client 连接面白名单四包：substrate/dockerapi/database/execrelay，白名单外导入即红，条目不再命中提示收缩）；CI 级另有 deadcode 门禁（豁免需持理由入 `internal/testdata/deadcode-allow.txt`）、antipattern-grep、buf breaking、wire generate-sync、console schema.d.ts 漂移门。
 
 ## 6. 架构评审须知
 

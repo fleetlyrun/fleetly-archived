@@ -356,7 +356,7 @@ func filterInitJobs(specs []ServiceSpec) []ServiceSpec {
 // 频控闸；生产由 tick 周期驱动）。
 func (e *Engine) SweepInitJobs(ctx context.Context) { e.sweepInitJobs(ctx, true) }
 
-// sweepInitJobs 是 tick 的 init 孤儿清扫 duty（零残留的 janitor 腿）：
+// sweepInitJobs 是 tick 的 init 孤儿清扫步（零残留的 janitor 腿）：
 // 扫描全部受管服务中的 fleetly-init- 前缀族，移除「部署行缺失/终态/相位
 // 已离开 init_jobs」的残留（完成清场失败、失败清场失败、崩溃半程、外部
 // 注入）。非终态且仍在 init 相位的服务=管线自有对象，不动。频控：非

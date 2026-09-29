@@ -8,7 +8,7 @@ package runtime
 // Start 顺序：先起配置端点监听（Traefik 首次拉取的前置），base_domain 非
 // 空时再起 8423 TLS 面（同 /configs 载荷、平台证书服务——证书未就绪时
 // GetCertificate 报错、握手失败，Traefik 容忍期语义承接），后台跑 Run
-// （收敛 + 续期 + 平台证书 duty）。Stop 关停 HTTP server（明文 + TLS）。
+// （收敛 + 续期 + 平台证书控制器）。Stop 关停 HTTP server（明文 + TLS）。
 
 import (
 	"context"

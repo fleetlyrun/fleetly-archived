@@ -276,7 +276,7 @@ func TestGetAlertsStatusProjection(t *testing.T) {
 		t.Fatalf("metrics_mode = %q, want on", resp.GetMetricsMode())
 	}
 	if resp.GetVmalertExists() {
-		t.Fatal("vmalert must report absent when the duty manager is not assembled")
+		t.Fatal("vmalert must report absent when the manager is not assembled")
 	}
 }
 

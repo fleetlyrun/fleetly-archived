@@ -199,7 +199,7 @@ func (s *Store) ListCronRuns(ctx context.Context, appID, service string, limit i
 // PruneCronRunsKeepPerSchedule 是 janitor 增项：每 (app_id, service) 保留
 // scheduled_at 最新的 keep 条，其余删行。窗口函数按分区编号（modernc
 // SQLite 支持窗口函数）；幂等，返回删除条数。清理失败只告警不中断整轮
-// （janitor 各 duty 同纪律）。
+// （janitor 各步同纪律）。
 func (s *Store) PruneCronRunsKeepPerSchedule(ctx context.Context, keep int) (int64, error) {
 	if keep <= 0 {
 		keep = CronRunKeeper

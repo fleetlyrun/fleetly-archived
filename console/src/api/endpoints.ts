@@ -880,7 +880,7 @@ export function searchMetrics(
   return api<SearchMetricsResponse>(`/metrics/search?${qs}`);
 }
 
-/** 模式切换（deploy scope）：保存即生效——duty 收敛部署/移除，卷保留。 */
+/** 模式切换（deploy scope）：保存即生效——后台收敛部署/移除，卷保留。 */
 export function setMetricsMode(mode: MetricsMode) {
   return api<SetMetricsModeResponse>("/metrics/mode", { method: "PUT", json: { mode } });
 }
@@ -920,7 +920,7 @@ export function updateAlertRule(
   );
 }
 
-/** 删除规则（admin scope + 平台写面；duty 下一拍重渲染规则文件）。 */
+/** 删除规则（admin scope + 平台写面；收敛管理器下一拍重渲染规则文件）。 */
 export function deleteAlertRule(id: string) {
   return api<DeleteAlertRuleResponse>(
     `/alerting/rules/${encodeURIComponent(id)}`,

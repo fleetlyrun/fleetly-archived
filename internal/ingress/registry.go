@@ -10,7 +10,7 @@ package ingress
 //	存储       本地命名卷 fleetly-registry-data → /var/lib/registry（不进控制
 //	           面备份；镜像可重建 = 重建-重部署）
 //	网络       平台 overlay fleetly-system（label fleetly.managed=true），
-//	           zot 单挂；Traefik 由本 duty 接入（registry 路由后端 VIP 可达面）
+//	           zot 单挂；Traefik 由本控制器 接入（registry 路由后端 VIP 可达面）
 //	鉴权       HTTP Basic：平台生成随机 user/pass 写 registry.auth_file
 //	           （`<user>:<password>` 单行 0600——与 ingress token 同形，不入
 //	           SQLite），派生 zot 消费的 bcrypt htpasswd 工件与 zot 配置工件
@@ -19,9 +19,9 @@ package ingress
 //	           配置（平台路由段，platformRegistryRoute；控制面自有，不属任何
 //	           app）；zot overlay 内 5000 明文，不经 Traefik 的内网面保持
 //
-// 部署时点：startup/sweep 收敛（runRegistryDuty 独立 goroutine，与平台证书
-// duty 无次序依赖——设计 §2.4 次序⑤「zot 部署不依赖证书」）。base_domain
-// 为空时 duty 不启动（单节点 v0.1 形态零成本）。
+// 部署时点：startup/sweep 收敛（runRegistryController 独立 goroutine，与平台证书
+// 控制器无次序依赖——设计 §2.4 次序⑤「zot 部署不依赖证书」）。base_domain
+// 为空时 控制器不启动（单节点 v0.1 形态零成本）。
 //
 // 与 Traefik 部署器同款幂等收敛：不存在创建、存在比对 spec（镜像/挂载/
 // 网络/约束/副本数）差异才更新。
@@ -42,7 +42,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -68,8 +68,8 @@ const (
 	// RegistryBackendPort 是 zot 监听端口（overlay 内明文 5000；Traefik 经
 	// fleetly-system overlay 反代该 VIP 端口）。
 	RegistryBackendPort = "5000"
-	// registryRetryInterval 是 registry duty 的重试退避缺省（与平台证书
-	// duty 同款注入缝——Manager.platformRetryInterval 可覆盖，单测驱动）。
+	// registryRetryInterval 是 registry 控制器 的重试退避缺省（与平台证书
+	// 控制器同款注入缝——Manager.platformRetryInterval 可覆盖，单测驱动）。
 	registryRetryInterval = 30 * time.Second
 )
 
@@ -297,7 +297,7 @@ func registryConstraintFor(platformNodeID string) string {
 
 // EnsureRegistry 幂等收敛平台 registry（D-MN-5：base_domain 配置即部署；
 // 单节点 base_domain 空 = no-op）。swarm 未就绪/平台 ID 未铸返回可重试
-// 错误（duty 退避收敛）。步骤：
+// 错误（收敛循环退避收敛）。步骤：
 //  1. 凭据与派生工件（auth_file/htpasswd/zot 配置——挂载前置物）；
 //  2. 数据卷 + fleetly-system overlay；
 //  3. 期望 spec（钉 manager 约束）→ inspect → 缺失创建/漂移更新；
@@ -330,14 +330,14 @@ func (m *Manager) EnsureRegistry(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// ③ manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
+	// ③ manager 平台 ID（meta 单值真源；identity 铸造尚未完成时显式失败
 	// 退避重试——约束引用空 ID 会得到永不调度的任务，宁缺毋错）。
 	platformID, err := m.store.GetMeta(ctx, state.MetaKeyPlatformNodeID)
 	if err != nil {
 		return fmt.Errorf("ingress: read platform node id: %w", err)
 	}
 	if platformID == "" {
-		return fmt.Errorf("ingress: platform node id not ensured yet (identity duty pending; registry pin constraint requires it)")
+		return fmt.Errorf("ingress: platform node id not ensured yet (identity bootstrap pending; registry pin constraint requires it)")
 	}
 	desired := m.buildRegistrySpec(creds, netID, platformID)
 	cur, err := m.docker.ServiceInspect(ctx, RegistryServiceName)
@@ -407,7 +407,7 @@ func (m *Manager) buildRegistrySpec(creds *registryCredentials, netID, platformI
 
 // registrySpecEqual 幂等比对（镜像/挂载/网络/约束/副本数——registry 的全
 // 部执行面都由期望 spec 权威表达；label 不参与比对，服务名即身份）。
-func registrySpecEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func registrySpecEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -461,13 +461,13 @@ func (m *Manager) platformRegistryRoute() Route {
 	}
 }
 
-// runRegistryDuty 是 registry 部署的常驻收敛循环（Manager.Run 启动的独立
+// runRegistryController 是 registry 部署的常驻收敛循环（Manager.Run 启动的独立
 // goroutine；ctx 取消返回）：
 //
 //	base_domain 为空 → 不启动（单节点 v0.1 形态零成本，D-MN-5）；
-//	否则启动即收敛（失败退避重试——与平台证书 duty 无次序依赖，设计
+//	否则启动即收敛（失败退避重试——与平台证书控制器 无次序依赖，设计
 //	§2.4 次序⑤：zot 不依赖证书），收敛后按续期扫描周期复检漂移。
-func (m *Manager) runRegistryDuty(ctx context.Context) {
+func (m *Manager) runRegistryController(ctx context.Context) {
 	if !m.ConfigTLSEnabled() {
 		return
 	}

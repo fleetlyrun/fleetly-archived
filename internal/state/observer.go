@@ -18,7 +18,7 @@ import (
 //
 // 定位纪律：nodes 表是观测缓存，禁止用于决策。v0.1 注记「本刷新器不产
 // 生产品事件」自 v0.2 起解除：每拍同步成功后运行 PostSync 挂钩（锚定
-// duty ClusterAnchor——收编 + node.* 差分事件，multi-node §2.7）；挂钩
+// 循环 ClusterAnchor——收编 + node.* 差分事件，multi-node §2.7）；挂钩
 // 缺省为 nil（未装配 = 零行为差异，观测同步语义逐字不变）。
 
 const (
@@ -213,7 +213,7 @@ func (o *Observer) drainInvalidate() {
 
 // syncOnce 执行一次全量同步：Ping 先行（不可达快速失败，不产生半程
 // 写入），随后取全量快照并同事务落库；挂钩已装配时先读差分基线（同步
-// 前的缓存行），落库成功后运行后处理（锚定 duty + node.* 差分事件——
+// 前的缓存行），落库成功后运行后处理（锚定循环 + node.* 差分事件——
 // 挂钩自吞错误，不推翻同步成功）。
 func (o *Observer) syncOnce(ctx context.Context) error {
 	pingCtx, cancel := context.WithTimeout(ctx, observationSyncTimeout)

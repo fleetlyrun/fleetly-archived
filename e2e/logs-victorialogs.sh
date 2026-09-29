@@ -7,7 +7,7 @@
 #   上起一个特权 dind（私网 10.216.0.0/24，镜像钉 digest）→ swarm init +
 #   fleetlyd 起服 → 全部断言经 dind 内的 docker/fleetly CLI/REST 驱动：
 #
-#   A1 duty 收敛（缺省即部署——logs.backend 未设置 = victorialogs 生效，
+#   A1 收敛管理器收敛（缺省即部署——logs.backend 未设置 = victorialogs 生效，
 #      V2-1 默认捆绑）：fleetly-victorialogs 服务 running + 事件
 #      logs.victorialogs_deployed + `logs backend show`（deployed）。
 #   A2 回环可达（D-W5-4 等价承载形态：host 网络任务 + -httpListenAddr
@@ -325,8 +325,8 @@ FOUNDER_PRJ=default
 FOUNDER_PROJECT="$FOUNDER_TEAM/$FOUNDER_PRJ"
 nl 'founder registered (platform admin); machine token minted; project context '"$FOUNDER_PROJECT"
 
-# ───────── A1: duty 收敛（缺省即部署——未显式设置 = victorialogs 生效）
-nl '=== A1: duty converges on default (logs.backend unset -> victorialogs) ==='
+# ───────── A1: 收敛管理器收敛（缺省即部署——未显式设置 = victorialogs 生效）
+nl '=== A1: manager converges on default (logs.backend unset -> victorialogs) ==='
 vl_running() {
     msh "docker service ps fleetly-victorialogs --format '{{.CurrentState}}' | grep -q '^Running'" 2>/dev/null
 }
@@ -354,7 +354,7 @@ else
     assert "VL-A3 LOOPBACK_HEALTH_OK" 1 "VL /health unreachable on 127.0.0.1:9428"
 fi
 
-# backend show：缺省模式 + 部署在位（duty 已收敛）。
+# backend show：缺省模式 + 部署在位（收敛管理器已收敛）。
 backend_show_ok() {
     fcli logs backend show 2>/dev/null |
         grep -q 'backend: victorialogs' &&

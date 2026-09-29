@@ -1,6 +1,6 @@
 package metrics
 
-// duty 收敛流程的 hermetic 单测（fake dockerPort——victorialogs duty 测试
+// 收敛管理器的 hermetic 单测（fake dockerPort——victorialogs 管理器测试
 // 同型）：opt-in 缺省零常驻（D-W5-2——未显式设置 = 无所欠）、mode=on 三件
 // 收敛（服务 + 抓取 config + 卷）、幂等稳态、漂移更新、切回 unset 三件
 // 移除 + 卷保留 + config 清场、差分事件、负面（swarm 未就绪、平台 ID 未
@@ -19,7 +19,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -29,7 +29,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]dutydocker.ServiceSnapshot
+	services map[string]dockerapi.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -50,20 +50,20 @@ type fakeDocker struct {
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services: map[string]dutydocker.ServiceSnapshot{},
+		services: map[string]dockerapi.ServiceSnapshot{},
 		configs:  map[string]swarm.ConfigSpec{},
 	}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+func (f *fakeDocker) Info(_ context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: f.swarmActive}, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return dutydocker.ServiceSnapshot{}, f.inspectErr
+		return dockerapi.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -73,7 +73,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	defer f.mu.Unlock()
 	name := spec.Name
 	f.created = append(f.created, name)
-	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	cur := dockerapi.ServiceSnapshot{Exists: true, Version: 1}
 	fillSnapshotFrom(&cur, spec)
 	f.services[name] = cur
 	return nil
@@ -137,7 +137,7 @@ func (f *fakeDocker) ConfigListNamesByLabel(_ context.Context, labelKey, labelVa
 	defer f.mu.Unlock()
 	var out []string
 	for name, spec := range f.configs {
-		if spec.Annotations.Labels[labelKey] != labelValue {
+		if spec.Labels[labelKey] != labelValue {
 			continue
 		}
 		out = append(out, name)
@@ -342,7 +342,7 @@ func TestEnsureUpdatesOnDrift(t *testing.T) {
 }
 
 // TestEnsureRemovesOnDisable 切回 unset：三件服务移除 + removed 事件
-// （payload 带 volume_retained=true）；卷对象永不被 duty 删除（数据安全
+// （payload 带 volume_retained=true）；卷对象永不被收敛管理器删除（数据安全
 // 语义——VolumeRemove 不在端口面上，编译期保证）；抓取 config 清场；稳态
 // 幂等（无服务时 removeIfPresent no-op 且不再发事件）。
 func TestEnsureRemovesOnDisable(t *testing.T) {
@@ -398,7 +398,7 @@ func TestEnsureSwarmNotReady(t *testing.T) {
 	}
 }
 
-// TestEnsureMissingPlatformID 负面：平台 ID 未铸（identity duty 未跑）→
+// TestEnsureMissingPlatformID 负面：平台 ID 未铸（identity 铸造未跑）→
 // 显式错误退避重试，宁缺毋错（约束引用空 ID = 永不调度）。
 func TestEnsureMissingPlatformID(t *testing.T) {
 	h := newHarness(t)
@@ -590,7 +590,7 @@ func TestEnsureRegeneratesScrapeConfigOnNodeSetChange(t *testing.T) {
 	}
 
 	// 换版后稳态：节点集不变 → 零写（服务不更新；config 每拍幂等 ensure
-	// 同名对象〔duty 语义——不可变对象按名命中〕，不产生新名、不触发
+	// 同名对象〔收敛管理器语义——不可变对象按名命中〕，不产生新名、不触发
 	// 服务更新——churn 判据是服务面与对象名，不是 ensure 调用次数）。
 	h.fk.updated = nil
 	if _, err := h.mgr.Ensure(context.Background()); err != nil {
@@ -623,18 +623,18 @@ func TestEnsureNodeListReadFailureDefers(t *testing.T) {
 	}
 }
 
-// stateOf 把 spec 投影为实况形态（与 dutydocker.snapshotOf 的投影同构——
+// stateOf 把 spec 投影为实况形态（与 dockerapi.snapshotOf 的投影同构——
 // fake 注入用）。
-func stateOf(spec swarm.ServiceSpec) dutydocker.ServiceSnapshot {
-	out := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+func stateOf(spec swarm.ServiceSpec) dockerapi.ServiceSnapshot {
+	out := dockerapi.ServiceSnapshot{Exists: true, Version: 1}
 	fillSnapshotFrom(&out, spec)
 	return out
 }
 
-// fillSnapshotFrom 用期望 spec 填充实况投影（dutydocker.snapshotOf 同构
+// fillSnapshotFrom 用期望 spec 填充实况投影（dockerapi.snapshotOf 同构
 // ——消费面子集：fake 只填本包比对用到的字段；每次填充重建切片，重复
 // 收敛拍不累积，残留即假漂移）。
-func fillSnapshotFrom(s *dutydocker.ServiceSnapshot, spec swarm.ServiceSpec) {
+func fillSnapshotFrom(s *dockerapi.ServiceSnapshot, spec swarm.ServiceSpec) {
 	if cs := spec.TaskTemplate.ContainerSpec; cs != nil {
 		s.Image = cs.Image
 		s.Args = append([]string{}, cs.Args...)

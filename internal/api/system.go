@@ -55,7 +55,7 @@ type SystemService struct {
 	// box 是 envelope 加解密器（E3-2 S3 设置面：secret 密文落库/读面解密
 	// 出指纹/探针解密已存凭证；nil = 未装配——S3 三面如实报不可用）。
 	box *secrets.Box
-	// rustfs 是托管 RustFS duty 管理器（E3-5：TestConnection 的 rustfs
+	// rustfs 是托管 RustFS 收敛管理器（E3-5：TestConnection 的 rustfs
 	// 分支经它解析派生端点与托管凭据；nil = 未装配——rustfs 探针如实报
 	// 不可用）。
 	rustfs *rustfs.Manager

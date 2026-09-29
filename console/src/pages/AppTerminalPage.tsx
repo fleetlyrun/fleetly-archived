@@ -158,7 +158,7 @@ export function AppTerminalPage() {
           {!enabled || !canDeploy ? (
             <p className="text-sm text-muted-foreground" data-testid="terminal-disabled-note">
               {!enabled
-                ? "The web terminal is disabled in the control plane config (terminal.enabled). Enable it and restart fleetlyd — the exec relay duty converges the fleetly-exec service on every node automatically."
+                ? "The web terminal is disabled in the control plane config (terminal.enabled). Enable it and restart fleetlyd — the exec relay manager converges the fleetly-exec service on every node automatically."
                 : isPlatformAdmin
                   ? "Platform administrators have read-only access to resources (separation of duties), so the web terminal is not available. Ask a team owner for a member role (developer or higher)."
                   : "The web terminal requires the developer role or higher in this app's project — your account is read-only here."}

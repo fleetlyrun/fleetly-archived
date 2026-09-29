@@ -1,7 +1,7 @@
-package dutydocker
+package dockerapi
 
 // 服务面：实况投影（ServiceSnapshot）与幂等写原语。收敛决策（何时 create/
-// update）在 duty 收敛层；本文件只做翻译——「不存在」是收敛的正常输入
+// update）在消费方收敛层；本文件只做翻译——「不存在」是收敛的正常输入
 //（Exists=false 不是错误），update 以乐观令牌推进（version 取自先前的
 // ServiceInspect）。
 
@@ -62,13 +62,13 @@ func (c *Client) ServiceInspect(ctx context.Context, name string) (ServiceSnapsh
 		if errdefs.IsNotFound(err) {
 			return ServiceSnapshot{}, nil
 		}
-		return ServiceSnapshot{}, fmt.Errorf("dutydocker: service inspect %s: %w", name, err)
+		return ServiceSnapshot{}, fmt.Errorf("dockerapi: service inspect %s: %w", name, err)
 	}
 	return snapshotOf(res.Service), nil
 }
 
 // snapshotOf 是 swarm.Service → 投影的纯函数（单测面：字段提取的穷尽
-// 矩阵在 dutydocker_test.go）。
+// 矩阵在 dockerapi_test.go）。
 func snapshotOf(svc swarm.Service) ServiceSnapshot {
 	out := ServiceSnapshot{
 		Exists:   true,
@@ -117,10 +117,10 @@ func snapshotOf(svc swarm.Service) ServiceSnapshot {
 	return out
 }
 
-// ServiceCreate 创建服务（duty 保证仅缺失时调用）。
+// ServiceCreate 创建服务（调用方保证仅缺失时调用）。
 func (c *Client) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error {
 	if _, err := c.cli.ServiceCreate(ctx, mobyclient.ServiceCreateOptions{Spec: spec}); err != nil {
-		return fmt.Errorf("dutydocker: service create %s: %w", spec.Name, err)
+		return fmt.Errorf("dockerapi: service create %s: %w", spec.Name, err)
 	}
 	return nil
 }
@@ -131,7 +131,7 @@ func (c *Client) ServiceUpdate(ctx context.Context, name string, version uint64,
 		Version: swarm.Version{Index: version},
 		Spec:    spec,
 	}); err != nil {
-		return fmt.Errorf("dutydocker: service update %s: %w", name, err)
+		return fmt.Errorf("dockerapi: service update %s: %w", name, err)
 	}
 	return nil
 }
@@ -142,14 +142,14 @@ func (c *Client) ServiceRemove(ctx context.Context, name string) error {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("dutydocker: service remove %s: %w", name, err)
+		return fmt.Errorf("dockerapi: service remove %s: %w", name, err)
 	}
 	return nil
 }
 
 // TaskObservation 是一次任务实况观测（健康门与健康观察的输入；本 API 代的
 // swarm 任务对象不携带容器健康位——引擎级健康判定经 healthcheck 的 swarm
-// 原生闭环落到任务状态，database duty 头注的观察纪律）。
+// 原生闭环落到任务状态，database 包头注的观察纪律）。
 type TaskObservation struct {
 	// State 逐字镜像底座任务状态（running/failed/rejected/shutdown/...）。
 	State string
@@ -167,7 +167,7 @@ func (c *Client) TaskList(ctx context.Context, service string) ([]TaskObservatio
 		Filters: mobyclient.Filters{}.Add("service", service),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("dutydocker: task list %s: %w", service, err)
+		return nil, fmt.Errorf("dockerapi: task list %s: %w", service, err)
 	}
 	return taskObservationsOf(res.Items), nil
 }
@@ -197,7 +197,7 @@ func (c *Client) TaskAddress(ctx context.Context, service, networkID string) (ip
 		Filters: mobyclient.Filters{}.Add("service", service),
 	})
 	if err != nil {
-		return "", false, fmt.Errorf("dutydocker: task list %s: %w", service, err)
+		return "", false, fmt.Errorf("dockerapi: task list %s: %w", service, err)
 	}
 	for _, t := range res.Items {
 		if t.Status.State != swarm.TaskStateRunning || t.DesiredState != swarm.TaskStateRunning {
@@ -224,13 +224,13 @@ func (c *Client) TaskAddress(ctx context.Context, service, networkID string) (ip
 func (c *Client) ReadyNodeAddresses(ctx context.Context) ([]string, error) {
 	res, err := c.cli.NodeList(ctx, mobyclient.NodeListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("dutydocker: node list: %w", err)
+		return nil, fmt.Errorf("dockerapi: node list: %w", err)
 	}
 	return readyNodeAddresses(res.Items), nil
 }
 
 // readyNodeAddresses 是 NodeList 条目 → 可抓取地址集的纯投影（单测矩阵在
-// dutydocker_test.go，自 metrics/docker.go 迁入）。
+// dockerapi_test.go，自 metrics/docker.go 迁入）。
 func readyNodeAddresses(nodes []swarm.Node) []string {
 	out := make([]string, 0, len(nodes))
 	for _, n := range nodes {

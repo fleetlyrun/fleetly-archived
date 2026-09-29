@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// openMetricsStore 起独立临时库（含平台节点 meta——VM duty spec 收敛路径
+// openMetricsStore 起独立临时库（含平台节点 meta——VM spec 收敛路径
 // 不被本测触达，meta 只为完整性）。
 func openMetricsStore(t *testing.T) *state.Store {
 	t.Helper()
@@ -148,7 +148,7 @@ func TestGetMetricsStatusHonestCounts(t *testing.T) {
 	defer srv.Close()
 
 	mb := metrics.NewBackendWithBase(srv.URL)
-	// mm = nil（duty 未装配——部署态缺省；本测聚焦计数面）。
+	// mm = nil（管理器未装配——部署态缺省；本测聚焦计数面）。
 	svc := NewMetricsService(st).WithBackend(mb, nil).
 		WithRetentionDays(21).
 		WithNodesTotal(func(context.Context) (int, error) { return 3, nil })

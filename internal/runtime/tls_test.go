@@ -433,7 +433,7 @@ func TestNewControlPlaneTLSAssembly(t *testing.T) {
 	if _, err := platform.cache.Get(); err == nil {
 		t.Fatal("platform cache must be unready before the certificate is issued")
 	}
-	// 平台证书落盘（duty 签发形态：ingress 证书库路径）→ 一拍 Refresh 装入。
+	// 平台证书落盘（控制器签发形态：ingress 证书库路径）→ 一拍 Refresh 装入。
 	pCert, pKey, err := ing.PlatformCertPaths()
 	if err != nil {
 		t.Fatalf("platform cert paths: %v", err)
@@ -483,7 +483,7 @@ func TestControlPlaneTLSRefreshLoop(t *testing.T) {
 
 	// 未就绪：等待窗内握手失败，日志有 warn。
 	awaitUntil("the not-ready warn", func() bool { return logBuf.contains("still not ready") })
-	// 落盘（平台证书 duty 的续期形态）：一拍内装入，日志 ready。
+	// 落盘（平台证书控制器的续期形态）：一拍内装入，日志 ready。
 	writeTestCertPair(t, certFile, keyFile, []string{"a.test"})
 	awaitUntil("the ready info", func() bool { return logBuf.contains("now complete handshakes") })
 	awaitUntil("the cache becoming ready", cache.Ready)

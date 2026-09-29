@@ -27,7 +27,7 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// 平台缺省参数（对齐 rustfs duty 的退避/扫描节奏与库健康门的预算形态）。
+// 平台缺省参数（对齐 rustfs 管理器的退避/扫描节奏与库健康门的预算形态）。
 const (
 	// DefaultTickInterval 是收敛扫描拍周期（provisioning 受理→服务创建的
 	// 无 kick 时延上界；ready 观察拍的抖动下界——swarm 健康位自身已是
@@ -73,7 +73,7 @@ func (c Config) Normalize() Config {
 	return c
 }
 
-// Manager 是库实例收敛 duty 管理器（rustfs Manager 同款装配形态：自建
+// Manager 是库实例收敛管理器（rustfs Manager 同款装配形态：自建
 // Docker 连接，cleanup 释放；零框架依赖——lynx 服务壳在 internal/runtime）。
 type Manager struct {
 	cfg       Config
@@ -121,7 +121,7 @@ type Manager struct {
 	kick     chan struct{}
 }
 
-// NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放——rustfs
+// NewManager 构造库实例收敛管理器（自建 Docker 连接；cleanup 释放——rustfs
 // NewManager 同款形态）。
 func NewManager(cfg Config, store *state.Store, box *secrets.Box, selector PlacementSelector, log *slog.Logger) (*Manager, func(), error) {
 	dc, err := newRealDockerClient("")
@@ -233,10 +233,10 @@ func (m *Manager) beat(ctx context.Context) {
 	for i := range rows {
 		m.convergeInstance(ctx, &rows[i])
 	}
-	// S5 拍尾 duty：备份调度（§5.4 per 实例计划）与可升级公告（操作事件
+	// S5 拍尾步：备份调度（§5.4 per 实例计划）与可升级公告（操作事件
 	// 面——读台账 + 事件追加，不触底座收敛）。
-	m.dutyBackupScheduling(ctx, rows)
-	m.dutyUpgradeAdvertisement(ctx, rows)
+	m.scheduleBackups(ctx, rows)
+	m.advertiseUpgrades(ctx, rows)
 	m.gcProvisioningTimers(rows)
 }
 

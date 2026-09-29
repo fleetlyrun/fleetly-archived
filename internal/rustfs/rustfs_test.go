@@ -1,6 +1,6 @@
 package rustfs
 
-// duty 收敛流程的 hermetic 单测（fake dockerPort——zot 部署器测试同型）：
+// 收敛管理器的 hermetic 单测（fake dockerPort——zot 部署器测试同型）：
 // 部署幂等（缺失创建/在位稳态/漂移更新）、凭据惰性生成与再启用重生成、
 // 移除路径（服务删、卷保留、secret 清场、凭据键删除）、差分事件、负面
 //（swarm 未就绪、平台 ID 未铸、secret 材料零落事件/日志面）。
@@ -17,7 +17,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/statebackup"
@@ -81,7 +81,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]dutydocker.ServiceSnapshot
+	services map[string]dockerapi.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -100,22 +100,22 @@ type fakeDocker struct {
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services:      map[string]dutydocker.ServiceSnapshot{},
+		services:      map[string]dockerapi.ServiceSnapshot{},
 		networks:      map[string]string{},
 		secrets:       map[string]bool{},
 		runningTaskIP: "10.66.0.9",
 	}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+func (f *fakeDocker) Info(_ context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: f.swarmActive}, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return dutydocker.ServiceSnapshot{}, f.inspectErr
+		return dockerapi.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -124,7 +124,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, spec.Name)
-	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	cur := dockerapi.ServiceSnapshot{Exists: true, Version: 1}
 	fillSnapshotFromSpec(&cur, spec)
 	f.services[spec.Name] = cur
 	return nil
@@ -222,11 +222,11 @@ func (f *fakeDocker) TaskAddress(_ context.Context, service, _ string) (string, 
 	return "", false, nil
 }
 
-// fillSnapshotFromSpec 把期望 spec 投影为实况形态（dutydocker.snapshotOf
+// fillSnapshotFromSpec 把期望 spec 投影为实况形态（dockerapi.snapshotOf
 // 同构的消费面子集——ServiceInspect 的 fake 侧镜像；收敛后 specEqual 必须
 // 为真，否则幂等收敛会死循环）。切片全量重置——update 路径不得残留旧
 // spec 字段（否则收敛比对永远不等）。
-func fillSnapshotFromSpec(cur *dutydocker.ServiceSnapshot, spec swarm.ServiceSpec) {
+func fillSnapshotFromSpec(cur *dockerapi.ServiceSnapshot, spec swarm.ServiceSpec) {
 	cs := spec.TaskTemplate.ContainerSpec
 	cur.Image = cs.Image
 	cur.Env = append([]string{}, cs.Env...)
@@ -252,7 +252,7 @@ func fillSnapshotFromSpec(cur *dutydocker.ServiceSnapshot, spec swarm.ServiceSpe
 	}
 }
 
-// testHarness 是 duty 测试环境（真实 store + 真实 envelope + fake 底座）。
+// testHarness 是收敛管理器测试环境（真实 store + 真实 envelope + fake 底座）。
 type testHarness struct {
 	t      *testing.T
 	st     *state.Store
@@ -542,7 +542,7 @@ func TestEnsureNegativePaths(t *testing.T) {
 	}
 	h.docker.swarmActive = true
 
-	// 平台 ID 未铸（identity duty 尚未跑）。
+	// 平台 ID 未铸（identity 铸造尚未跑）。
 	if err := h.st.InTx(context.Background(), func(tx *state.Tx) error {
 		return tx.SetMeta(context.Background(), state.MetaKeyPlatformNodeID, "")
 	}); err != nil {

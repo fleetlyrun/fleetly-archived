@@ -118,7 +118,7 @@ func OwnershipAnchorLabels() []string {
 // 判定的声明地单点——孤儿网披露豁免等识别面据此消费，不再逐锚手写）。
 //
 // 与 GC 分支的关系（两者语义不同，不得为形式统一互相替代）：项目网收敛
-// duty（engine reconcileProjectNetworks）的回收判定只认本集合的**子集**
+// 收敛步（engine reconcileProjectNetworks）的回收判定只认本集合的**子集**
 // LabelProjectNetwork——「无成员即回收」的判据来自 state 侧成员台账
 // （ProjectNetworkMembers），只有项目网有；task-group 网无 state 行、长活
 // 零成员合法，进回收环即被误删（F1 裁决：长活网只披露不回收）。孤儿披露

@@ -305,7 +305,7 @@ func (b *Builder) registryMode() bool { return b.cfg.RegistryHost != "" }
 
 // applyRegistryMode 把 registry 模式叠加到 solve 选项上（推送引用 + buildkit
 // session 凭据注入）。凭据文件读取在执行时点（凭据可能晚于 Builder 装配才
-// 由 zot 部署 duty 生成）；缺失/损坏即推送失败（E_REGISTRY_PUSH_FAILED），
+// 由 zot 部署控制器 生成）；缺失/损坏即推送失败（E_REGISTRY_PUSH_FAILED），
 // 不静默空凭据。
 func (b *Builder) applyRegistryMode(opts *bkclient.SolveOpt, req Request) error {
 	if !b.registryMode() {

@@ -30,7 +30,7 @@ var eventExemptions = map[string]string{
 	// 面（单机 v0.1 无 DR 绑定歧义场景）。
 	"placement.unresolved": "reserved: post-DR binding decision, with the v0.2 recovery ladder",
 	// 预留：节点观测事件族（joined/down/up/removed）v0.1 零引用——v0.2
-	// 多节点（E1-6）已由锚定 duty 差分发出（internal/state/clusteranchor.go），
+	// 多节点（E1-6）已由锚定循环差分发出（internal/state/clusteranchor.go），
 	// 豁免条目随之移除；保留本注释作为词面纪律的变迁记录。
 	// placement.changed / volume.discarded 的豁免同样移除：显式换点 Rebind
 	//（E1-7，internal/placement/rebind.go）成为真实发出来源。
@@ -47,11 +47,11 @@ var eventExemptions = map[string]string{
 	// 转移事件 9 的豁免已在 S2 移除——发出来源 = EnterDbPhase 单写点的调用
 	// 方：db.provision_started（受理/重试，internal/api/databases.go）+
 	// db.ready/db.provision_failed/db.degraded/db.recovered/db.deleted（收敛
-	// duty，internal/database/converge.go）+ db.suspended/db.resumed（受理，
+	// 收敛循环，internal/database/converge.go）+ db.suspended/db.resumed（受理，
 	// internal/api/databases.go）+ db.delete_started（删除守卫通过后，同上）。
 	// db.credentials_rotated 的豁免已在 S4 移除：发出来源 = 轮换编排成功尾
 	//（internal/database/rotate.go RotateCredentials）。S5 已接线操作事件
-	// 其余 8 的豁免移除：db.upgrade_available（可升级公告 duty，
+	// 其余 8 的豁免移除：db.upgrade_available（可升级公告步，
 	// internal/database/upgrade.go）+ db.upgrade_started/finished/failed
 	//（升级编排，同文件）+ db.backup_succeeded/db.backup_failed（备份编排，
 	// internal/database/backup.go）+ db.restore_completed/db.restore_failed

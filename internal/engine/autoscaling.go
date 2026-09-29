@@ -1,7 +1,7 @@
 package engine
 
 // 自动扩缩评估器（B 线 W5 设计 §1，D-V3W5-2，v0.3 W5-S1）：收敛拍尾部的
-// 周期 duty——对「有策略 × metrics.mode=on × 服务 running」的 compose 服务
+// 周期步——对「有策略 × metrics.mode=on × 服务 running」的 compose 服务
 // 求 CPU/内存水位，超阈值经**平台副本写通道**调整期望副本。
 //
 // 副本动作通道（设计 §1.2「spec 的运行期副本覆盖层」的落形，W5-S1 读码
@@ -70,7 +70,7 @@ type MetricsQuerier interface {
 }
 
 // WithMetricsQuerier 注入 VM 查询端口（生产装配 = metrics.Backend；nil =
-// duty 整体不在评估域——装配形态而非运行态，不产生任何披露）。
+// 本步整体不在评估域——装配形态而非运行态，不产生任何披露）。
 func (e *Engine) WithMetricsQuerier(q MetricsQuerier) *Engine { e.metricsQ = q; return e }
 
 // scalingCPUPromQL 是单服务 CPU 水位的瞬时查询（cadvisor 按 swarm 服务
@@ -131,7 +131,7 @@ func evaluateScaling(policy state.ScalingPolicy, cur uint64, stateful bool,
 	cpuPct, memPct := math.NaN(), math.NaN()
 	if cpuEvaluable {
 		if !cpu.ok {
-			return noop // 目标维度查不到序列：诚实不动作（披露在 duty 侧）
+			return noop // 目标维度查不到序列：诚实不动作（披露在本步侧）
 		}
 		cpuPct = cpu.value / (float64(cur) * cpuLimitCores) * 100
 		if prop, ok := scalingProposal(cur, targetCPU, cpuPct); ok {
@@ -224,13 +224,13 @@ func joinDimension(acc, dir string) string {
 
 // AutoscalingTick 单步执行扩缩评估（测试与诊断显式入口——直通频控闸；
 // 生产由 tick 周期驱动，safeCall 收口 MG-5）。
-func (e *Engine) AutoscalingTick(ctx context.Context) { e.dutyAutoscaling(ctx, true) }
+func (e *Engine) AutoscalingTick(ctx context.Context) { e.autoscaleApps(ctx, true) }
 
-// dutyAutoscaling 是收敛拍尾部的扩缩 duty：频控（scanGate 单点时间闸，
+// autoscaleApps 是收敛拍尾部的扩缩步：频控（scanGate 单点时间闸，
 // disclosure.go）→ 候选集 = 全部策略行 → 逐策略门槛检查 → 求值 → 动作。
-func (e *Engine) dutyAutoscaling(ctx context.Context, force bool) {
+func (e *Engine) autoscaleApps(ctx context.Context, force bool) {
 	if e.metricsQ == nil {
-		return // 查询面未装配：duty 不在评估域（装配形态；无披露——不冒充运行态）
+		return // 查询面未装配：本步不在评估域（装配形态；无披露——不冒充运行态）
 	}
 	now := e.now()
 	if !e.scalingScanGate.due(now, force, autoscalingInterval) {
@@ -251,7 +251,7 @@ func (e *Engine) dutyAutoscaling(ctx context.Context, force bool) {
 	}
 	if in.Mode != state.MetricsModeOn {
 		// 策略休眠（设计 §1.2）：每策略一次性披露；metrics 回 on 时清记忆
-		//（duty 的 on 路径逐策略 clear）——再离线可再披露一次。
+		//（本步的 on 路径逐策略 clear）——再离线可再披露一次。
 		for _, p := range policies {
 			e.discloseScalingOnce(ctx, &e.scalingDormantSeen, "scaling.dormant", p, "metrics_off")
 		}

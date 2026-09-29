@@ -5,12 +5,12 @@
 // scale-0 保全，deleting 走幂等 reap。状态写全部经 state.EnterDbPhase 单
 // 写点（同事务 CAS + 事件）；本包不做任何裸状态写。
 //
-// duty 形态与 internal/rustfs 同款（常驻 tick 循环 + 事件驱动 kick；API
+// 收敛管理器形态与 internal/rustfs 同款（常驻 tick 循环 + 事件驱动 kick；API
 // 受理生命周期操作后 Kick 立即收敛，不等下一拍）。底座消费面 = 本包私有
 // 端口（引擎凭据 secret 的 SecretReference 需要 SecretID 与完整 File
 // UID/GID/Mode，engine.ServiceSpec 通用投影装不下，W3 真机教训：空
 // UID/GID/Mode 会让 swarm agent 在任务启动期解析失败）。收编注记：通用
-// 收敛原语的 moby 适配层 2026-09-29 架构评审 C1 起由 internal/dutydocker
+// 收敛原语的 moby 适配层 2026-09-29 架构评审 C1 起由 internal/dockerapi
 // 唯一承载——本包 realDockerClient 以嵌入共享面 + 自留领域执行体
 // （ContainerRun/JobRun 一次性原语，需原始 moby 连接面，共享包刻意不装）
 // 满足端口。
@@ -34,28 +34,28 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	mobyclient "github.com/moby/moby/client"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// ErrNotSwarmReady 表示本机不是 active swarm manager（duty 可重试态；
+// ErrNotSwarmReady 表示本机不是 active swarm manager（收敛循环可重试态；
 // rustfs.ErrNotSwarmReady 同语义不共享类型——端口在本包定义）。
-var ErrNotSwarmReady = errors.New("docker engine is not an active swarm manager (database duty)")
+var ErrNotSwarmReady = errors.New("docker engine is not an active swarm manager (database manager)")
 
-// dockerPort 是收敛 duty 对 Docker API 的最小消费面（端口在本包定义、
-// 假实现注入单测；通用收敛原语的 moby 实现由 internal/dutydocker 唯一
-// 承载——本包 realDockerClient 经嵌入 *dutydocker.Client + 自留领域执行
+// dockerPort 是收敛管理器对 Docker API 的最小消费面（端口在本包定义、
+// 假实现注入单测；通用收敛原语的 moby 实现由 internal/dockerapi 唯一
+// 承载——本包 realDockerClient 经嵌入 *dockerapi.Client + 自留领域执行
 // 体满足端口，rustfs 同款端口形态。第三方类型只进不出——swarm.ServiceSpec
-// 是收敛器构造载荷，出口只有共享投影（dutydocker.InfoSnapshot/
+// 是收敛器构造载荷，出口只有共享投影（dockerapi.InfoSnapshot/
 // ServiceSnapshot/TaskObservation）与 error）。服务写幂等语义由收敛层
 // 保证（inspect → 比对 → create/update）。
 type dockerPort interface {
-	// Info 报告 swarm 状态投影（SwarmActive 位由 duty 判定——非 active
+	// Info 报告 swarm 状态投影（SwarmActive 位由收敛循环判定——非 active
 	// 即本拍让位）。
-	Info(ctx context.Context) (dutydocker.InfoSnapshot, error)
+	Info(ctx context.Context) (dockerapi.InfoSnapshot, error)
 	// ServiceInspect 按名取服务实况；缺失返回 Exists=false（不是错误——
 	// 「不存在」是收敛的正常输入）。
-	ServiceInspect(ctx context.Context, name string) (dutydocker.ServiceSnapshot, error)
+	ServiceInspect(ctx context.Context, name string) (dockerapi.ServiceSnapshot, error)
 	// ServiceCreate 创建服务（收敛器保证仅缺失时调用）。
 	ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error
 	// ServiceUpdate 以乐观令牌推进服务（version 取自先前的 ServiceInspect）。
@@ -82,7 +82,7 @@ type dockerPort interface {
 	// 不残留）。
 	SecretList(ctx context.Context, labels map[string]string) ([]string, error)
 	// SecretRemove 删除 secret（幂等：缺失视为成功；in-use 返回错误由
-	// duty 下一拍重试——服务删除到引用释放有传播延迟）。
+	// 收敛循环下一拍重试——服务删除到引用释放有传播延迟）。
 	SecretRemove(ctx context.Context, name string) error
 	// VolumeEnsure 确认命名卷存在（幂等；缺失创建——数据诞生点显式收敛，
 	// swarm 对任务卷挂载亦有按节点创建语义，显式创建让部署器自证前置物
@@ -93,8 +93,8 @@ type dockerPort interface {
 	// 用户显式选择丢弃数据时触达）。
 	VolumeRemove(ctx context.Context, name string) error
 	// TaskList 返回服务的全部任务观测（含历史；健康门轮询的数据源——
-	// 共享投影 dutydocker.TaskObservation，本包不再自持观测类型）。
-	TaskList(ctx context.Context, service string) ([]dutydocker.TaskObservation, error)
+	// 共享投影 dockerapi.TaskObservation，本包不再自持观测类型）。
+	TaskList(ctx context.Context, service string) ([]dockerapi.TaskObservation, error)
 	// ContainerRun 启动一次性容器并等待退出（轮换的 ALTER USER 执行体，
 	// S4）：create（入库共享网络）→ start → wait(next-exit) → remove。返回
 	// 退出码；env/cmd 的凭据材料只进创建载荷，绝不进日志/错误文本。
@@ -182,10 +182,10 @@ type ContainerRunInput struct {
 // 轮换一次性容器与备份/恢复一次性 Swarm job，含 awaitJob/collectJobOutcome
 // 输出采集）自留本包——它们需要原始 moby 连接面（ContainerCreate/Start/
 // Wait/Remove、TaskLogs），共享包刻意不装；通用收敛原语（Info/服务写/
-// 网络/secret/卷/任务观测）经嵌入 *dutydocker.Client 提升（2026-09-29 C1
+// 网络/secret/卷/任务观测）经嵌入 *dockerapi.Client 提升（2026-09-29 C1
 // 收编形态——NewWithClient 以本包自有连接构造共享面，单连接复用）。
 type realDockerClient struct {
-	*dutydocker.Client
+	*dockerapi.Client
 	cli *mobyclient.Client
 }
 
@@ -199,7 +199,7 @@ func newRealDockerClient(host string) (*realDockerClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("database: construct docker client: %w", err)
 	}
-	return &realDockerClient{Client: dutydocker.NewWithClient(cli), cli: cli}, nil
+	return &realDockerClient{Client: dockerapi.NewWithClient(cli), cli: cli}, nil
 }
 
 // Close 释放底层连接（Wire cleanup；嵌入面的 Close 同源——同一条连接，
@@ -207,8 +207,8 @@ func newRealDockerClient(host string) (*realDockerClient, error) {
 func (c *realDockerClient) Close() error { return c.cli.Close() }
 
 // TaskList 透传共享面的任务观测（健康门轮询的数据源；映射由
-// dutydocker.taskObservationsOf 承载，本包观测类型已收编删除）。
-func (c *realDockerClient) TaskList(ctx context.Context, service string) ([]dutydocker.TaskObservation, error) {
+// dockerapi.taskObservationsOf 承载，本包观测类型已收编删除）。
+func (c *realDockerClient) TaskList(ctx context.Context, service string) ([]dockerapi.TaskObservation, error) {
 	return c.Client.TaskList(ctx, service)
 }
 

@@ -35,7 +35,7 @@ import (
 //
 // 开关 = s3.mode：unset 即不上传（upload_status 保持 none——外部端点未
 // 配置是合法态，不算失败不红）。rustfs 模式上传经平台托管凭据（E3-5
-// duty 生成落密钥库）与 fleetly-rustfs-net 网络挂接——duty 未收敛时以
+// 管理器生成落密钥库）与 fleetly-rustfs-net 网络挂接——管理器未收敛时以
 // 凭据/端点缺失如实失败（诚实行为，不静默跳过）。
 //
 // secret 纪律（state-model §2.9）：restic env 的凭证值（口令/AK/SK）绝不
@@ -87,7 +87,7 @@ type ResticSpec struct {
 	ContainerMountDir string
 	// Networks 是容器挂接的网络名（E3-5：rustfs 模式 = [fleetly-rustfs-net]
 	// ——托管端点 http://rustfs:9000 只在该 overlay 内可解析；空 = 缺省
-	// bridge（external 模式出网即可）。网络由 rustfs duty 以 attachable
+	// bridge（external 模式出网即可）。网络由 rustfs 管理器以 attachable
 	// 形态创建，独立容器可挂接）。
 	Networks []string
 }
@@ -106,7 +106,7 @@ type ResticRunner interface {
 //   - external：设置值直出——repo = s3:<endpoint_url>/<bucket>/statebackups；
 //     path-style 跟随 s3.path_style 设置（与 objectstore.PathStyle 同源同义）；
 //   - rustfs：服务端派生 http://rustfs:9000 + 平台单桶 + path-style（凭据
-//     随 E3-5 duty 落库，resticCredentials 消费）；
+//     随 E3-5 管理器落库，resticCredentials 消费）；
 //   - unset：found=false（合法态，上传轨整体停摆）。
 //
 // restic 0.19.x 事实核对（v0.19.1 internal/backend/s3/s3.go + `restic
@@ -239,7 +239,7 @@ func (m *Manager) uploadSnapshot(ctx context.Context, rec state.StateBackup, ret
 
 	// rustfs 模式的网络挂接（E3-5）：托管端点 http://rustfs:9000 只在
 	// fleetly-rustfs-net 内可解析——restic 一次性容器 attach 该网（rustfs
-	// duty 以 attachable 形态建网）；external 模式零挂接（缺省 bridge 出网）。
+	// 管理器以 attachable 形态建网）；external 模式零挂接（缺省 bridge 出网）。
 	networks := []string(nil)
 	if state.NormalizeMode(in.Mode) == state.S3ModeRustfs {
 		networks = []string{state.RustfsNetworkName}
@@ -332,7 +332,7 @@ func (m *Manager) uploadSnapshot(ctx context.Context, rec state.StateBackup, ret
 }
 
 // resticCredentials 解密上传凭证（external 模式 secret 密文 → 明文；
-// rustfs 模式 → 平台托管凭据，E3-5 duty 生成后经 envelope 密文落库——
+// rustfs 模式 → 平台托管凭据，E3-5 管理器生成后经 envelope 密文落库——
 // 凭据缺失/密钥损坏显式失败，不静默跳过——诚实红）。
 func (m *Manager) resticCredentials(ctx context.Context, in state.S3Settings) (s3Credentials, error) {
 	switch state.NormalizeMode(in.Mode) {
@@ -349,16 +349,16 @@ func (m *Manager) resticCredentials(ctx context.Context, in state.S3Settings) (s
 		creds.SecretKey = string(plain)
 		return creds, nil
 	case state.S3ModeRustfs:
-		// 托管凭据（E3-5）：rustfs duty 在 mode=rustfs 收敛时生成并存
-		// envelope 密文；此路径只读不生成（生成职责唯一归 duty）。未备便
-		//（duty 生成拍未到）显式失败——上传轨下次触发自然重试。
+		// 托管凭据（E3-5）：rustfs 管理器在 mode=rustfs 收敛时生成并存
+		// envelope 密文；此路径只读不生成（生成职责唯一归管理器）。未备便
+		//（生成拍未到）显式失败——上传轨下次触发自然重试。
 		accessCT, secretCT, found, err := m.store.LoadRustfsCredentialsCiphertext(ctx)
 		if err != nil {
 			return s3Credentials{}, fmt.Errorf("statebackup: load rustfs credentials: %w", err)
 		}
 		if !found {
 			return s3Credentials{}, errors.New(
-				"statebackup: managed rustfs credentials not provisioned yet (the rustfs duty provisions them shortly after s3.mode=rustfs is saved)")
+				"statebackup: managed rustfs credentials not provisioned yet (the rustfs manager provisions them shortly after s3.mode=rustfs is saved)")
 		}
 		accessPlain, err := m.box.Decrypt([]byte(accessCT))
 		if err != nil {

@@ -423,12 +423,12 @@ var builtins = []Code{
 
 	// ── Web 终端面（E7 设计 §2.4/§2.5，W5-S6；注册表只增）──
 	// 消费点：ExecService.CreateTerminalTicket 与 native WS 端点的功能开关
-	// 门（config terminal.enabled=false——duty 移除 relay 服务、API 拒绝
+	// 门（config terminal.enabled=false——收敛管理器移除 relay 服务、API 拒绝
 	// 签发，Console 面板显示禁用态）。
 	{ID: "E_TERMINAL_DISABLED", HTTP: 409,
 		Source:     "E7 web-terminal §2.4 (W5-S6 feature gate: terminal.enabled=false deploys no exec relay and refuses ticket issuance, 409)",
 		Summary:    "the web terminal feature is disabled (terminal.enabled=false): no exec relay is deployed and no terminal tickets are issued",
-		Suggestion: "Enable the feature by setting terminal.enabled: true in the control plane config and restarting fleetlyd; the exec relay duty converges the fleetly-exec service on every node automatically."},
+		Suggestion: "Enable the feature by setting terminal.enabled: true in the control plane config and restarting fleetlyd; the exec relay manager converges the fleetly-exec service on every node automatically."},
 
 	// ── 程序化动态工作负载（T 线 DT-5 / IMPL-T2-1，注册表只增）：任务面的
 	// 请求契约违约（scope 形态/内部变体支持矩阵/TTL 与资源上下限）走 400；

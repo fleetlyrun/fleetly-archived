@@ -25,7 +25,7 @@ import (
 )
 
 // newS3PublicTestManager 构造 base_domain 非空 + ACME 启用 + 短退避/短扫描
-// 的测试管理器（公网开关 duty 的收敛断言不等待真实周期）。返回 obtainFn
+// 的测试管理器（公网开关控制器 的收敛断言不等待真实周期）。返回 obtainFn
 // 的调用计数器（签发计数断言：SAN 集增/缩各触发一次重签发）。
 func newS3PublicTestManager(t *testing.T, baseDomain string) (*Manager, *fakeDocker, *state.Store, *atomic.Int64) {
 	t.Helper()
@@ -101,7 +101,7 @@ func TestPlatformS3RouteViewToggle(t *testing.T) {
 	}
 
 	// 开启：路由进视图（web + websecure；websecure 的 TLS 位由平台证书挂载
-	// 循环承载，本测试无平台证书 → 纯 HTTP 形态——证书联动在 duty 测试）。
+	// 循环承载，本测试无平台证书 → 纯 HTTP 形态——证书联动在 控制器测试）。
 	setS3Settings(t, st, "example.test", state.S3ModeRustfs, true)
 	if err := m.publishWithCerts(ctx); err != nil {
 		t.Fatalf("publish (exposed=true): %v", err)
@@ -166,12 +166,12 @@ func TestPlatformDomainsS3Conditional(t *testing.T) {
 	}
 }
 
-// TestS3PublicDutyConvergesToggle 开关往返全链（duty 驱动，fake substrate）：
+// TestS3PublicControllerConvergesToggle 开关往返全链（控制器驱动，fake substrate）：
 // 开启 → Traefik 挂 fleetly-rustfs-net、s3.<base> 进视图、平台证书按四 SAN
 // 重签发；关闭 → 网络摘除（app 网络保留）、路由摘除、证书按三 SAN 重签。
 // F10 同型回归：往返全程既有 app 的 websecure 路由与 tls.certificates 段
 // 恒在（全量视图换入不得擦 TLS——publish 恒带证书段）。
-func TestS3PublicDutyConvergesToggle(t *testing.T) {
+func TestS3PublicControllerConvergesToggle(t *testing.T) {
 	m, dc, st, calls := newS3PublicTestManager(t, "example.test")
 	ctx := context.Background()
 
@@ -202,10 +202,10 @@ func TestS3PublicDutyConvergesToggle(t *testing.T) {
 		return certPEM, keyPEM, nil
 	}
 
-	// 开启（rustfs duty 之外本测试只关心 ingress 面——rustfs 网络由 fake 的
-	// NetworkEnsure/NetworkID 语义直接可解析，与「rustfs duty 已建网」同构）。
+	// 开启（rustfs 收敛循环之外本测试只关心 ingress 面——rustfs 网络由 fake 的
+	// NetworkEnsure/NetworkID 语义直接可解析，与「rustfs 收敛循环已建网」同构）。
 	setS3Settings(t, st, "example.test", state.S3ModeRustfs, true)
-	go m.runS3PublicDuty(ctx)
+	go m.runS3PublicController(ctx)
 
 	awaitUntil(t, "s3 route in view after enable", 5*time.Second, func() bool {
 		return hasRouterKey(t, m, "fleetly-rustfs-websecure")
@@ -262,8 +262,8 @@ func TestS3PublicDutyConvergesToggle(t *testing.T) {
 
 	// 幂等稳态：状态不再变化 → 签发停止（抽两窗计数相等——重签发收敛有界，
 	// 不存在循环重签）。注意签发计数不判精确值：测试的 awaitUntil 轮询
-	// （certs.Load）与 duty 的原子 Save（tmp+rename）在 Windows 上存在
-	// rename-vs-open-reader 的瞬时失败（Access is denied），duty 按既有退避
+	// （certs.Load）与控制器的原子 Save（tmp+rename）在 Windows 上存在
+	// rename-vs-open-reader 的瞬时失败（Access is denied），控制器按既有退避
 	// 语义重试会多消耗一次签发——这正是收敛重试的设计行为（Linux 生产/CI
 	// 上 rename 对 open reader 原子，无此重试）。
 	time.Sleep(150 * time.Millisecond)
@@ -276,8 +276,8 @@ func TestS3PublicDutyConvergesToggle(t *testing.T) {
 }
 
 // TestS3PublicNetworkAttachDoesNotCreateNetwork 守恒形态：公网开关开启但
-// rustfs 网络未建（rustfs duty 未收敛）→ attach 不代建（NetworkEnsure 零
-// 调用——fleetly-rustfs-net 的 attachable 形态归 rustfs duty 权威创建），
+// rustfs 网络未建（rustfs 收敛循环未收敛）→ attach 不代建（NetworkEnsure 零
+// 调用——fleetly-rustfs-net 的 attachable 形态归 rustfs 收敛循环权威创建），
 // 返回可重试错误。
 func TestS3PublicNetworkAttachDoesNotCreateNetwork(t *testing.T) {
 	m, dc, _, _ := newS3PublicTestManager(t, "example.test")
@@ -293,14 +293,14 @@ func TestS3PublicNetworkAttachDoesNotCreateNetwork(t *testing.T) {
 		t.Fatal("attach must fail (retryable) when the rustfs network is absent")
 	}
 	if len(dc.netEns) != 0 {
-		t.Fatalf("attach must not NetworkEnsure the rustfs net (attachable ownership is the rustfs duty's), got %v", dc.netEns)
+		t.Fatalf("attach must not NetworkEnsure the rustfs net (attachable ownership is the rustfs manager's), got %v", dc.netEns)
 	}
 }
 
-// TestS3PublicDutyInertSingleNode 单节点形态（base_domain 空）：duty 直接
+// TestS3PublicControllerInertSingleNode 单节点形态（base_domain 空）：控制器直接
 // 返回（零收敛、零签发）——公网面在单节点不存在（设置面 E_S3_PUBLIC_
 // REQUIRES_BASE_DOMAIN 的消费面镜像）。
-func TestS3PublicDutyInertSingleNode(t *testing.T) {
+func TestS3PublicControllerInertSingleNode(t *testing.T) {
 	dir := t.TempDir()
 	st, err := state.Open(context.Background(), filepath.Join(dir, "state.db"))
 	if err != nil {
@@ -317,11 +317,11 @@ func TestS3PublicDutyInertSingleNode(t *testing.T) {
 	}
 	m := NewManagerWithDocker(cfg, st, newFakeDocker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	done := make(chan struct{})
-	go func() { m.runS3PublicDuty(context.Background()); close(done) }()
+	go func() { m.runS3PublicController(context.Background()); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("duty must return immediately when base_domain is empty")
+		t.Fatal("controller must return immediately when base_domain is empty")
 	}
 }
 
@@ -364,9 +364,9 @@ func TestS3PublicSettingsUnreadableFailsClosed(t *testing.T) {
 	if !hasRouterKey(t, m, "fleetly-"+app.TeamSlug+"-"+app.ProjectSlug+"-demo-web-web") {
 		t.Fatal("app routes must publish normally when s3 settings are unreadable")
 	}
-	// duty 对同一故障显式退避（不静默吞掉）。
+	// 控制器对同一故障显式退避（不静默吞掉）。
 	if _, err := m.s3PublicExposed(ctx); err == nil {
-		t.Fatal("s3PublicExposed must surface the read error (duty retry input)")
+		t.Fatal("s3PublicExposed must surface the read error (controller retry input)")
 	}
 }
 

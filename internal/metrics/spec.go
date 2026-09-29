@@ -29,7 +29,7 @@ package metrics
 //     墙拦公网、VPC 对内互通）。VM 自身保持回环
 //     （`-httpListenAddr=127.0.0.1:8428`——查询面只在 manager 本地，零
 //     公网面不变量对 VM 依旧成立）。
-//   - **动态抓取面**：duty 每拍从底座节点注册表读全部 Ready 节点的
+//   - **动态抓取面**：收敛管理器每拍从底座节点注册表读全部 Ready 节点的
 //     advertise 地址（dockerPort.ReadyNodeAddresses——Status.Addr，缺省
 //     回落 ManagerStatus.Addr；availability 非 active〔drain/pause〕的
 //     节点不入选——global 采集器不在其上运行，抓了必 down），scrape
@@ -62,7 +62,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -146,7 +146,7 @@ const (
 	// 64MB 裕量充足）。
 	nodeExporterMemoryBytes = int64(64) << 20
 
-	// retryInterval 是 duty 收敛失败的退避缺省（victorialogs duty 同款注入缝）。
+	// retryInterval 是 收敛失败的退避缺省（victorialogs 管理器同款注入缝）。
 	retryInterval = 30 * time.Second
 	// scanInterval 是已收敛后的漂移复检周期。
 	scanInterval = 60 * time.Second
@@ -636,7 +636,7 @@ func anchorRulesConfig(spec *swarm.ServiceSpec, rulesName, rulesID string) {
 // 参数含 -httpListenAddr 回环监听（VM 查询面零公网面）与采集器
 // -listen_ip / --web.listen-address 的 0.0.0.0 绑定——绑定面漂移必被本
 // 比对捕获）。
-func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

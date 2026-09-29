@@ -13,10 +13,10 @@ package engine
 //     network.orphaned（只披露不删：无法归因 ⇒ 不静默删他人物件）；带归属
 //     锚 label 的对象不进孤儿面（豁免判据 = state.IsOwnershipAnchor 声明地
 //     单点；项目网漏网对象归第 3 条 GC 分支——IMPL-F1）；期望项目网缺失 →
-//     network.missing（披露；修正归第 3 条 duty）。瞬态读错不结论
+//     network.missing（披露；修正归第 3 条收敛步）。瞬态读错不结论
 //     （services 面同纪律）；持续形态每进程只报一次（seen 记忆，恢复清零
 //     可再报）。
-//  3. 收敛（reconcileProjectNetworks duty，30s 频控）：有成员项目的项目网
+//  3. 收敛（reconcileProjectNetworks 步，30s 频控）：有成员项目的项目网
 //     幂等 ensure（缺失自愈——`network.missing` 的派生修正）+ 无成员、
 //     零端点的项目网回收（成员清空/项目删除后的回收残留）。in-use 由底座
 //     FailedPrecondition 拒绝兜底（真机实证），失败留下拍重试。
@@ -37,7 +37,7 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// projectNetworkSweepInterval 是项目网收敛 duty 的频控间隔（substrateRecon
+// projectNetworkSweepInterval 是项目网收敛步 的频控间隔（substrateRecon
 // 同量级：成员清空后的回收延迟以 30s 计可接受）。
 const projectNetworkSweepInterval = 30 * time.Second
 
@@ -142,7 +142,7 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 		}
 	}
 	e.networkOrphanSeen.sweep(orphanSet) // 恢复/归因成功：记忆清零可再报
-	// ② 缺失方向：期望项目网不在底座（外部移除）→ 披露；修正归收敛 duty。
+	// ② 缺失方向：期望项目网不在底座（外部移除）→ 披露；修正归收敛步。
 	missingSet := map[string]bool{}
 	names := make([]string, 0, len(projectNets))
 	for name := range projectNets {
@@ -161,7 +161,7 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 			continue
 		}
 		if reported {
-			e.log.Warn("engine: expected project network absent from the substrate (the convergence duty re-ensures it)",
+			e.log.Warn("engine: expected project network absent from the substrate (the convergence step re-ensures it)",
 				"network", name, "project_id", projectNets[name])
 		}
 	}
@@ -170,13 +170,13 @@ func (e *Engine) reconNetworks(ctx context.Context) {
 
 // expectedNetworks 从 state 推导 networks 对账的期望面（读错即整体放弃本拍）。
 // 返回：expected = 全部合法平台网名集（含项目网）；projectNets = 期望项目网
-// → 项目 ID（缺失方向与收敛 duty 共用）。
+// → 项目 ID（缺失方向与收敛步共用）。
 //
 //	app 网   = 非 deleted 生命周期（active/deleting——deleting 的服务仍在
 //	           收敛中，网不得判孤儿）的 app 网；
 //	库网     = 非 deleted 终态的库实例网；
 //	项目网   = 有成员（active 且参与位在位）的项目网；期望名由项目 ID 推导。
-//	组件网   = 装配层注入白名单（ingress/state 常量；生命周期归各组件 duty）。
+//	组件网   = 装配层注入白名单（ingress/state 常量；生命周期归各组件管理器）。
 //
 // task-group 长活网不进期望集（网无 state 行——不入台账、零成员 ensure
 // 合法，state 不可枚举）；豁免走 reconNetworks 的归属锚谓词
@@ -256,13 +256,13 @@ func networkMissingDisclosure(name, projectID string) disclosure {
 	}
 }
 
-// ── 项目网收敛 duty（成员 ensure + 空网回收）────────────────────────────────
+// ── 项目网收敛步（成员 ensure + 空网回收）────────────────────────────────
 
 // ReconcileProjectNetworks 单步执行项目网收敛（测试与诊断显式入口——直通
 // 频控闸；生产由 tick 周期驱动）。
 func (e *Engine) ReconcileProjectNetworks(ctx context.Context) { e.reconcileProjectNetworks(ctx, true) }
 
-// reconcileProjectNetworks 是 tick 的项目网收敛 duty（IMPL-T15-1）：
+// reconcileProjectNetworks 是 tick 的项目网收敛步（IMPL-T15-1）：
 //  1. 有成员项目的项目网幂等 ensure（缺失自愈——network.missing 的派生修正）；
 //  2. 无成员项目网回收：带自描述 label 归属、零挂接端点才删（in-use 由底座
 //     拒绝兜底——真机实证 FailedPrecondition）；失败留下拍重试。
@@ -274,7 +274,7 @@ func (e *Engine) reconcileProjectNetworks(ctx context.Context, force bool) {
 		return
 	}
 	if e.netSub == nil {
-		return // 未接线：duty 空转
+		return // 未接线：本步空转
 	}
 	members, err := e.store.ProjectNetworkMembers(ctx)
 	if err != nil {

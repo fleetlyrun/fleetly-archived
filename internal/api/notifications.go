@@ -29,7 +29,7 @@ import (
 // URL/name 形状校验在本面做 400 形状门（退化信封——形状违约不走注册表
 // 码），patterns 白名单与通道组合形状校验在 state 层（422
 // E_WEBHOOK_PATTERN_INVALID 原样透传；通道形状在 api 面先拦为 400）。投
-// 递本身由 internal/notify duty 承载——本服务是纯受理/投影面。
+// 递本身由 internal/notify 投递器承载——本服务是纯受理/投影面。
 //
 // scope：读 = read（台账与端点是事实面，指纹非凭据）；写 = admin（端点
 // 是平台级凭据面——创建/轮换/删除/测试/SMTP 设置与 s3 设置同级）。

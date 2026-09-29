@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/rustfs"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -31,12 +31,12 @@ func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Disca
 // 由方法集隐式满足）：swarm 在位、凭据 secret 在位（探针只消费凭据面）。
 type fakeRustfsDocker struct{}
 
-func (fakeRustfsDocker) Info(context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: true}, nil
+func (fakeRustfsDocker) Info(context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: true}, nil
 }
 
-func (fakeRustfsDocker) ServiceInspect(_ context.Context, _ string) (dutydocker.ServiceSnapshot, error) {
-	return dutydocker.ServiceSnapshot{Exists: true, Version: 1}, nil
+func (fakeRustfsDocker) ServiceInspect(_ context.Context, _ string) (dockerapi.ServiceSnapshot, error) {
+	return dockerapi.ServiceSnapshot{Exists: true, Version: 1}, nil
 }
 
 func (fakeRustfsDocker) ServiceCreate(context.Context, swarm.ServiceSpec) error { return nil }
@@ -120,7 +120,7 @@ func TestS3RustfsProbeWiring(t *testing.T) {
 	}
 	admin := seedTokenPlain(t, st, "admin")
 
-	// rustfs duty 管理器（fake 底座 + fake 探针执行器）：托管凭据已备便。
+	// rustfs 收敛管理器（fake 底座 + fake 探针执行器）：托管凭据已备便。
 	rmgr := rustfs.NewManagerWithDocker(st, box, fakeRustfsDocker{}, discardLogger()).
 		WithProbeRunner(&fakeProbeRunner{})
 	if err := st.SaveS3Settings(context.Background(), state.S3Settings{Mode: state.S3ModeRustfs},

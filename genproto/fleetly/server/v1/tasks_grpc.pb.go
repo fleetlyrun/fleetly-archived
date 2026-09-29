@@ -58,7 +58,7 @@ type TasksServiceClient interface {
 	// 生效，不是 per-task attach）。
 	EnsureTaskNetwork(ctx context.Context, in *EnsureTaskNetworkRequest, opts ...grpc.CallOption) (*EnsureTaskNetworkResponse, error)
 	// CreateTask 受理任务（owner = 调用令牌；TTL/资源配额 fail-closed 校验；
-	// 状态收敛由引擎 duty 承载——本 RPC 返回 queued 形态）。
+	// 状态收敛由引擎 tick 收敛循环承载——本 RPC 返回 queued 形态）。
 	CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*CreateTaskResponse, error)
 	// GetTask 取单个任务视图（env 只在本面回显；他令牌的任务 404）。
 	GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error)
@@ -170,7 +170,7 @@ type TasksServiceServer interface {
 	// 生效，不是 per-task attach）。
 	EnsureTaskNetwork(context.Context, *EnsureTaskNetworkRequest) (*EnsureTaskNetworkResponse, error)
 	// CreateTask 受理任务（owner = 调用令牌；TTL/资源配额 fail-closed 校验；
-	// 状态收敛由引擎 duty 承载——本 RPC 返回 queued 形态）。
+	// 状态收敛由引擎 tick 收敛循环承载——本 RPC 返回 queued 形态）。
 	CreateTask(context.Context, *CreateTaskRequest) (*CreateTaskResponse, error)
 	// GetTask 取单个任务视图（env 只在本面回显；他令牌的任务 404）。
 	GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error)

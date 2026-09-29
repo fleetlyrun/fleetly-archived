@@ -24,7 +24,7 @@
 #
 #   ── W5-S4 ACME DNS-01 形态腿（AC-*，D-V3W5-3/D-V3W5-4 设置面往返+联动门；
 #   跑在 TLS-8 的 off 态实例上——该实例配置携带 base_domain=e2e.test 且
-#   ingress.acme.enabled: false（签发 duty 惰性——设置面与签发面解耦）：
+#   ingress.acme.enabled: false（签发控制器惰性——设置面与签发面解耦）：
 #   AC-1  provider 门（负向）：acme.dns.provider=none 时 wildcard on →
 #         422 E_ACME_WILDCARD_REQUIRES_PROVIDER（通配必须 DNS-01）。
 #   AC-2  设置缺省态读面：acme show = provider none + 凭证 not set +

@@ -11,7 +11,7 @@ import (
 )
 
 // TestLoadLogsSettingsDefault 空库/未设置 → 缺省态（Backend=victorialogs，
-// Set=false）——未显式设置过的存量安装升级后 duty 即部署 VL 的语义锚。
+// Set=false）——未显式设置过的存量安装升级后收敛管理器即部署 VL 的语义锚。
 func TestLoadLogsSettingsDefault(t *testing.T) {
 	st := newSettingsStore(t)
 	in, err := st.LoadLogsSettings(context.Background())

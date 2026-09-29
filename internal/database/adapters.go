@@ -127,7 +127,7 @@ type engineTools struct {
 	// 与的取回脚本——同一槽位的引擎内实现细节）。
 	restoreScript func(tpl dbtemplate.Template, in dbtemplate.RestoreInput) ([]string, error)
 	// rotate 是引擎侧热轮换原语（rotate.go 的一次性容器 job 实现）。
-	// nil = 引擎无引擎侧动作（Redis：凭据 = spec 启动参数，收敛 duty 按
+	// nil = 引擎无引擎侧动作（Redis：凭据 = spec 启动参数，收敛循环按
 	// desired-hash 差异重建承载）——测试钉死 nil 当且仅当 Redis（新引擎
 	// 不得静默无动作）。
 	rotate func(m *Manager, ctx context.Context, inst *state.DatabaseInstance, image, old, new string) error
@@ -711,7 +711,7 @@ func restoreMongoJobScript(tpl dbtemplate.Template, in dbtemplate.RestoreInput) 
 // RotateCredential 引擎侧热轮换（dbtemplate.EngineAdapter 契约——薄委托
 // rotate.go 的既有原语，接口非装饰）：PG = 一次性容器 ALTER USER；MySQL =
 // 一次性容器 ALTER USER（fleetly@'%'）；Mongo = 一次性容器 updateUser
-// （admin 库）；Redis = 无引擎侧动作（spec 启动参数投递，收敛 duty 按哈
+// （admin 库）；Redis = 无引擎侧动作（spec 启动参数投递，收敛循环按哈
 // 希差换挂）。
 func (m *Manager) RotateCredential(ctx context.Context, in dbtemplate.RotateInput) error {
 	inst, err := m.store.GetDatabaseInstanceByName(ctx, in.Instance)

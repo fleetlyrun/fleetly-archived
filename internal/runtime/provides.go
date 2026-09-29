@@ -142,7 +142,7 @@ func NewStore(cfg *AppConfig) (*state.Store, func(), error) {
 // 连接资源由 Wire cleanup 释放。base_domain 非空时装配平台 registry 适配
 // （E1-4/E1-5）：registry 模式镜像引用经 manifest HEAD 前哨核验、service
 // 写自动附带 --with-registry-auth 凭据（惰性现读 registry.auth_file——
-// 凭据可能由 zot 部署 duty 晚于装配期生成）；单节点不装配（零行为差异）。
+// 凭据可能由 zot 部署控制器 晚于装配期生成）；单节点不装配（零行为差异）。
 // IMPL-T1-2/DT-2：装配外部 registry 凭证读取缝（state registry.* 设置
 // 现读 + Box 解密；保存即对下一次部署生效——tag 解析与 service 写两处
 // 消费）与回落留痕（registry 腿失败回落本机 inspect 的日志）。
@@ -198,7 +198,7 @@ func NewNodeIdentity(app lynx.App, st *state.Store, dc state.DockerClient) *stat
 }
 
 // NewObserver 构造节点观测缓存刷新器（30s 全量 resync + 事件驱动失效，
-// 底座不可达置 stale + 指数退避），并挂观测拍后处理 = 集群锚定 duty
+// 底座不可达置 stale + 指数退避），并挂观测拍后处理 = 集群锚定循环
 // （ClusterAnchor：worker 身份收编 + node.* 差分事件，multi-node §2.7
 // E1-6）+ auto-rotate 触发链（D-MN-1：mode 取 join.token_rotate 归一值
 // ——auto 缺省，manual 显式 opt-out；轮换端口 = substrate 客户端，state
@@ -253,7 +253,7 @@ func NewSecretsBox(app lynx.App, cfg *AppConfig) (*secrets.Box, error) {
 	return box, nil
 }
 
-// NewRustfsManager 构建托管 RustFS duty 管理器（E3-5，D-S3-7：s3.mode=
+// NewRustfsManager 构建托管 RustFS 收敛管理器（E3-5，D-S3-7：s3.mode=
 // rustfs 时幂等部署/收敛 fleetly-rustfs，mode 离开时移除服务保留卷；
 // 常驻收敛循环由服务壳 Start 承载，资源层——晚于 engine 停）。自建
 // Docker 连接（zot 部署器同款形态），cleanup 释放；探针/建桶容器执行器
@@ -273,7 +273,7 @@ func NewVictorialogsBackend() *victorialogs.Backend {
 	return victorialogs.NewBackend()
 }
 
-// NewVictorialogsManager 构建托管 VictoriaLogs duty 管理器（E6 W5-S1，
+// NewVictorialogsManager 构建托管 VictoriaLogs 收敛管理器（E6 W5-S1，
 // 设计 §2.1：logs.backend=victorialogs〔缺省〕时幂等部署/收敛
 // fleetly-victorialogs——单副本钉 manager、卷/内部网络/host-mode 回环发布
 // 9428、-retentionPeriod 对齐 logs.retention_days；切回 jsonl 移除服务
@@ -292,13 +292,13 @@ func NewVictorialogsManager(app lynx.App, cfg *AppConfig, st *state.Store, vl *v
 }
 
 // NewMetricsBackend 构造 VM 回环查询消费端（E6 W5-S3：SearchMetrics 的
-// 查询后端与 duty 健康拨测共用——指向 127.0.0.1:8428，D-W5-4 等价承载
+// 查询后端与收敛管理器健康拨测共用——指向 127.0.0.1:8428，D-W5-4 等价承载
 // 形态的宿主可达面；无状态，无资源释放）。
 func NewMetricsBackend() *metrics.Backend {
 	return metrics.NewBackend()
 }
 
-// NewMetricsManager 构建托管 metrics 栈 duty 管理器（E6 W5-S3，设计 §4.1，
+// NewMetricsManager 构建托管 metrics 栈收敛管理器（E6 W5-S3，设计 §4.1，
 // D-W5-2 opt-in：metrics.mode=on 时幂等部署/收敛三件——VM 单副本钉
 // manager/卷/host 网络回环监听 8428/-retentionPeriod 对齐 metrics.
 // retention_days/-promscrape.config 经 swarm config 对象分发；cAdvisor 与
@@ -329,7 +329,7 @@ func NewMetricsManager(app lynx.App, cfg *AppConfig, st *state.Store, mb *metric
 	return mgr, cleanup, nil
 }
 
-// NewDatabaseManager 构建库实例收敛 duty 管理器（E4 W4-S2，managed-
+// NewDatabaseManager 构建库实例收敛管理器（E4 W4-S2，managed-
 // databases §2.1/§2.3 的 provisioner：按生命周期态分派收敛——provisioning
 // 建现场过健康门、ready/degraded 健康观察、paused 保持 scale-0、deleting
 // 幂等 reap；状态写全部经 state.EnterDbPhase 单写点）。自建 Docker 连接
@@ -388,7 +388,7 @@ func NewPlacementResolver(st *state.Store, dc state.DockerClient) *placement.Res
 // W5-S3：DNS-01 插件解析缝随 envelope 解密器接线（dns01.go）——读 acme.*
 // 设置 → 解密凭证 → acmedns.New（零第三方 SDK 插件）；每签发现读（凭证
 // 轮换即生效）；provider 未配置/解密失败显式报错（wildcard 签发诚实失败，
-// duty 退避重试，不回落 HTTP-01）。
+// 收敛循环退避重试，不回落 HTTP-01）。
 func NewIngressManager(app lynx.App, cfg *AppConfig, st *state.Store, sb *secrets.Box) (*ingress.Manager, func(), error) {
 	mgr, cleanup, err := ingress.NewManager(cfg.IngressSettings(), st, app.Logger())
 	if err != nil {
@@ -421,7 +421,7 @@ func NewIngressManager(app lynx.App, cfg *AppConfig, st *state.Store, sb *secret
 // 2026-09-29 评审 C6 归位——载荷翻译在 internal/ingress/routepublisher.go，
 // 装配层只接线）。mb 是 VM 回环查询消费端（W5-S1 自动扩缩评估器的数据面
 // ——经 WithMetricsQuerier 注入 engine.MetricsQuerier 端口；nil = 扩缩
-// duty 空转，装配形态诚实空转不冒充运行态）。
+// 空转，装配形态诚实空转不冒充运行态）。
 func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Client, pl *placement.Resolver, box *secrets.Box, m *ingress.Manager, bm *statebackup.Manager, lm *logs.Manager, mb *metrics.Backend) *engine.Engine {
 	settings := cfg.EngineSettings()
 	// 控制面地址注入（ctrlinject.go：集群内工作负载回拨控制面的零配置
@@ -475,7 +475,7 @@ func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Clie
 		// IMPL-T15-1（OT-1）：底座网络对象面端口（项目网 ensure/对账/GC）
 		// + recon networks 面的平台组件网白名单（组件固定名常量在此注入
 		// ——engine 不 import ingress，方向纪律；组件网生命周期归各组件
-		// duty，网络对账不判罚）。
+		// 管理器，网络对账不判罚）。
 		WithNetworkSubstrate(sc).
 		WithPlatformNetworks(state.RustfsNetworkName, ingress.RegistryNetworkName)
 }
@@ -557,7 +557,7 @@ func NewExecRelayHub(app lynx.App, cfg *AppConfig, st *state.Store, tasks execre
 	})
 }
 
-// NewExecRelayManager 构建托管 relay duty 管理器（E7 W5-S6，web-terminal
+// NewExecRelayManager 构建托管 relay 收敛管理器（E7 W5-S6，web-terminal
 // §2.1：terminal.enabled=true 时幂等收敛 global 服务 fleetly-exec；false 时
 // 移除。集群 token secret 首拍生成、哈希落 meta。wss 校验名 = 平台 TLS 模式
 // 为 platform 时下发的 ctrl.<base>——off/manual 诚实降级为 ws:// 明文，设计
@@ -605,7 +605,7 @@ func NewCronService(st *state.Store, cm *cron.Manager) *api.CronService {
 
 // NewDatabaseService 构造库实例资源面服务（E4 W4-S2：受理/守卫/脱敏投影
 // ——box 承载凭据生成与指纹；kicker = database.Manager——受理后即时触发
-// 收敛拍，收敛本体由 duty 异步承载。W4-S4 增补 rotator = 同一 Manager——
+// 收敛拍，收敛本体由收敛循环异步承载。W4-S4 增补 rotator = 同一 Manager——
 // 轮换编排（引擎侧 job/收敛触发/引用重部署）在底座邻接层，api 只受理与
 // 审计。W4-S5 增补 ops = 同一 Manager——备份/恢复/升级编排（一次性 job/
 // 备份门/健康门/归位）同款形态）。
@@ -679,9 +679,9 @@ func NewRuntimeService(st *state.Store, eng *engine.Engine) *api.RuntimeService 
 // E3-2：S3 设置面随 envelope 加解密器接线（secret 密文落库/指纹读面/探针
 // 解密）；baseDomain 同供 s3.public_exposed 门禁（E_S3_PUBLIC_REQUIRES_
 // BASE_DOMAIN）。E3-5：托管 RustFS 组件（objectstore.rustfs）与 TestConnection
-// 的 rustfs 分支随 duty 管理器接线——mode=rustfs 且服务未在位 = 红（收敛
+// 的 rustfs 分支随收敛管理器接线——mode=rustfs 且服务未在位 = 红（收敛
 // 过渡态如实可见）；mode 非 rustfs = 无所欠恒绿。E6 W5-S1：victorialogs
-// 组件随 duty 管理器与日志管线接线（设计 §2.3：healthy = duty 部署符合
+// 组件随收敛管理器与日志管线接线（设计 §2.3：healthy = 管理器部署符合
 // 预期且 ingest streak 无降级；降级时 Error 带丢弃计数——诚实红面）。E6
 // W5-S4：notifications 组件随投递器接线（设计 §5.2——启用端点连续终败即
 // 红，Error 带端点名与最近错误；无终败 = 无所欠恒绿）。
@@ -774,14 +774,14 @@ func NewEnvService(st *state.Store, sb *secrets.Box, lm *logs.Manager) *api.EnvS
 }
 
 // NewLogsService 构造日志面服务（T2.20：Follow/History 接管线管理器）。
-// W5-S1：注入 VL 消费端与 duty 管理器（SearchLogs 检索面 + backend 视图
+// W5-S1：注入 VL 消费端与收敛管理器（SearchLogs 检索面 + backend 视图
 // 的部署态——nil 形态如实报不可用/unknown）。
 func NewLogsService(st *state.Store, mg *logs.Manager, vl *victorialogs.Backend, vm *victorialogs.Manager) *api.LogsService {
 	return api.NewLogsService(st, mg).WithVictorialogs(vl, vm)
 }
 
 // NewMetricsService 构造 metrics 面服务（E6 W5-S3，D-W5-2 opt-in：PromQL
-// 查询透传面 + 状态视图 + 模式切换；注入 VM 消费端与 duty 管理器——nil
+// 查询透传面 + 状态视图 + 模式切换；注入 VM 消费端与收敛管理器——nil
 // 形态如实报不可用/unknown。retention 对齐 metrics.* 配置节；集群节点
 // 总数 = 观测缓存计数（展示/诊断读面，非决策路径）——「N/M nodes
 // reporting」的分母；§6 挂账票修订后分母口径与抓取目标集一致 = Ready 且
@@ -820,15 +820,15 @@ func NewNotificationsService(st *state.Store, sb *secrets.Box) *api.Notification
 
 // NewAlertingService 构造告警面服务（B 线 W5-S2，D-V3W5-1：规则 CRUD +
 // alerts.mode 开关 + 栈状态视图 + TestAlertRule 即时求值——查询后端与
-// metrics duty 管理器注入，与 NewMetricsService 同款装配缝）。
+// metrics 收敛管理器注入，与 NewMetricsService 同款装配缝）。
 func NewAlertingService(st *state.Store, mb *metrics.Backend, mm *metrics.Manager) *api.AlertingService {
 	return api.NewAlertingService(st).WithBackend(mb, mm)
 }
 
 // NewExecService 构造 Web 终端受理面服务（E7 W5-S6：ticket 签发 + 状态
-// 视图——整体 terminal scope；注入 relay duty 管理器承接 status 部署态）。
+// 视图——整体 terminal scope；注入 relay 部署收敛管理器承接 status 部署态）。
 func NewExecService(st *state.Store, hub *execrelay.Hub, erm *execrelay.Manager) *api.ExecService {
-	return api.NewExecService(st, hub).WithDutyManager(erm)
+	return api.NewExecService(st, hub).WithRelayManager(erm)
 }
 
 // NewTerminalNativeHandler 构造 Web 终端 native 端点 handler（E7 W5-S6：
@@ -1089,7 +1089,7 @@ func NewServices(
 		newLogsService(lm),
 		newNotifyService(nm),
 		// ── 第三段：资源层（最后停：backup 晚于 engine 等 post-deploy
-		//     在途快照；rustfs/victorialogs/database 收敛 duty 同层——在途
+		//     在途快照；rustfs/victorialogs/database 收敛循环同层——在途
 		//     收敛拍随 ctx 排水；cron 调度器同层——触发链与收口拍随 ctx
 		//     排水，残留 job 由下次启动首拍收口兜底；store 最后）──
 		newIdentityService(id),

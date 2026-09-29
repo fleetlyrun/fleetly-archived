@@ -16,7 +16,7 @@ import (
 // v0.3 W5-S2）：告警规则 CRUD + alerts.mode 开关 + 栈状态视图 + TestAlertRule
 //（VM instant query 直接执行 expr——规则编写的即时校验面）。
 //
-// 本服务是纯受理/投影面：规则渲染与 vmalert 部署由 metrics duty 承载，告警
+// 本服务是纯受理/投影面：规则渲染与 vmalert 部署由 metrics 管理器承载，告警
 // 投递由接收器（runtime）→ notify 管线承载。mb/mm 可为 nil（测试/精简装配
 // ——TestAlertRule 如实报后端不可用，status 部署态如实报 unknown）。
 type AlertingService struct {
@@ -24,7 +24,7 @@ type AlertingService struct {
 	st *state.Store
 	// mb 是 VM 查询消费端（nil = 未装配——TestAlertRule 如实报不可用）。
 	mb *metrics.Backend
-	// mm 是 metrics duty 管理器（nil = 未装配——status 部署态如实报 unknown）。
+	// mm 是 metrics 收敛管理器（nil = 未装配——status 部署态如实报 unknown）。
 	mm *metrics.Manager
 }
 
@@ -33,7 +33,7 @@ func NewAlertingService(st *state.Store) *AlertingService {
 	return &AlertingService{st: st}
 }
 
-// WithBackend 注入 VM 消费端与 duty 管理器（链式装配，nil 合法）。
+// WithBackend 注入 VM 消费端与收敛管理器（链式装配，nil 合法）。
 func (s *AlertingService) WithBackend(mb *metrics.Backend, mm *metrics.Manager) *AlertingService {
 	s.mb = mb
 	s.mm = mm
@@ -102,7 +102,7 @@ func (s *AlertingService) UpdateAlertRule(ctx context.Context, req *serverv1.Upd
 	return &serverv1.UpdateAlertRuleResponse{Rule: alertRuleView(r)}, nil
 }
 
-// DeleteAlertRule 删除规则（写面平台门；duty 下一拍重渲染规则文件）。
+// DeleteAlertRule 删除规则（写面平台门；收敛循环下一拍重渲染规则文件）。
 func (s *AlertingService) DeleteAlertRule(ctx context.Context, req *serverv1.DeleteAlertRuleRequest) (*serverv1.DeleteAlertRuleResponse, error) {
 	if err := requirePlatformWriteFace(ctx, s.st); err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (s *AlertingService) DeleteAlertRule(ctx context.Context, req *serverv1.Del
 
 // SetAlertsMode 切换 alerts.mode（unset | on）：前置门 metrics.mode=on 在
 // state 层（409 E_ALERTS_METRICS_REQUIRED 信封透传）；设置保存 + 审计同
-// 事务，duty 下一拍收敛（部署 vmalert + 规则文件，或移除）。
+// 事务，收敛循环下一拍收敛（部署 vmalert + 规则文件，或移除）。
 func (s *AlertingService) SetAlertsMode(ctx context.Context, req *serverv1.SetAlertsModeRequest) (*serverv1.SetAlertsModeResponse, error) {
 	if err := requirePlatformWriteFace(ctx, s.st); err != nil {
 		return nil, err

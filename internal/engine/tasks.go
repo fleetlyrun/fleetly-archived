@@ -12,11 +12,11 @@ package engine
 //     网络必须已在位（缺失 = 确定性失败，不代建）——per-task 动态 attach
 //     在类型层不存在。
 //  2. 受理（API 层）：state 行（queued）+ 配额 fail-closed；env 密文入行。
-//  3. 收敛（advanceTasks duty，每 tick）：queued → 底座服务 create → running；
+//  3. 收敛（advanceTasks 步，每 tick）：queued → 底座服务 create → running；
 //     running → 任务失败/自然退出检测（failed / stopped）；stopping/deleting
 //     → 服务移除 → stopped / 行删除。幂等、瞬态读错重试、确定性错误立即
 //     failed（不无限重试）。
-//  4. TTL 回收（reapExpiredTasks duty）：到期 → stopping + task.expired 事件
+//  4. TTL 回收（reapExpiredTasks 步）：到期 → stopping + task.expired 事件
 //     （timeout 参数建议沿 T2-0③：TTL ≥1min、默认 10min、tick 2s/30s 窗口
 //     可覆盖，stop_grace_period 显式钉 5s）。
 //  5. 对账（reconTasks，substrateRecon 同拍）：底座带任务 label 的服务在
@@ -294,7 +294,7 @@ func (e *Engine) taskNetworkProjection(ctx context.Context, appID string) (map[s
 
 // reapExpiredTasks 回收到期任务：queued/running 且 expires_at ≤ now →
 // stopping（reason=expired）+ task.expired 事件；随后的 advanceTasks 拍
-// 移除底座服务并落 stopped。sub 未接线 = duty 空转（单测/精简装配）。
+// 移除底座服务并落 stopped。sub 未接线 = 本步空转（单测/精简装配）。
 func (e *Engine) reapExpiredTasks(ctx context.Context) {
 	if e.sub == nil {
 		return

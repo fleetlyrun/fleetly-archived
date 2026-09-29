@@ -54,7 +54,7 @@ const (
 	stdinBufferDepth = 256
 )
 
-// DefaultTokenPath 是集群 token secret 文件的缺省挂载路径（duty spec 的
+// DefaultTokenPath 是集群 token secret 文件的缺省挂载路径（部署 spec 的
 // secret target 同锚）。
 const DefaultTokenPath = "/run/secrets/fleetly-exec-token" //nolint:gosec // G101：secret 挂载路径常量，非凭据
 
@@ -78,7 +78,7 @@ func (l SessionLimits) normalized() SessionLimits {
 // RelayConfig 是 relay 运行时配置（env 解析后的 typed 形态；单测直接构造）。
 type RelayConfig struct {
 	// ControlAddr 是控制面地址 host:port（native HTTP 面——FLEETLY_CONTROL_ADDR，
-	// duty 渲染 spec 时注入 advertise 地址）。
+	// 部署收敛渲染 spec 时注入 advertise 地址）。
 	ControlAddr string
 	// TLSName 非空 = wss:// 且按此名做服务器证书校验（平台证书 SAN 主机名
 	// ctrl.<base>，FLEETLY_CONTROL_TLS_NAME 下发——拨 IP 但按 SAN 名校验，

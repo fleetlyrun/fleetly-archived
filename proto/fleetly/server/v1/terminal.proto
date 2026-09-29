@@ -76,7 +76,7 @@ message CreateTerminalTicketResponse {
 message GetTerminalStatusRequest {}
 
 message GetTerminalStatusResponse {
-  // 终端功能是否启用（config terminal.enabled；false = duty 不部署 relay，
+  // 终端功能是否启用（config terminal.enabled；false = 不部署 relay，
   // CreateTerminalTicket 报 E_TERMINAL_DISABLED）。
   bool enabled = 1;
   // fleetly-exec relay 服务部署态（global 服务在位与否）。

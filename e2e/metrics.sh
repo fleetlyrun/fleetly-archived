@@ -8,7 +8,7 @@
 #   fleetlyd 起服 → 全部断言经 dind 内的 docker/fleetly CLI/REST 驱动：
 #
 #   A1 缺省零常驻（D-W5-2 opt-in：metrics.mode 未显式设置 = unset 生效）：
-#      duty 拍后三件服务全不在 + `metrics status` 读 unset。
+#      收敛拍后三件服务全不在 + `metrics status` 读 unset。
 #   A2 `metrics mode set on` 受理（deploy scope 走 bootstrap token 通畅）。
 #   A3 三件收敛（fleetly-cadvisor / fleetly-node-exporter / fleetly-
 #      victoriametrics 全部 Running；首跑含镜像拉取，重试窗放宽）。
@@ -322,7 +322,7 @@ FOUNDER_PROJECT="$FOUNDER_TEAM/$FOUNDER_PRJ"
 nl 'founder registered (platform admin); machine token minted; project context '"'"'"$FOUNDER_PROJECT"'"'"''
 
 
-# ───────── A1: 缺省零常驻（D-W5-2 opt-in——unset 生效，duty 无所欠）
+# ───────── A1: 缺省零常驻（D-W5-2 opt-in——unset 生效，收敛管理器无所欠）
 nl '=== A1: default (unset) deploys nothing ==='
 nothing_deployed() {
     names=$(m docker service ls --format '{{.Name}}' 2>/dev/null)
@@ -331,7 +331,7 @@ nothing_deployed() {
     printf '%s' "$names" | grep -q 'fleetly-victoriametrics' && return 1
     return 0
 }
-# 给 duty 留两拍（30s 退避窗的短侧）确认不是过渡态。
+# 给收敛循环留两拍（30s 退避窗的短侧）确认不是过渡态。
 sleep 20
 if nothing_deployed; then
     assert "MET-A1 DEFAULT_UNSET_NOTHING_DEPLOYED" 0
@@ -351,7 +351,7 @@ else
 fi
 
 # ───────── A3: mode set on（opt-in 置位；受理即返回，收敛异步）
-# set 是幂等 upsert——启动拍若与其他 duty 的库写并发冲突（busy）可重试。
+# set 是幂等 upsert——启动拍若与其他收敛循环的库写并发冲突（busy）可重试。
 nl '=== A3: metrics mode set on ==='
 mode_set_ok() {
     fcli metrics mode set on >/dev/null 2>&1

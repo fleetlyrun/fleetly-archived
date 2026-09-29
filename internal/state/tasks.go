@@ -5,7 +5,7 @@ package state
 //（每令牌并发/资源配额覆盖）。
 //
 // 纪律：
-//   - 本表是任务状态机的唯一写点（API 受理/停止/删除 + 引擎 tick duty 收敛
+//   - 本表是任务状态机的唯一写点（API 受理/停止/删除 + 引擎 tick 收敛
 //     全部经本文件原语）；每次转移与审计/事件同事务 fail-closed（Outbox）；
 //     状态写经单点内核 updateTask——必须携带 PrevStatus（裸状态写结构性拒
 //     绝），CAS 前按 machine.go taskTransitions 校验（IMPL-ARCH-C2，纪律
@@ -310,7 +310,7 @@ func (s *Store) ListTasks(ctx context.Context, ownerTokenID string, includeTermi
 		ownerTokenID, limit)
 }
 
-// ListNonTerminalTasks 返回全部非终态任务（引擎收敛 duty 的工作集；跨令牌
+// ListNonTerminalTasks 返回全部非终态任务（引擎收敛循环 的工作集；跨令牌
 // ——收敛是平台职责，配额/隔离在 API 面收口）。
 func (s *Store) ListNonTerminalTasks(ctx context.Context, limit int) ([]Task, error) {
 	if limit <= 0 {
@@ -675,7 +675,7 @@ func (s *Store) DeleteTaskRow(ctx context.Context, id string) (bool, error) {
 }
 
 // PruneTerminalTasksOlderThan 回收超保留窗的终态任务台账行（state janitor
-// 的保留期 duty；返回删除行数——事件/审计随行删除不回溯）。
+// 的保留期步；返回删除行数——事件/审计随行删除不回溯）。
 func (s *Store) PruneTerminalTasksOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM tasks WHERE status IN ('stopped','failed') AND COALESCE(stopped_at, created_at) < ?`,

@@ -54,9 +54,9 @@ const (
 // http://rustfs:9000，path-style；平台单桶）。S3 各消费面共用（api 探针
 // storedS3Endpoint、备份上传轨 resticTarget——E3-3，凭证注入引擎面——E3-4），
 // 单一事实源在本包。RustfsNetworkName 是托管 RustFS 的内部 overlay 网络
-//（E3-5 duty 创建，attachable——restic 上传轨一次性容器经它入网）；
+//（E3-5 管理器创建，attachable——restic 上传轨一次性容器经它入网）；
 // 应用注入面（E3-4）与上传轨消费同名网络。端点 host 段 `rustfs` 是
-// network alias（internal/rustfs duty 的服务 alias），两者必须一致——
+// network alias（internal/rustfs 管理器的服务 alias），两者必须一致——
 // internal/rustfs 的测试钉住该不变量。
 const (
 	RustfsEndpointURL = "http://rustfs:9000"

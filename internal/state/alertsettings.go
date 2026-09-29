@@ -16,12 +16,12 @@ import (
 //
 // 缺省语义（与 metrics.mode 同型的 opt-in）：alerts.mode 未显式设置 = 缺省
 // `unset`——vmalert 不部署（metrics 三件套有自己的 opt-in 门，两层独立）；
-// 显式 `on` 后 metrics duty 在三件之外加部署 vmalert。
+// 显式 `on` 后 metrics 管理器在三件之外加部署 vmalert。
 //
 // 前置门（设计 §2.1 原文）：alerts.mode=on 的**前置门 = metrics.mode=on**
 // ——vmalert 没有 datasource 无意义；metrics.mode 非 on 时设置拒绝 409
 //（E_ALERTS_METRICS_REQUIRED，带指引）。反向（metrics 先关而 alerts 仍
-// on）不在设置门拦截：duty 收敛以「两门同为 on」为 vmalert 应许态，metrics
+// on）不在设置门拦截：收敛管理器以「两门同为 on」为 vmalert 应许态，metrics
 // 关闭即 vmalert 一并移除（status 面如实投影），metrics 回 on 自动恢复。
 
 // AlertsKeyMode 是 alerts 模式设置键（词表只增；键名常量为本包唯一登记点）。

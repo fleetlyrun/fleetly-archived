@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -52,7 +52,7 @@ func runBackupToLedger(t *testing.T, h *harness, inst state.DatabaseInstance) Jo
 func TestMySQLBackupJobSpec(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("my-bk", dbtemplate.TemplateMySQL84)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	j := runBackupToLedger(t, h, inst)
 
@@ -103,7 +103,7 @@ func TestMySQLBackupJobSpec(t *testing.T) {
 func TestMongoBackupJobSpec(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("mo-bk", dbtemplate.TemplateMongoDB80)
-	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dockerapi.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	j := runBackupToLedger(t, h, inst)
 

@@ -105,7 +105,7 @@
     },
     "/v1/alerting/rules/{id}": {
       "delete": {
-        "summary": "DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。",
+        "summary": "DeleteAlertRule 删除规则（收敛管理器下一拍重渲染规则文件）。",
         "operationId": "AlertingService_DeleteAlertRule",
         "responses": {
           "200": {
@@ -387,7 +387,7 @@
         },
         "vmalert_exists": {
           "type": "boolean",
-          "title": "vmalert 服务部署态（mode=on 且 exists=false = duty 收敛中——过渡态）。"
+          "title": "vmalert 服务部署态（mode=on 且 exists=false = 后台收敛中——过渡态）。"
         },
         "vmalert_image": {
           "type": "string"

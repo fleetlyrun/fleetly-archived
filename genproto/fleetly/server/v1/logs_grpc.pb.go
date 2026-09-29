@@ -56,7 +56,7 @@ type LogsServiceClient interface {
 	// ingest streak / 丢弃计数——CLI `logs backend show` 与 Console 卡共面）。
 	GetLogsBackend(ctx context.Context, in *GetLogsBackendRequest, opts ...grpc.CallOption) (*GetLogsBackendResponse, error)
 	// SetLogsBackend 切换日志后端（victorialogs | jsonl）：保存即生效——
-	// duty 收敛部署/移除（卷保留），采集路由下拍切换。
+	// 后台收敛部署/移除（卷保留），采集路由下拍切换。
 	SetLogsBackend(ctx context.Context, in *SetLogsBackendRequest, opts ...grpc.CallOption) (*SetLogsBackendResponse, error)
 }
 
@@ -157,7 +157,7 @@ type LogsServiceServer interface {
 	// ingest streak / 丢弃计数——CLI `logs backend show` 与 Console 卡共面）。
 	GetLogsBackend(context.Context, *GetLogsBackendRequest) (*GetLogsBackendResponse, error)
 	// SetLogsBackend 切换日志后端（victorialogs | jsonl）：保存即生效——
-	// duty 收敛部署/移除（卷保留），采集路由下拍切换。
+	// 后台收敛部署/移除（卷保留），采集路由下拍切换。
 	SetLogsBackend(context.Context, *SetLogsBackendRequest) (*SetLogsBackendResponse, error)
 	mustEmbedUnimplementedLogsServiceServer()
 }

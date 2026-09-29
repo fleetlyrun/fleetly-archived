@@ -113,12 +113,14 @@
 | --- | --- | --- |
 | **confirm_destructive** | 破坏性变更确认门控（服务删除/卷解绑需显式置位放行） | deployments.proto、CLI `--confirm-destructive`、`E_DEPLOY_CONFIRM_REQUIRED` |
 | **phase baseline** | 阶段预算基线（`phase_started_at`，拾取时刻；排队不计入预算） | 时间词，不得称 anchor/锚点 |
-| **tombstone / reap** | app 删除第二拍（deleting → deleted + 受管服务移除）；`reap` 是 tombstone 回收 duty（非保留期删除，不与 prune 混用） | eventcode `app.deleted`、internal/engine/appdelete.go |
+| **tombstone / reap** | app 删除第二拍（deleting → deleted + 受管服务移除）；`reap` 是 tombstone 回收步（非保留期删除，不与 prune 混用） | eventcode `app.deleted`、internal/engine/appdelete.go |
 | **last-admin guard** | 吊销最后一枚 admin token 的守卫（409） | `E_TOKEN_LAST_ADMIN` |
 | **context_roots** | 构建上下文信任边界扩根（显式配置） | build 配置键 |
 | **route withdraw** | 路由撤销（app 删除/域名移除路径；与 publish 成对） | 当前无 `route.withdraw` 事件/审计，记为待补对端 |
 | **stale_nonterminal** | 非终态超龄显性化告警（janitor，不自愈） | engine/build 事件 |
 | **ingress configRevision** | ingress 配置代次（内部计数），与平台 revision 严格分开 | 仅 internal/ingress |
+| **converge（收敛）** | 一拍把实况推向期望态的动作（`Ensure`/`converge`）；承载它的常驻循环叫收敛循环（受管组件侧的 Manager / ingress 的 controller），拍尾附属动作叫「步」（备份调度/公告/扩缩） | 英文标识符 converge/Ensure，中文文档「收敛」 |
+| **duty（已退役）** | 2026-09-29 前对「常驻收敛职责循环」的旧称；代码与活文档已全面改写（管理器/controller/步），带日期设计文档与 plan 保留旧称属历史记录 | 读旧文档时对照：duty ≈ 收敛循环/管理器；共享包 dutydocker 已更名 dockerapi |
 
 ### 命名规则补遗
 

@@ -107,14 +107,14 @@ type fakeSubstrate struct {
 	// 原无 recover）。
 	panicServiceList bool
 	// failServiceListErr 注入 ServiceList 瞬态错误（H10/MG-3 测试：deleting
-	// 回收 duty 的底座瞬态重试路径——非 nil 即返回错误，模拟 dockerd 短暂
+	// 回收步的底座瞬态重试路径——非 nil 即返回错误，模拟 dockerd 短暂
 	// 不可达）。
 	failServiceListErr error
 	// failInspectErr 注入 ServiceInspect 瞬态错误（T0-V2.2 存在性对账测试：
-	// 非 nil 即返回——模拟 dockerd 超时/不可达；对账 duty 必须把它与服务
+	// 非 nil 即返回——模拟 dockerd 超时/不可达；对账步 必须把它与服务
 	// 缺失区分，不得发事件、不得改派生态）。
 	failInspectErr error
-	// serviceListCalls 是 ServiceList 的调用计数（H10/MG-3 频控断言：duty
+	// serviceListCalls 是 ServiceList 的调用计数（H10/MG-3 频控断言：回收步
 	// 时间闸内的拍子不应触达底座）。
 	serviceListCalls int
 	// inspectCalls 是 ServiceInspect 的调用计数（T0-V2.2 存在性对账频控
@@ -606,7 +606,7 @@ type fakeNetworkSubstrate struct {
 	failListErr error
 	// failInspectErr 注入 NetworkInspect 瞬态错误（GC 读错不动作断言面）。
 	failInspectErr error
-	// ensures 记录 ensure 调用序列（收敛 duty 断言面）。
+	// ensures 记录 ensure 调用序列（收敛步断言面）。
 	ensures []string
 	// removes 记录 remove 调用序列（回收断言面）。
 	removes []string

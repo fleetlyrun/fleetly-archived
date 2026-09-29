@@ -105,7 +105,7 @@ type Config struct {
 	RegistryHost string
 	// RegistryAuthFile 是平台 registry 凭据文件路径（registry.auth_file；
 	// `<user>:<password>` 单行 0600，ingress 部署器生成）。registry 模式
-	// 构建执行时读取（凭据可能晚于装配期才生成——zot 部署 duty 的产物），
+	// 构建执行时读取（凭据可能晚于装配期才生成——zot 部署控制器 的产物），
 	// 经 buildkit session 注入推送凭据；文件缺失/损坏 → 构建终态失败
 	//（E_REGISTRY_PUSH_FAILED）。
 	RegistryAuthFile string

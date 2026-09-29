@@ -89,10 +89,10 @@ Console 入口：`http://dev.fleetly.run:8420/ui/`（8420 为明文 HTTP——�
 
 | 断言/能力 | 实录 | 结果 |
 |---|---|---|
-| 平台证书 duty | LE 生产,`_fleetly-platform` 多 SAN(ctrl/registry/console) issuer=CN=YE2;8423 TLS 面服务 | ✅ |
+| 平台证书控制器 | LE 生产,`_fleetly-platform` 多 SAN(ctrl/registry/console) issuer=CN=YE2;8423 TLS 面服务 | ✅ |
 | zot 部署器 | fleetly-registry 1/1(v2.1.21 钉版);registry.dev 443 → 401 Basic Auth 挑战 | ✅ |
 | join 向导 | `nodes join-guide` 完整输出(join 命令/防火墙矩阵/DNS 步骤);node2 join 成功 | ✅ |
-| 锚定 duty | node2 自动铸造平台 ID `n_01M30WZY…` + `node.joined` 事件 | ✅ |
+| 锚定循环 | node2 自动铸造平台 ID `n_01M30WZY…` + `node.joined` 事件 | ✅ |
 | **auto-rotate(D-MN-1)** | 日志 `worker join token auto-rotated after new node anchoring, minted:1` | ✅ 真机首跑 |
 | 断言 A(拓扑) | 双节点 Ready、节点观测缓存双行 | ✅ |
 | 断言 C(有状态 drain) | drain→任务受阻(Pending);回岗→**自动回绑 node2**;**marker 数据完好**(真卷带部署后缀 `statedata-01M30X6G`) | ✅(事件面见 F11) |
@@ -116,7 +116,7 @@ Console 入口：`http://dev.fleetly.run:8420/ui/`（8420 为明文 HTTP——�
 
 | 断言/能力 | 实录 | 结果 |
 |---|---|---|
-| rustfs 启用→duty 收敛 | `s3 set --mode rustfs` 后 20s 服务 1/1;`s3.rustfs_deployed` 事件 | ✅ |
+| rustfs 启用→收敛管理器收敛 | `s3 set --mode rustfs` 后 20s 服务 1/1;`s3.rustfs_deployed` 事件 | ✅ |
 | 平台探针(rustfs 面) | `s3 test` 四步 init/backup/snapshots/forget 全绿(修 W3-F1 后二次探针亦绿) | ✅(修后) |
 | 备份上传轨 | manual 备份 `upload=ok`(restic 仓库读回校验);二次上传幂等(W3-F1b 修后);`backup.upload_failed`→`backup.upload_recovered` 事件链真机闭环(见 W3-F3) | ✅ |
 | 凭证注入+网络牵线 | web 容器 6 键 `S3_*` env 全注(endpoint/bucket/双键/path-style 值正确);`nslookup rustfs`→VIP 10.0.6.2;`wget`→HTTP 403(RustFS 应答匿名拒) | ✅ |
@@ -160,7 +160,7 @@ Console 入口：`http://dev.fleetly.run:8420/ui/`（8420 为明文 HTTP——�
 | A7 secrets | set→external 声明部署→`/run/secrets/mytoken` **逐字**;rm→悬空部署 `E_SECRET_NOT_FOUND` 诚实失败 | ✅ |
 | A8 暂停/恢复 | suspend→服务 0/0;resume→ready(16s) | ✅ |
 | A9 删除守卫/reap | 有引用删除→`E_DB_REFERENCED` 409;摘引用重部署→删除→deleted+服务移除+**数据卷 orphaned 保留** | ✅ |
-| A10 预算 | fleetlyd idle 76.9MB(W3 64.4+12.5,database duty 增量);平台零新增常驻组件(D-DB-9:库/作业=用户负载);rustfs 演练后 116.8MiB(restic 负载后,限 256MiB 内) | ✅(轻量口径) |
+| A10 预算 | fleetlyd idle 76.9MB(W3 64.4+12.5,database 收敛管理器增量);平台零新增常驻组件(D-DB-9:库/作业=用户负载);rustfs 演练后 116.8MiB(restic 负载后,限 256MiB 内) | ✅(轻量口径) |
 | Console | /ui 前缀路由 `/ui/databases` 200,新 bundle 含 databases 面 | ✅ |
 
 **v3 结果:35/35(含两处重判)**。v1/v2 的 19+35 处 FAIL 全数归因脚本伤(JSON 取值路径/heredoc 转义/sleep 60 观察窗/缺顶层 secrets 声明/rm 无 confirm 旗标/清场撞 deleted 名字保留期),平台面零缺陷。
@@ -185,7 +185,7 @@ Console 入口：`http://dev.fleetly.run:8420/ui/`（8420 为明文 HTTP——�
 
 控制面双面(8420 HTTP / 8421 gRPC)默认明文;开启 TLS 改 `control_plane.tls.mode`(web 终端专项设计 §3.1,键位注释见 config-example.yaml):
 
-- **platform 模式**(推荐,`base_domain` 非空时):复用平台证书(LE 签发/续期由平台证书 duty 承接),证书续期落盘后约 60s 内热重载(新连接用新证书);证书就绪前 TLS 面照常监听、握手失败(日志有 warn/ready 锚点),等待签发的空窗属正常。
+- **platform 模式**(推荐,`base_domain` 非空时):复用平台证书(LE 签发/续期由平台证书控制器承接),证书续期落盘后约 60s 内热重载(新连接用新证书);证书就绪前 TLS 面照常监听、握手失败(日志有 warn/ready 锚点),等待签发的空窗属正常。
 - **manual 模式**:自备证书对(`cert_file`/`key_file`),启动即校验可读,缺失报错拒绝启动;证书更换需重启生效。
 - 最低协议版本 `control_plane.tls.min_version`(缺省 tls1.2)。不做 mTLS/客户端证书——Bearer token 仍是唯一认证。
 
@@ -204,7 +204,7 @@ Console 入口：`http://dev.fleetly.run:8420/ui/`（8420 为明文 HTTP——�
 
 | 断言/能力 | 实录 | 结果 |
 |---|---|---|
-| VL 默认捆绑升级即生效 | 未显式设置的存量安装升级后 duty 自动部署 fleetly-victorialogs 1/1;`logs backend show` = victorialogs(default)/deployed/**ingest ok**/dropped 0;`logs.victorialogs_deployed` 事件 #348 | ✅ |
+| VL 默认捆绑升级即生效 | 未显式设置的存量安装升级后收敛管理器自动部署 fleetly-victorialogs 1/1;`logs backend show` = victorialogs(default)/deployed/**ingest ok**/dropped 0;`logs.victorialogs_deployed` 事件 #348 | ✅ |
 | 检索面 | 容器日志 `logs search --keyword` 命中(echo 循环 marker 3 行带时间戳);REST SearchLogs 同源 | ✅ |
 | 访问日志归因(R4 载体=VL) | curl hello.dev 域名 → access 行带 method/status/host/path/route/client_ip/duration_ms/**deployment_id**(命中该 app 最近 succeeded 部署) | ✅ |
 | Web 终端(D-W5-3 反向常连) | relay global 1/1;`nodes_connected:1`;termclient 真 PTY `echo` 回显 MATCH;terminal.opened/closed 事件;会话内容零泄漏(事件流 grep 0);打错 app 名(无运行任务)=诚实 500 非 5xx 假成功 | ✅ |

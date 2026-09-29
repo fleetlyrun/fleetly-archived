@@ -25,7 +25,7 @@ func TestRustfsCredentialsRoundtrip(t *testing.T) {
 	if err != nil || !found || a != "ct-access" || k != "ct-secret" {
 		t.Fatalf("roundtrip a=%q k=%q found=%v err=%v, want stored pair", a, k, found, err)
 	}
-	// 覆写（轮换路径：duty 再生成后整对替换）。
+	// 覆写（轮换路径：管理器再生成后整对替换）。
 	if err := st.SaveRustfsCredentialsCiphertext(ctx, "ct-access-2", "ct-secret-2"); err != nil {
 		t.Fatalf("SaveRustfsCredentialsCiphertext (rotate): %v", err)
 	}

@@ -61,9 +61,9 @@ unreachable func: Client.List
 #httpClient 同族注入点随首个真实消费方出现再转正，本批已删）。
 unreachable func: WithBaseURL
 
-# engine：dutyCallCount 是 duty 测试注入缝的读面（safecall_test 等待/断言
-# duty 被调次数）。
-unreachable func: Engine.dutyCallCount
+# engine：stepCallCount 是 tick 步测试注入缝的读面（safecall_test 等待/断言
+# 步被调次数）。
+unreachable func: Engine.stepCallCount
 
 # gitserver：waitIdle 是 webhook worker 的测试同步点（部署行异步落库的
 # 确定性等待，webhook_test 消费）。

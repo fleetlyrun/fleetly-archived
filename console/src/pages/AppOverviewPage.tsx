@@ -81,7 +81,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 // 删除语义取自服务端代码事实（internal/api/apps.go DeleteApp +
 // internal/engine/appdelete.go），如实写进确认文案：
 //   - 第一拍（API 同步）：active → deleting 墓碑 + 路由即时撤销（域名停摆）；
-//   - 第二拍（引擎收敛 duty，约 10s 一拍）：在途部署等终态 → 受管服务逐个
+//   - 第二拍（引擎收敛循环，约 10s 一拍）：在途部署等终态 → 受管服务逐个
 //     移除 → Swarm secret 扫尾 → deleted；失败保持 deleting 下拍重试；
 //   - 数据卷不随删除清理（引擎无卷处理路径）——节点上孤儿保留、可手工恢复；
 //   - app 行不物理删除且名字唯一约束仍在——名字永久占用、不可复用。

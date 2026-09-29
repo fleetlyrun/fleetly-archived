@@ -61,7 +61,7 @@ service LogsService {
     option (fleetly.annotations.v1.scope) = "read";
   }
   // SetLogsBackend 切换日志后端（victorialogs | jsonl）：保存即生效——
-  // duty 收敛部署/移除（卷保留），采集路由下拍切换。
+  // 后台收敛部署/移除（卷保留），采集路由下拍切换。
   rpc SetLogsBackend(SetLogsBackendRequest) returns (SetLogsBackendResponse) {
     option (google.api.http) = { put: "/v1/logs-backend" body: "*" };
     option (fleetly.annotations.v1.scope) = "deploy";
@@ -176,7 +176,7 @@ message LogsBackendView {
   // 该键是否被显式保存过（false = 缺省态生效）。
   bool backend_set = 2;
   // 部署态（backend=victorialogs 时）：deployed（服务在位）| pending
-  //（duty 收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
+  //（后台收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
   //（测试形态）= unknown。
   string deployment = 3;
   // 入湖 streak 是否降级中（VL 不可达——检索降级，直播不受影响）。

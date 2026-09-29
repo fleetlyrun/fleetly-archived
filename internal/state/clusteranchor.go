@@ -13,19 +13,19 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// 锚定 duty（multi-node §2.7/D-MN-8）：worker 平台身份由 manager 收编——
+// 锚定循环（multi-node §2.7/D-MN-8）：worker 平台身份由 manager 收编——
 // 观测拍（observer resync / 事件驱动失效）后对全量快照逐节点：
 //
 //  1. 无 fleetly.node-id label 的节点 → 铸造 n_<ULID> → 写 label（写前
 //     直读版本令牌 + 冲突重试，沿用 NodeIdentity 既有纪律）→ 登记
 //     runtime_node_refs → 审计（identity_created/anchored）。
 //  2. label 已存在 → 以 label 值登记 ref（labels 是持久载体（raft 复制），
-//     SQLite ref 可整表重建——L1/L2 恢复后由本 duty 从 label 反建）。
+//     SQLite ref 可整表重建——L1/L2 恢复后由本循环从 label 反建）。
 //  3. 冲突（swarm 节点已映射到另一平台 ID / label 值撞已有映射 / label
 //     缺失但映射尚在）→ 不自动消解：审计 + 管理面警示日志，人工走
 //     rebind 路径（D-PLC-6 人工 rebind 的集群版）。
 //
-// 本机节点沿用既有锚定（NodeIdentity：meta → label → ref），本 duty 跳过。
+// 本机节点沿用既有锚定（NodeIdentity：meta → label → ref），本循环跳过。
 //
 // node.* 产品事件（§5.3 只增清单）随同一拍差分发出：node.joined（快照
 // 新现）、node.down/node.up（state ready↔down 转移，Swarm 失联判定语义）、
@@ -37,7 +37,7 @@ import (
 // 且 join.token_rotate=auto 时，异步轮换 worker join token（审计
 // node.join_token_rotated；不阻塞观测拍、失败不重试、无新锚定不空转）。
 
-// ClusterAnchor 是集群锚定与节点事件 duty。
+// ClusterAnchor 是集群锚定与节点事件循环。
 type ClusterAnchor struct {
 	store  *Store
 	docker DockerClient
@@ -65,7 +65,7 @@ type JoinTokenRotator interface {
 
 // WithTokenRotate 接线 auto-rotate 触发链（D-MN-1，链式装配）：mode 取
 // 配置 join.token_rotate 的归一值（auto|manual）；r 为轮换端口（nil =
-// 未接线）。manual 或未接线 = 关闭位——本 duty 的其余语义（收编/事件）
+// 未接线）。manual 或未接线 = 关闭位——本循环的其余语义（收编/事件）
 // 不受影响。
 func (a *ClusterAnchor) WithTokenRotate(mode string, r JoinTokenRotator) *ClusterAnchor {
 	a.rotateMode = mode
@@ -73,7 +73,7 @@ func (a *ClusterAnchor) WithTokenRotate(mode string, r JoinTokenRotator) *Cluste
 	return a
 }
 
-// NewClusterAnchor 构造锚定 duty。
+// NewClusterAnchor 构造锚定循环。
 func NewClusterAnchor(store *Store, d DockerClient, log *slog.Logger) *ClusterAnchor {
 	return &ClusterAnchor{store: store, docker: d, log: log}
 }
@@ -107,7 +107,7 @@ type ReconcileResult struct {
 func (a *ClusterAnchor) Reconcile(ctx context.Context, prev []CachedNode, next []SubstrateNode) (ReconcileResult, error) {
 	var res ReconcileResult
 
-	// 本机节点沿用既有锚定（NodeIdentity duty 负责 meta → label → ref）。
+	// 本机节点沿用既有锚定（NodeIdentity 铸造负责 meta → label → ref）。
 	selfID, err := a.docker.SelfNodeID(ctx)
 	if err != nil {
 		if errors.Is(err, ErrNotSwarmManager) {
@@ -181,7 +181,7 @@ func (a *ClusterAnchor) anchorNode(ctx context.Context, n SubstrateNode, res *Re
 	if label != "" {
 		// label 已存在：先查该平台 ID 的既有映射——label 值撞已有映射
 		//（同平台 ID 已锚在另一 swarm 节点）是冲突，不是换机重锚：收编
-		// duty 无权改写映射（NodeIdentity 的重锚语义只属本机节点）。
+		// 锚定循环无权改写映射（NodeIdentity 的重锚语义只属本机节点）。
 		existing, err := a.store.GetRuntimeNodeRef(ctx, label)
 		switch {
 		case err == nil && existing.SwarmNodeID != n.SwarmNodeID:

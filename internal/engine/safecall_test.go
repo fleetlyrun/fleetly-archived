@@ -1,13 +1,13 @@
 package engine
 
-// MG-5/M1-7：tick 路径 duty panic 包壳的覆盖面测试（B4）。两层断言：
-//  1. TestTickDutiesAllGoThroughSafeCall（结构断言，源扫描）：tick 与 Run 的
-//     drift 分支里每个 duty 调用点必须经 e.safeCall(...) 收口——**新增 duty
+// MG-5/M1-7：tick 路径步 panic 包壳的覆盖面测试（B4）。两层断言：
+//  1. TestTickStepsAllGoThroughSafeCall（结构断言，源扫描）：tick 与 Run 的
+//     drift 分支里每个步调用点必须经 e.safeCall(...) 收口——**新增步
 //     不走 helper 本测试即红**（MG-5 的「覆盖面结构断言」契约：往 tick 里
-//     加裸调用 e.xxx(ctx) 而不包 safeCall，或加了 duty 不更新清单，测试都
-//     会失败，逼着新 duty 进入包壳与清单的统一管理）；
-//  2. TestTickSingleDutyPanicIsolated（行为断言，表驱动）：以 duty 清单驱动
-//     注入 panic，断言单 duty panic 不打死 tick、其余 duty 照常执行；
+//     加裸调用 e.xxx(ctx) 而不包 safeCall，或加了步不更新清单，测试都
+//     会失败，逼着新步进入包壳与清单的统一管理）；
+//  2. TestTickStepPanicIsolated（行为断言，表驱动）：以步清单驱动
+//     注入 panic，断言单步 panic 不打死 tick、其余步照常执行；
 //  3. TestWatchPostWindowPanicDoesNotKillTick / TestDriftScanPanicDoesNotKill
 //     RunLoop：经真实代码路径（假底座毒点，非注入钩子）分别命中
 //     watchPostWindow 与 driftScan 两个原裸奔点。
@@ -25,9 +25,9 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// tickDutyManifest 是 tick 的 duty 清单（与 engine.go 的 tick 实现一一对应；
-// 源扫描测试钉死两者一致——新增 duty 不进清单/不走 safeCall 即红）。
-var tickDutyManifest = []string{"recoveryRetry", "pickQueued", "advanceActive", "watchPostWindow", "reapDeletingApps", "substrateRecon", "sweepInitJobs", "reconcileProjectNetworks", "reapExpiredTasks", "advanceTasks", "dutyAutoscaling"}
+// tickStepManifest 是 tick 的步清单（与 engine.go 的 tick 实现一一对应；
+// 源扫描测试钉死两者一致——新增步不进清单/不走 safeCall 即红）。
+var tickStepManifest = []string{"recoveryRetry", "pickQueued", "advanceActive", "watchPostWindow", "reapDeletingApps", "substrateRecon", "sweepInitJobs", "reconcileProjectNetworks", "reapExpiredTasks", "advanceTasks", "autoscaleApps"}
 
 // readEngineSource 读取 engine.go 源文本（同包直读；源扫描的输入）。
 // 行尾归一到 LF 后再扫描：Windows 检出（core.autocrlf=true）会把磁盘上的
@@ -56,25 +56,25 @@ func funcBody(t *testing.T, src, signature string) string {
 	return src[start : start+end]
 }
 
-// TestTickDutiesAllGoThroughSafeCall 结构断言：tick 的每个 duty 恰好一次、
-// 且只以 safeCall 形态出现（裸调用会使该 duty 的出现次数 >1 即红）；Run 的
+// TestTickStepsAllGoThroughSafeCall 结构断言：tick 的每个步恰好一次、
+// 且只以 safeCall 形态出现（裸调用会使该步的出现次数 >1 即红）；Run 的
 // drift 分支同理。
-func TestTickDutiesAllGoThroughSafeCall(t *testing.T) {
+func TestTickStepsAllGoThroughSafeCall(t *testing.T) {
 	src := readEngineSource(t)
 	tickBody := funcBody(t, src, "func (e *Engine) tick(")
 	runBody := funcBody(t, src, "func (e *Engine) Run(")
 
-	// duty 总数与清单一致（多出的 safeCall 调用点也要进清单受管）。
-	if got := strings.Count(tickBody, "e.safeCall("); got != len(tickDutyManifest) {
-		t.Fatalf("safeCall call sites in tick = %d, manifest = %d (both sides must be kept in sync)", got, len(tickDutyManifest))
+	// 步总数与清单一致（多出的 safeCall 调用点也要进清单受管）。
+	if got := strings.Count(tickBody, "e.safeCall("); got != len(tickStepManifest) {
+		t.Fatalf("safeCall call sites in tick = %d, manifest = %d (both sides must be kept in sync)", got, len(tickStepManifest))
 	}
-	for _, duty := range tickDutyManifest {
-		if !strings.Contains(tickBody, fmt.Sprintf("e.safeCall(%q, func() {", duty)) {
-			t.Errorf("duty %q in tick does not go through safeCall (MG-5 contract: new duties must use the helper and join tickDutyManifest)", duty)
+	for _, step := range tickStepManifest {
+		if !strings.Contains(tickBody, fmt.Sprintf("e.safeCall(%q, func() {", step)) {
+			t.Errorf("step %q in tick does not go through safeCall (MG-5 contract: new steps must use the helper and join tickStepManifest)", step)
 		}
 	}
 	// Run 的 drift 分支：driftScan 必须经 safeCall（tick 与 drift ticker 的
-	// 全部 duty 调用点收口，M1-7）。
+	// 全部步调用点收口，M1-7）。
 	if !strings.Contains(runBody, `e.safeCall("driftScan", func() { e.driftScan(ctx) })`) {
 		t.Error(`Run's driftTicker branch does not go through safeCall("driftScan", ...)`)
 	}
@@ -83,22 +83,22 @@ func TestTickDutiesAllGoThroughSafeCall(t *testing.T) {
 	}
 }
 
-// TestTickSingleDutyPanicIsolated 表驱动：单个 duty panic（注入钩子命中
-// safeCall 入口）不打死 tick——同拍其余 duty 照常执行；panic 若未包壳将
+// TestTickStepPanicIsolated 表驱动：单个步 panic（注入钩子命中
+// safeCall 入口）不打死 tick——同拍其余步照常执行；panic 若未包壳将
 // 直接打穿测试进程（Tick 调用即崩）。
-func TestTickSingleDutyPanicIsolated(t *testing.T) {
-	for _, duty := range tickDutyManifest {
-		t.Run(duty, func(t *testing.T) {
+func TestTickStepPanicIsolated(t *testing.T) {
+	for _, step := range tickStepManifest {
+		t.Run(step, func(t *testing.T) {
 			h := newHarness(t)
-			h.eng.dutyCalls = map[string]int{}
-			h.eng.dutyPanicOn = map[string]bool{duty: true}
+			h.eng.stepCalls = map[string]int{}
+			h.eng.stepPanicOn = map[string]bool{step: true}
 			h.eng.Tick(context.Background()) // 未包壳即 panic → 测试失败
-			for _, other := range tickDutyManifest {
-				if other == duty {
+			for _, other := range tickStepManifest {
+				if other == step {
 					continue
 				}
-				if h.eng.dutyCallCount(other) == 0 {
-					t.Fatalf("after duty %q panicked, other duty %q did not run (tick loop was killed)", duty, other)
+				if h.eng.stepCallCount(other) == 0 {
+					t.Fatalf("after step %q panicked, other step %q did not run (tick loop was killed)", step, other)
 				}
 			}
 		})
@@ -106,7 +106,7 @@ func TestTickSingleDutyPanicIsolated(t *testing.T) {
 }
 
 // TestWatchPostWindowPanicDoesNotKillTick MG-5 回归（真实毒点：假底座
-// TaskList panic——watchPostWindow 原是 tick 三 duty 中唯一无 recover 的
+// TaskList panic——watchPostWindow 原是 tick 三步中唯一无 recover 的
 // 路径）：窗后巡检 panic → 同拍先行的 pickQueued 照常执行（入队部署被
 // 拾取），清毒后链路继续收敛。第二条部署用独立 app（毒点只挂在 demo 的
 // 服务名上，避免 advanceOne 的 per-record 兜底把该部署本身判死——那是
@@ -121,7 +121,7 @@ func TestWatchPostWindowPanicDoesNotKillTick(t *testing.T) {
 	// 窗末已过 + 巡检会触达 TaskList（毒点）。
 	h.clk.Advance(30 * time.Second)
 	h.sub.panicOnTaskList(h.svc("web"))
-	// 同拍再入队一条（独立 app）：pickQueued 在毒点 duty（最后位）之前执行。
+	// 同拍再入队一条（独立 app）：pickQueued 在毒点步（最后位）之前执行。
 	composeOther := strings.Replace(composeV1, "name: demo", "name: other", 1)
 	rec2 := h.enqueueApp(t, h.writeCompose(composeOther), "other")
 	h.eng.Tick(ctx)
@@ -154,7 +154,7 @@ func TestDriftScanPanicDoesNotKillRunLoop(t *testing.T) {
 	cfg := Config{PollInterval: 5 * time.Millisecond, DriftInterval: 5 * time.Millisecond}
 	eng := NewEngine(cfg, h.store, h.sub, h.images, h.resolver, h.box,
 		slog.New(slog.NewTextHandler(io.Discard, nil))).WithClock(h.clk)
-	eng.dutyCalls = map[string]int{}
+	eng.stepCalls = map[string]int{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- eng.Run(ctx) }()
@@ -162,17 +162,17 @@ func TestDriftScanPanicDoesNotKillRunLoop(t *testing.T) {
 	// 存活判据：毒点常驻的情况下 drift 与 tick 两个分支各跑满 2 拍
 	//（第一拍即 panic——能到第二拍说明 panic 未打死循环）。
 	deadline := time.Now().Add(5 * time.Second)
-	for (eng.dutyCallCount("driftScan") < 2 || eng.dutyCallCount("tick") < 2) && time.Now().Before(deadline) {
+	for (eng.stepCallCount("driftScan") < 2 || eng.stepCallCount("tick") < 2) && time.Now().Before(deadline) {
 		select {
 		case err := <-done:
 			t.Fatalf("Run exited early (drift panic broke through the loop): %v", err)
 		case <-time.After(2 * time.Millisecond):
 		}
 	}
-	if got := eng.dutyCallCount("driftScan"); got < 2 {
+	if got := eng.stepCallCount("driftScan"); got < 2 {
 		t.Fatalf("driftScan ran only %d beats (panic killed the Run loop)", got)
 	}
-	if got := eng.dutyCallCount("tick"); got < 2 {
+	if got := eng.stepCallCount("tick"); got < 2 {
 		t.Fatalf("tick ran only %d beats (drift panic killed the Run loop)", got)
 	}
 	cancel()

@@ -213,7 +213,7 @@ func TestDisclosureModuleContract(t *testing.T) {
 
 // TestScanGateDueAndAdvance 钉住节拍门语义：零值即刻到期（重启即清零 =
 // 重启后立即扫一拍）；闸内拍跳过且不前移闸；过闸恢复扫描；force 直通且
-// 同样推进闸（与收敛前各 duty 的形态一致）；推进锚 = 判定时刻 + interval。
+// 同样推进闸（与收敛前各步的形态一致）；推进锚 = 判定时刻 + interval。
 func TestScanGateDueAndAdvance(t *testing.T) {
 	var gate scanGate
 	interval := 30 * time.Second

@@ -23,7 +23,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -51,7 +51,7 @@ const (
 	// memoryLimitBytes 是内存限额（设计 §2.5：对齐 zot 口径 256MB）。
 	memoryLimitBytes = int64(256) << 20
 
-	// retryInterval 是 duty 收敛失败的退避缺省（ingress duty 同款注入缝）。
+	// retryInterval 是 收敛失败的退避缺省（ingress 控制器同款注入缝）。
 	retryInterval = 30 * time.Second
 	// scanInterval 是已收敛后的漂移复检周期。
 	scanInterval = 60 * time.Second
@@ -217,7 +217,7 @@ func buildSpec(netID, platformID string, c credentials, refs []secretRef) swarm.
 // specEqual 幂等比对（镜像/env/挂载/网络/约束/副本/限额/凭据 secret 引用
 // ——服务的全部执行面都由期望 spec 权威表达；label 不参与，服务名即身份；
 // secret 名内嵌凭据指纹 → 凭据轮换必被本比对捕获）。
-func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

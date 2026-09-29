@@ -16,7 +16,7 @@ package database
 //     ALTER USER——如实报 ErrPGRotationPaused 提示先 resume，不做「接受
 //     受理、resume 后悄悄不生效」的假成功。
 //   - Redis：无引擎侧动作（凭据 = spec 启动参数）——CAS 落库新密文后由收
-//     敛 duty 下一拍按 desired-hash 差异重建任务（运行中）或仅更新 spec
+//     敛循环下一拍按 desired-hash 差异重建任务（运行中）或仅更新 spec
 //     （paused，resume 时以新密码重建）。
 //   - MySQL（v0.3 W4，D-W4-3）：同 PG 原语——一次性容器 job 以旧密码认证
 //     （MYSQL_PWD env）、`ALTER USER 'fleetly'@'%'`（官方镜像建 USER@'%'

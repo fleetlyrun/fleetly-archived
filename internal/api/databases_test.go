@@ -175,10 +175,10 @@ func TestDatabaseLifecycleRPCs(t *testing.T) {
 	view := mustCreate(t, cl, token, "pg-life", dbtemplate.TemplatePostgres16)
 	id := view.GetId()
 
-	// 收敛过健康门（模拟 duty）：provisioning → ready。
+	// 收敛过健康门（模拟收敛循环）：provisioning → ready。
 	if err := st.EnterDbPhase(context.Background(), id,
 		state.DatabaseProvisioning, state.DatabaseReady); err != nil {
-		t.Fatalf("duty ready: %v", err)
+		t.Fatalf("converge ready: %v", err)
 	}
 
 	// suspend：ready → paused。
@@ -197,15 +197,15 @@ func TestDatabaseLifecycleRPCs(t *testing.T) {
 	if resp2.GetDatabase().GetStatus() != string(state.DatabaseProvisioning) {
 		t.Fatalf("status = %s, want provisioning", resp2.GetDatabase().GetStatus())
 	}
-	// duty 落 ready → suspend 再入 paused（双前置态分支的 ready 路径已覆盖；
+	// 收敛循环落 ready → suspend 再入 paused（双前置态分支的 ready 路径已覆盖；
 	// 这里补 degraded 前置态：provisioning → ready → degraded → suspend）。
 	if err := st.EnterDbPhase(context.Background(), id,
 		state.DatabaseProvisioning, state.DatabaseReady); err != nil {
-		t.Fatalf("duty ready 2: %v", err)
+		t.Fatalf("converge ready 2: %v", err)
 	}
 	if err := st.EnterDbPhase(context.Background(), id,
 		state.DatabaseReady, state.DatabaseDegraded); err != nil {
-		t.Fatalf("duty degraded: %v", err)
+		t.Fatalf("converge degraded: %v", err)
 	}
 	if _, err := cl.SuspendDatabase(ctx, &serverv1.SuspendDatabaseRequest{Name: "pg-life"}); err != nil {
 		t.Fatalf("SuspendDatabase from degraded: %v", err)
@@ -225,7 +225,7 @@ func TestDatabaseLifecycleRPCs(t *testing.T) {
 	}
 	if err := st.EnterDbPhase(context.Background(), id,
 		state.DatabaseProvisioning, state.DatabaseFailed); err != nil {
-		t.Fatalf("duty failed: %v", err)
+		t.Fatalf("converge failed: %v", err)
 	}
 	resp3, err := cl.RetryDatabase(ctx, &serverv1.RetryDatabaseRequest{Name: "pg-life"})
 	if err != nil {
@@ -255,10 +255,10 @@ func TestDatabaseDeleteGuardAndConfirm(t *testing.T) {
 	ctx := authCtx(context.Background(), token)
 	view := mustCreate(t, cl, token, "pg-ref", dbtemplate.TemplatePostgres16)
 	_ = mustCreate(t, cl, token, "pg-free", dbtemplate.TemplatePostgres16)
-	// 收敛过健康门（模拟 duty）——ready 是删除的合法前置态。
+	// 收敛过健康门（模拟收敛循环）——ready 是删除的合法前置态。
 	if err := st.EnterDbPhase(context.Background(), view.GetId(),
 		state.DatabaseProvisioning, state.DatabaseReady); err != nil {
-		t.Fatalf("duty ready: %v", err)
+		t.Fatalf("converge ready: %v", err)
 	}
 
 	// confirm mismatch → 400。

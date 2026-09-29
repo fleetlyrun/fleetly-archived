@@ -3,7 +3,7 @@ package api
 // DatabaseService 实现 server.v1.DatabaseService（E4 数据库托管，managed-
 // databases §2.3 操作表 + §5.1 契约的 S2 子集）。库实例是独立一等资源
 // （D-DB-1）：受理 = db_instances 行（provisioning）+ 凭据生成一次 + 事件
-// 与审计同事务 fail-closed；收敛由 internal/database duty 异步承载——API
+// 与审计同事务 fail-closed；收敛由 internal/database 收敛循环异步承载——API
 // 只做受理/守卫/投影，绝不触底座。
 //
 // 错误映射（D-DB-8 零新增码）：
@@ -44,7 +44,7 @@ const connectionPasswordMask = "********"
 
 // ProvisionKicker 是创建/恢复/重试受理后的收敛触发端口（实现方 = internal/
 // database.Manager——接口在本包定义，方向纪律：api 定义端口、不感知实现
-// 类型）。nil 容忍：未装配时受理照常成功，收敛等 duty 下一拍（≤10s）。
+// 类型）。nil 容忍：未装配时受理照常成功，收敛等收敛循环下一拍（≤10s）。
 type ProvisionKicker interface {
 	Kick()
 }
@@ -83,7 +83,7 @@ type DatabaseService struct {
 }
 
 // NewDatabaseService 构造 DatabaseService（box 是凭据生成/指纹的加解密器；
-// kick 可 nil——受理后即时收敛拍，缺省时收敛由 duty 周期拍兜底；rotator
+// kick 可 nil——受理后即时收敛拍，缺省时收敛由周期拍兜底；rotator
 // 可 nil——轮换 RPC 未装配时显式报错，不静默退化；ops 同理——备份/恢复/
 // 升级 RPC 未装配时显式报错）。
 func NewDatabaseService(st *state.Store, box *secrets.Box, kick ProvisionKicker, rotator CredentialRotator, ops BackupOrchestrator) *DatabaseService {
@@ -91,7 +91,7 @@ func NewDatabaseService(st *state.Store, box *secrets.Box, kick ProvisionKicker,
 }
 
 // kickOnce 受理成功后的即时收敛请求（失败静默——kick 只是提前，不承载正
-// 确性：错过的 kick 由 duty 周期拍消化）。
+// 确性：错过的 kick 由周期拍消化）。
 func (s *DatabaseService) kickOnce() {
 	if s.kick != nil {
 		s.kick.Kick()
@@ -241,7 +241,7 @@ func (s *DatabaseService) ListDatabases(ctx context.Context, req *serverv1.ListD
 
 // DeleteDatabase 删除受理：终端态守卫 → confirm 两段式 → 引用守卫
 // （E_DB_REFERENCED 409 附引用清单）→ 卷处置选择落位 + deleting 转移 +
-// 审计 db.delete 同事务；reap 由收敛 duty 幂等完成。
+// 审计 db.delete 同事务；reap 由收敛循环幂等完成。
 func (s *DatabaseService) DeleteDatabase(ctx context.Context, req *serverv1.DeleteDatabaseRequest) (*serverv1.DeleteDatabaseResponse, error) {
 	inst, err := resolveDatabaseRef(ctx, s.st, req.GetName())
 	if err != nil {
@@ -296,7 +296,7 @@ func (s *DatabaseService) DeleteDatabase(ctx context.Context, req *serverv1.Dele
 	return &serverv1.DeleteDatabaseResponse{Name: inst.Name, Status: string(state.DatabaseDeleting)}, nil
 }
 
-// SuspendDatabase 暂停（ready/degraded → paused）：scale-0 由收敛 duty 落
+// SuspendDatabase 暂停（ready/degraded → paused）：scale-0 由收敛循环落
 // 地；引用方连不上是诚实暴露（设计 §2.3）。
 func (s *DatabaseService) SuspendDatabase(ctx context.Context, req *serverv1.SuspendDatabaseRequest) (*serverv1.SuspendDatabaseResponse, error) {
 	inst, err := s.getMutableInstance(ctx, req.GetName())
@@ -311,7 +311,7 @@ func (s *DatabaseService) SuspendDatabase(ctx context.Context, req *serverv1.Sus
 		} else if !errors.Is(err, state.ErrDatabaseStateConflict) || inst.State != state.DatabaseReady {
 			return err
 		}
-		// ready 期 CAS 落败 = 并发已到 degraded（观察 duty 抢先）：按
+		// ready 期 CAS 落败 = 并发已到 degraded（观察循环抢先）：按
 		// degraded 前置态重试（操作表第二合法前置态）。
 		return tx.EnterDbPhase(ctx, inst.ID, state.DatabaseDegraded, state.DatabasePaused,
 			databaseLifecycleEvent("db.suspended", inst))

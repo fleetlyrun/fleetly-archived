@@ -11,7 +11,7 @@ import (
 // 事件同事务 fail-closed）。
 //
 // 缺省语义（V2-1 默认捆绑，用户直裁）：logs.backend 未显式设置 = 缺省
-// `victorialogs`——存量安装升级后 duty 即部署 VL；显式设过 `jsonl` 的
+// `victorialogs`——存量安装升级后收敛管理器即部署 VL；显式设过 `jsonl` 的
 // 安装不动。Load 投影区分「未设置」（Set=false）与「显式设置」（Set=true），
 // 供 CLI/Console 诚实展示（mode 值恒为生效形态，绝不回空串让消费方各自
 // 猜缺省——缺省的唯一事实源在本包）。

@@ -1,4 +1,4 @@
-package dutydocker
+package dockerapi
 
 // 对象面：卷/网络/secret/config 的幂等 ensure/remove 原语与容器移除。
 // 幂等语义（六包原实现逐字收拢）：已有即 no-op、缺失创建、并发创建竞态
@@ -22,7 +22,7 @@ func (c *Client) VolumeEnsure(ctx context.Context, name string) error {
 	if _, err := c.cli.VolumeInspect(ctx, name, mobyclient.VolumeInspectOptions{}); err == nil {
 		return nil
 	} else if !errdefs.IsNotFound(err) {
-		return fmt.Errorf("dutydocker: volume inspect %s: %w", name, err)
+		return fmt.Errorf("dockerapi: volume inspect %s: %w", name, err)
 	}
 	if _, err := c.cli.VolumeCreate(ctx, mobyclient.VolumeCreateOptions{
 		Driver: "local",
@@ -32,7 +32,7 @@ func (c *Client) VolumeEnsure(ctx context.Context, name string) error {
 		if _, ierr := c.cli.VolumeInspect(ctx, name, mobyclient.VolumeInspectOptions{}); ierr == nil {
 			return nil // 并发创建竞态：已存在即成功
 		}
-		return fmt.Errorf("dutydocker: volume create %s: %w", name, err)
+		return fmt.Errorf("dockerapi: volume create %s: %w", name, err)
 	}
 	return nil
 }
@@ -44,7 +44,7 @@ func (c *Client) VolumeRemove(ctx context.Context, name string) error {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("dutydocker: volume remove %s: %w", name, err)
+		return fmt.Errorf("dockerapi: volume remove %s: %w", name, err)
 	}
 	return nil
 }
@@ -56,7 +56,7 @@ func (c *Client) NetworkEnsure(ctx context.Context, name string, attachable bool
 	if _, err := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{}); err == nil {
 		return nil
 	} else if !errdefs.IsNotFound(err) {
-		return fmt.Errorf("dutydocker: network inspect %s: %w", name, err)
+		return fmt.Errorf("dockerapi: network inspect %s: %w", name, err)
 	}
 	if _, err := c.cli.NetworkCreate(ctx, name, mobyclient.NetworkCreateOptions{
 		Driver:     "overlay",
@@ -66,7 +66,7 @@ func (c *Client) NetworkEnsure(ctx context.Context, name string, attachable bool
 		if _, ierr := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{}); ierr == nil {
 			return nil // 并发创建竞态：已存在即成功
 		}
-		return fmt.Errorf("dutydocker: network create %s: %w", name, err)
+		return fmt.Errorf("dockerapi: network create %s: %w", name, err)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func (c *Client) NetworkEnsure(ctx context.Context, name string, attachable bool
 func (c *Client) NetworkID(ctx context.Context, name string) (string, error) {
 	res, err := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{})
 	if err != nil {
-		return "", fmt.Errorf("dutydocker: network inspect %s: %w", name, err)
+		return "", fmt.Errorf("dockerapi: network inspect %s: %w", name, err)
 	}
 	return res.Network.ID, nil
 }
@@ -83,12 +83,12 @@ func (c *Client) NetworkID(ctx context.Context, name string) (string, error) {
 // NetworkName 把服务实况里的网络挂载目标（创建期被 engine 归一为网络 ID
 // ——"host" 亦然）解析回网络名，幂等比对的同锚面（"host" 是 local-scope
 // 网络，其 swarm 侧对象 ID 与本地 ID 不同，正向查名不可行；反向按 ID 解析
-// 返回 swarm scope 对象名，2026-09-22 dind 实证）。解析失败返回错误，duty
-// 退避重试不误判漂移。
+// 返回 swarm scope 对象名，2026-09-22 dind 实证）。解析失败返回错误，调用
+// 方退避重试不误判漂移。
 func (c *Client) NetworkName(ctx context.Context, target string) (string, error) {
 	res, err := c.cli.NetworkInspect(ctx, target, mobyclient.NetworkInspectOptions{})
 	if err != nil {
-		return "", fmt.Errorf("dutydocker: network inspect %s: %w", target, err)
+		return "", fmt.Errorf("dockerapi: network inspect %s: %w", target, err)
 	}
 	return res.Network.Name, nil
 }
@@ -100,7 +100,7 @@ func (c *Client) NetworkRemove(ctx context.Context, name string) error {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("dutydocker: network remove %s: %w", name, err)
+		return fmt.Errorf("dockerapi: network remove %s: %w", name, err)
 	}
 	return nil
 }
@@ -116,15 +116,15 @@ func (c *Client) SecretInspect(ctx context.Context, name string) (id string, exi
 	if errdefs.IsNotFound(err) {
 		return "", false, nil
 	}
-	return "", false, fmt.Errorf("dutydocker: secret inspect %s: %w", name, err)
+	return "", false, fmt.Errorf("dockerapi: secret inspect %s: %w", name, err)
 }
 
-// SecretCreate 创建 swarm secret 并返回其 ID（duty 保证仅缺失时调用；data
+// SecretCreate 创建 swarm secret 并返回其 ID（调用方保证仅缺失时调用；data
 // 只进创建载荷，绝不进日志/错误）。
 func (c *Client) SecretCreate(ctx context.Context, spec swarm.SecretSpec) (string, error) {
 	res, err := c.cli.SecretCreate(ctx, mobyclient.SecretCreateOptions{Spec: spec})
 	if err != nil {
-		return "", fmt.Errorf("dutydocker: secret create %s: %w", spec.Name, err)
+		return "", fmt.Errorf("dockerapi: secret create %s: %w", spec.Name, err)
 	}
 	return res.ID, nil
 }
@@ -146,7 +146,7 @@ func (c *Client) SecretEnsure(ctx context.Context, name string, data []byte, lab
 			return res.Secret.ID, nil
 		}
 	}
-	return "", fmt.Errorf("dutydocker: secret create %s: %w", name, err)
+	return "", fmt.Errorf("dockerapi: secret create %s: %w", name, err)
 }
 
 // SecretList 按 label 选择器返回 secret 名（清场路径：凭据材料不残留）。
@@ -157,7 +157,7 @@ func (c *Client) SecretList(ctx context.Context, labels map[string]string) ([]st
 	}
 	res, err := c.cli.SecretList(ctx, mobyclient.SecretListOptions{Filters: filters})
 	if err != nil {
-		return nil, fmt.Errorf("dutydocker: secret list: %w", err)
+		return nil, fmt.Errorf("dockerapi: secret list: %w", err)
 	}
 	out := make([]string, 0, len(res.Items))
 	for _, s := range res.Items {
@@ -166,14 +166,14 @@ func (c *Client) SecretList(ctx context.Context, labels map[string]string) ([]st
 	return out, nil
 }
 
-// SecretRemove 删除 secret（幂等：缺失视为成功；in-use 返回错误由 duty
+// SecretRemove 删除 secret（幂等：缺失视为成功；in-use 返回错误由调用方
 // 退避重试——服务删除到引用释放有传播延迟）。
 func (c *Client) SecretRemove(ctx context.Context, name string) error {
 	if _, err := c.cli.SecretRemove(ctx, name, mobyclient.SecretRemoveOptions{}); err != nil {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("dutydocker: secret remove %s: %w", name, err)
+		return fmt.Errorf("dockerapi: secret remove %s: %w", name, err)
 	}
 	return nil
 }
@@ -186,14 +186,14 @@ func (c *Client) ConfigEnsure(ctx context.Context, name string, spec swarm.Confi
 	if res, err := c.cli.ConfigInspect(ctx, name, mobyclient.ConfigInspectOptions{}); err == nil {
 		return res.Config.ID, nil
 	} else if !errdefs.IsNotFound(err) {
-		return "", fmt.Errorf("dutydocker: config inspect %s: %w", name, err)
+		return "", fmt.Errorf("dockerapi: config inspect %s: %w", name, err)
 	}
 	created, err := c.cli.ConfigCreate(ctx, mobyclient.ConfigCreateOptions{Spec: spec})
 	if err != nil {
 		if res, ierr := c.cli.ConfigInspect(ctx, name, mobyclient.ConfigInspectOptions{}); ierr == nil {
 			return res.Config.ID, nil // 并发创建竞态：已存在即成功
 		}
-		return "", fmt.Errorf("dutydocker: config create %s: %w", name, err)
+		return "", fmt.Errorf("dockerapi: config create %s: %w", name, err)
 	}
 	return created.ID, nil
 }
@@ -204,7 +204,7 @@ func (c *Client) ConfigRemove(ctx context.Context, name string) error {
 		if errdefs.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("dutydocker: config remove %s: %w", name, err)
+		return fmt.Errorf("dockerapi: config remove %s: %w", name, err)
 	}
 	return nil
 }
@@ -214,7 +214,7 @@ func (c *Client) ConfigRemove(ctx context.Context, name string) error {
 func (c *Client) ConfigListNamesByLabel(ctx context.Context, labelKey, labelValue string) ([]string, error) {
 	res, err := c.cli.ConfigList(ctx, mobyclient.ConfigListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("dutydocker: config list: %w", err)
+		return nil, fmt.Errorf("dockerapi: config list: %w", err)
 	}
 	var out []string
 	for _, cfg := range res.Items {
@@ -233,7 +233,7 @@ func (c *Client) ContainerRemoveForce(ctx context.Context, name string) (bool, e
 		if errdefs.IsNotFound(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("dutydocker: container remove %s: %w", name, err)
+		return false, fmt.Errorf("dockerapi: container remove %s: %w", name, err)
 	}
 	return true, nil
 }

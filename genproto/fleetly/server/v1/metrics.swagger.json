@@ -18,7 +18,7 @@
   "paths": {
     "/v1/metrics/mode": {
       "put": {
-        "summary": "SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛\n部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。",
+        "summary": "SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——后台收敛\n部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。",
         "operationId": "MetricsService_SetMetricsMode",
         "responses": {
           "200": {
@@ -220,7 +220,7 @@
         },
         "exists": {
           "type": "boolean",
-          "title": "服务是否在位（mode=on 且 false = duty 收敛中——过渡态红面）。"
+          "title": "服务是否在位（mode=on 且 false = 后台收敛中——过渡态红面）。"
         },
         "image": {
           "type": "string",

@@ -298,7 +298,7 @@ func (*GetMetricsStatusRequest) Descriptor() ([]byte, []int) {
 type MetricsComponentView struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// 服务是否在位（mode=on 且 false = duty 收敛中——过渡态红面）。
+	// 服务是否在位（mode=on 且 false = 后台收敛中——过渡态红面）。
 	Exists bool `protobuf:"varint,2,opt,name=exists,proto3" json:"exists,omitempty"`
 	// 实况镜像引用（不在位为空）。
 	Image         string `protobuf:"bytes,3,opt,name=image,proto3" json:"image,omitempty"`

@@ -4,13 +4,13 @@ package runtime
 // §3.1/§3.2）：8420（HTTP：gateway + native 端点 + /ui）与 8421（gRPC）双面
 // 同证书 TLS 化。off（缺省）= 今日明文行为逐字不变（NewControlPlaneTLS 返回
 // nil，两个服务壳不加 TLS 选项）；platform = 复用平台证书（ingress 侧
-// _fleetly-platform 多 SAN 单证书，LE 签发/续期由平台证书 duty 既有机制承
+// _fleetly-platform 多 SAN 单证书，LE 签发/续期由平台证书控制器既有机制承
 // 接，D-MN-6）；manual = 显式证书文件对（重启生效——文档明示，设计原文）。
 //
 // 服务形态（关键裁决）：
 //   - 证书供给 = tls.Config.GetCertificate 闭包读缓存证书（每握手零磁盘
 //     IO）；platform 模式另有后台刷新循环（60s 周期重读落盘文件、按内容
-//     指纹换缓存）——平台证书 duty 续期落盘（tmp+rename 原子换入）后 60s
+//     指纹换缓存）——平台证书控制器续期落盘（tmp+rename 原子换入）后 60s
 //     内生效，新握手即用新证书（在途连接不受影响——TLS 会话用旧证书直到
 //     关闭，诚实语义）。
 //   - platform 就绪次序 = 「listener 就绪、握手失败直到证书就绪」（8423
@@ -94,7 +94,7 @@ func NewControlPlaneTLS(app lynx.App, cfg *AppConfig, ing *ingress.Manager) (*Co
 			return nil, nil, fmt.Errorf("control_plane.tls: %w", err)
 		}
 		cache := newTLSCertCache(certFile, keyFile).withMinVersion(cfg.TLSMinVersion())
-		// platform 模式初始加载允许失败（证书 duty 可能尚未签发）——监听
+		// platform 模式初始加载允许失败（证书控制器可能尚未签发）——监听
 		// 照常就绪，握手失败直到缓存装入（「listener 就绪、握手失败直到
 		// 证书就绪」的诚实形态）；刷新循环每拍重试并日志告警。
 		if err := cache.Load(); err != nil {
@@ -240,7 +240,7 @@ func (c *tlsCertCache) Get() (*tls.Certificate, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.cert == nil {
-		return nil, fmt.Errorf("control plane TLS certificate not ready (platform mode waits for the certificate duty to issue it)")
+		return nil, fmt.Errorf("control plane TLS certificate not ready (platform mode waits for the certificate controller to issue it)")
 	}
 	return c.cert, nil
 }

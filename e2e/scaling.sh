@@ -31,7 +31,7 @@
 #   SCL-D1 诚实无数据：注入前 scaling.no_data 一次性披露（真实打压负载
 #      在跑而归属标签缺席 = no_series 判据的真实触发形态）。
 #   SCL-E1 扩容：注入 +3.0/s 计数斜率（2×1.5 核打满形态，cpu_pct=100%>
-#      22% 扩带）→ 副本 2→4（ceil(2×100/20)=10 夹逼 max4）——duty 30s
+#      22% 扩带）→ 副本 2→4（ceil(2×100/20)=10 夹逼 max4）——收敛循环 30s
 #      频控 + rate 窗，重试窗 420s。
 #   SCL-E2 scaling.adjusted 事件载荷（dimension=cpu / replicas_before 2 /
 #      after 4 / service 归属）。
@@ -517,7 +517,7 @@ if poll_until 420 scaled_up; then
 else
     nl "burn replicas at cap: $(burn_replicas)"
     m docker service ls || true
-    assert "SCL-E1 REPLICAS_SCALED_UP_2_TO_4" 1 "replicas never reached 4 (want 2->4 via duty evaluation)"
+    assert "SCL-E1 REPLICAS_SCALED_UP_2_TO_4" 1 "replicas never reached 4 (want 2->4 via convergence evaluation)"
 fi
 
 events_json_snap

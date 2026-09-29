@@ -9,7 +9,7 @@
 #
 #   A0 前置校验（E_S3_NOT_CONFIGURED，诚实拒绝）：s3.mode=unset 时部署带
 #      fleetly.s3=true 的 compose → 部署失败且错误含 E_S3_NOT_CONFIGURED。
-#   A1 RustFS duty 收敛（E3-5）：s3 set --mode rustfs → fleetly-rustfs 服务
+#   A1 RustFS 收敛管理器收敛（E3-5）：s3 set --mode rustfs → fleetly-rustfs 服务
 #      running（钉版镜像/内部网络/零 host 端口由 spec 构造单测钉死，此处
 #      黑盒断言收敛）→ s3.rustfs_deployed 事件落库 → `fleetly s3 test`
 #      探针通过（put→get→delete 真实往返 = 平台托管凭据 + 桶就绪）。
@@ -324,8 +324,8 @@ case "$A0_OUT" in
 *) fail "S3-A0 UNSET_DEPLOY_REFUSED" "deploy output missing E_S3_NOT_CONFIGURED: $(printf '%s' "$A0_OUT" | tail -3)" ;;
 esac
 
-# ───────────────── A1: RustFS duty 收敛（E3-5）
-nl '=== A1: rustfs duty convergence (managed service + probe) ==='
+# ───────────────── A1: RustFS 收敛管理器收敛（E3-5）
+nl '=== A1: rustfs manager convergence (managed service + probe) ==='
 fcli s3 set --mode rustfs >/dev/null 2>&1 || fatal 's3 set --mode rustfs'
 rustfs_running() {
     msh "docker service ps fleetly-rustfs --format '{{.CurrentState}}' | grep -q '^Running'" 2>/dev/null

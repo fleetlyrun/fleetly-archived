@@ -72,7 +72,7 @@ type TaskSource interface {
 var (
 	// ErrTerminalDisabled 是功能开关关闭（terminal.enabled=false）。
 	ErrTerminalDisabled = errors.New("execrelay: web terminal is disabled")
-	// ErrNoRelayConnection 是目标节点无 relay 连接（duty 未收敛/节点刚断）。
+	// ErrNoRelayConnection 是目标节点无 relay 连接（relay 服务未收敛/节点刚断）。
 	ErrNoRelayConnection = errors.New("execrelay: no exec relay connection for the target node")
 	// ErrNoRunningTask 是目标服务无 running 任务。
 	ErrNoRunningTask = errors.New("execrelay: the target service has no running task")
@@ -193,7 +193,7 @@ func (h *Hub) VerifyClusterToken(ctx context.Context, token string) error {
 		return fmt.Errorf("execrelay: read cluster token hash: %w", err)
 	}
 	if hash == "" {
-		return errors.New("execrelay: cluster token not provisioned yet (duty pending)")
+		return errors.New("execrelay: cluster token not provisioned yet (relay deployment pending)")
 	}
 	// 常量时间比对（认证比对面的纪律形态——sha256 后长度恒定）。
 	if subtle.ConstantTimeCompare([]byte(state.HashToken(token)), []byte(hash)) != 1 {

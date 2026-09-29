@@ -24,7 +24,7 @@ import (
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/victorialogs"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
@@ -64,18 +64,18 @@ func assertApperrCode(t *testing.T, err error, code string) {
 	}
 }
 
-// fakeVLManager 是 victorialogs duty dockerPort 端口的最小假件（按方法集
+// fakeVLManager 是 victorialogs dockerPort 端口的最小假件（按方法集
 // 满足——部署态映射测试用；未导出接口不阻挡外部实现）。
 type fakeVLManager struct {
 	exists bool
 }
 
-func (f *fakeVLManager) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: true}, nil
+func (f *fakeVLManager) Info(_ context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: true}, nil
 }
 
-func (f *fakeVLManager) ServiceInspect(_ context.Context, _ string) (dutydocker.ServiceSnapshot, error) {
-	return dutydocker.ServiceSnapshot{Exists: f.exists, Image: "pinned"}, nil
+func (f *fakeVLManager) ServiceInspect(_ context.Context, _ string) (dockerapi.ServiceSnapshot, error) {
+	return dockerapi.ServiceSnapshot{Exists: f.exists, Image: "pinned"}, nil
 }
 
 func (f *fakeVLManager) ServiceCreate(_ context.Context, _ swarm.ServiceSpec) error {
@@ -94,7 +94,7 @@ func (f *fakeVLManager) ServiceRemove(_ context.Context, _ string) error {
 
 func (f *fakeVLManager) VolumeEnsure(_ context.Context, _ string) error { return nil }
 
-// NetworkName 恒等透传（W5-S3 门上 dockerPort 增面——duty 网络目标反解；
+// NetworkName 恒等透传（W5-S3 门上 dockerPort 增面——收敛层网络目标反解；
 // 本假件不覆盖该路径）。
 func (f *fakeVLManager) NetworkName(_ context.Context, target string) (string, error) {
 	return target, nil

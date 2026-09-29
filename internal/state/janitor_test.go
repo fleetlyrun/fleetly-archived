@@ -435,7 +435,7 @@ func TestJanitorOrphanProbeErrorSkipsDir(t *testing.T) {
 }
 
 // TestJanitorPrunesTerminalBuilds A10②：builds 终态行按 90 天窗清理
-// （finished_at 锚点）；非终态行不清理（超龄由扫描 duty 告警，不自愈）。
+// （finished_at 锚点）；非终态行不清理（超龄由扫描步告警，不自愈）。
 func TestJanitorPrunesTerminalBuilds(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()

@@ -12,7 +12,7 @@ import (
 //
 // 缺省语义（D-W5-2 与 V2-2 rustfs 同型——**默认关**）：metrics.mode 未
 // 显式设置 = 缺省 `unset`——三件套（VictoriaMetrics/cAdvisor/node_exporter）
-// 不部署，零新增常驻（验收标准 7）；显式 `on` 后 duty 部署三件。Load
+// 不部署，零新增常驻（验收标准 7）；显式 `on` 后管理器部署三件。Load
 // 投影区分「未设置」（Set=false）与「显式设置」（Set=true）。
 
 // MetricsKeyMode 是 metrics 模式设置键（词表只增；键名常量为本包唯一

@@ -1,10 +1,10 @@
 package ingress
 
-// E1-3 平台证书 duty 与 8423 TLS 配置端点测试（E1 多节点设计 §2.4）：
-//   - base_domain 非空：duty 签发重试次序（假签发器：先败后成）→ 证书落盘
+// E1-3 平台证书控制器 与 8423 TLS 配置端点测试（E1 多节点设计 §2.4）：
+//   - base_domain 非空：控制器签发重试次序（假签发器：先败后成）→ 证书落盘
 //     （多 SAN：ctrl/registry/console）→ Traefik provider endpoint 翻转
 //     https://ctrl.<base>:8423/configs → PlatformTLSCertificate 可服务；
-//   - base_domain 为空：duty 惰性（零签发、零 endpoint 变化）——单节点
+//   - base_domain 为空：控制器惰性（零签发、零 endpoint 变化）——单节点
 //     v0.1 形态逐字等价（金样：既有 gateway/ingress 测试零改动通过）；
 //   - TLS 配置端点 handler：token 鉴权沿用、只承载 /configs。
 
@@ -107,7 +107,7 @@ func selfSignedTestCertMultiSAN(t *testing.T, domains []string) ([]byte, []byte)
 		pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 }
 
-// awaitUntil 轮询等待条件成立（duty 是后台 goroutine——以终态轮询驱动次
+// awaitUntil 轮询等待条件成立（控制器是后台 goroutine——以终态轮询驱动次
 // 序断言；deadline 内不成立即失败并打印现场）。
 func awaitUntil(t *testing.T, what string, deadline time.Duration, cond func() bool) {
 	t.Helper()
@@ -123,7 +123,7 @@ func awaitUntil(t *testing.T, what string, deadline time.Duration, cond func() b
 
 // traefikEndpointArg 从 fake 服务实况提取 provider endpoint 参数值（服务
 // 未创建/参数未出现返回空串——轮询等待的谓词形态，不触发 FailNow；经
-// serviceState 加锁读——duty 后台 goroutine 并发写）。
+// serviceState 加锁读——控制器后台 goroutine 并发写）。
 func traefikEndpointArg(t *testing.T, dc *fakeDocker) string {
 	t.Helper()
 	for _, a := range dc.serviceState(IngressServiceName).Args {
@@ -152,11 +152,11 @@ func TestPlatformDomainsAndTLSEnabled(t *testing.T) {
 	}
 }
 
-// TestPlatformCertDutyRetryThenEndpointSwitch duty 全序（fake 签发器：先败
+// TestPlatformCertControllerRetryThenEndpointSwitch 控制器全序（fake 签发器：先败
 // 两次后成）：签发重试（3 次调用）→ 证书落盘（cert_dir 真源 + 多 SAN）→
 // endpoint 翻转 https://ctrl.<base>:8423/configs → PlatformTLSCertificate
 // 可供握手。翻转前 endpoint 维持 8422 形态（容忍期语义，设计 §2.4 次序②③）。
-func TestPlatformCertDutyRetryThenEndpointSwitch(t *testing.T) {
+func TestPlatformCertControllerRetryThenEndpointSwitch(t *testing.T) {
 	m, dc, _, calls := newPlatformTestManager(t, "example.test")
 	certPEM, keyPEM := selfSignedTestCertMultiSAN(t, m.PlatformDomains())
 	m.obtainFn = func(_ context.Context, _ string, _ registration.User, _ []string) ([]byte, []byte, error) {
@@ -173,7 +173,7 @@ func TestPlatformCertDutyRetryThenEndpointSwitch(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go m.runPlatformCertDuty(ctx)
+	go m.runPlatformCertController(ctx)
 
 	// 终态①：恰好 3 次 Obtain（2 败 1 成——重试退避生效、成功即停）。
 	awaitUntil(t, "successful issuance after retries", 5*time.Second, func() bool {
@@ -211,7 +211,7 @@ func TestPlatformCertDutyRetryThenEndpointSwitch(t *testing.T) {
 	}
 	// 终态⑤（F8，2026-09-21 真机发现钉住）：证书就绪同拍视图已重发布——
 	// websecure 证书段在线（内联 PEM），指纹与平台证书一致；不等 12h sweep。
-	// await 形态：endpoint 翻转与视图换入是 duty 内先后两步（重发布含台账
+	// await 形态：endpoint 翻转与视图换入是控制器内先后两步（重发布含台账
 	// 与设置现读的数次查询），轮询窗口内到达即符合 F8 语义；超时 = 重发布
 	// 缺失，F8 回归（S4 注：E3-6 在 publishWithCerts 增加了 s3 设置现读，
 	// 拉长了翻转→换入间隙，即时快照假设在本机高频轮询下曾偶发踩空）。
@@ -289,9 +289,9 @@ func TestProviderEndpointVPCIPForm(t *testing.T) {
 	}
 }
 
-// TestPlatformCertDutyInertWhenBaseDomainEmpty base_domain 为空 = duty 惰性：
+// TestPlatformCertControllerInertWhenBaseDomainEmpty base_domain 为空 = 控制器惰性：
 // 零签发、零 endpoint 变化（单节点 v0.1 形态逐字等价——验收 2 的空侧）。
-func TestPlatformCertDutyInertWhenBaseDomainEmpty(t *testing.T) {
+func TestPlatformCertControllerInertWhenBaseDomainEmpty(t *testing.T) {
 	m, dc, _, calls := newPlatformTestManager(t, "")
 	// 磁盘上预置一张平台证书（最不利形态：证书在盘也不得翻转 endpoint）。
 	certPEM, keyPEM := selfSignedTestCertMultiSAN(t, []string{"ctrl.x.test"})
@@ -303,16 +303,16 @@ func TestPlatformCertDutyInertWhenBaseDomainEmpty(t *testing.T) {
 		t.Fatalf("save pair: %v", err)
 	}
 
-	// duty 直接调用即返回（不启动循环、不签发、不收敛）。
+	// 控制器直接调用即返回（不启动循环、不签发、不收敛）。
 	done := make(chan struct{})
-	go func() { m.runPlatformCertDuty(context.Background()); close(done) }()
+	go func() { m.runPlatformCertController(context.Background()); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("duty must return immediately when base_domain is empty")
+		t.Fatal("controller must return immediately when base_domain is empty")
 	}
 	if n := calls.Load(); n != 0 {
-		t.Fatalf("obtain calls = %d, want 0 (duty inert)", n)
+		t.Fatalf("obtain calls = %d, want 0 (controller inert)", n)
 	}
 	if err := m.EnsureTraefik(context.Background()); err != nil {
 		t.Fatalf("ensure traefik: %v", err)

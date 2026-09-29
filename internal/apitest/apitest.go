@@ -249,7 +249,7 @@ func start(t *testing.T, opts startOptions) *Env {
 	// 服务装配集（键 = internal/runtime 登记表的服务短名）：真实 api 服务
 	// 实现 + 确定性假端口/降级装配（各条目注记）——生产构造的测试 adapter
 	//（同型构造、fake 在构造期注入，与 wire 供给的生产实例共用登记表的
-	// 注册本体）。未装配的 duty 依赖按 nil/停用形态如实降级（与生产
+	// 注册本体）。未装配的收敛管理器依赖按 nil/停用形态如实降级（与生产
 	// nil-safety 同语义），不是省略登记。
 	instances := map[string]any{
 		"SystemService":      systemSvc,
@@ -271,7 +271,7 @@ func start(t *testing.T, opts startOptions) *Env {
 		// mb/mm nil = TestAlertRule 如实报不可用、status 部署态如实报 absent）。
 		"AlertingService": api.NewAlertingService(st),
 		// 通知 Webhook 面（E6 W5-S4；W4-S3 通道扩展）：CLI golden/冒烟测试同
-		// 路径消费（受理/投影面——投递器 duty 不在进程内装配，TestWebhook 指
+		// 路径消费（受理/投影面——投递器不在进程内装配，TestWebhook 指
 		// 向真实网络才可达）。
 		"NotificationsService": api.NewNotificationsService(st, box),
 		// Web 终端受理面（E7 W5-S6）：停用 hub 形态（terminal.enabled=false——
@@ -288,7 +288,7 @@ func start(t *testing.T, opts startOptions) *Env {
 		//（TriggerCronRun 显式不可用；runs 读面同路径消费）。
 		"CronService": api.NewCronService(st, nil),
 		// 库实例面（E4 W4-S2）：CLI golden/冒烟测试同路径消费（受理面——收敛
-		// 行为在 internal/database 单测，本环境不装配 duty；kicker/rotator/ops
+		// 行为在 internal/database 单测，本环境不装配收敛管理器；kicker/rotator/ops
 		// nil = 收敛由周期拍兜底、rotate/备份/恢复/升级 RPC 显式报错的降级形
 		// 态，与生产 nil-safety 同语义）。密钥库面（W4-S4）：同路径消费（无值
 		// 读回——负面扫描的 CLI 断言面）。

@@ -4,7 +4,7 @@ package engine
 // 修正（running → down）+ 持续缺失节流（不重复发事件）+ 服务恢复后可再报
 //（非永久静音）；service 存在（含外部 scale=0）→ 零事件；非 running 派生
 // 态不是候选；substrate 瞬态错误 → 零事件、有日志、不被当成缺失；tick
-// duty 的时间闸频控。
+// tick 步的时间闸频控。
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// captureHandler 捕获日志记录（对账 duty「瞬态错误只进日志」断言用）。
+// captureHandler 捕获日志记录（对账步「瞬态错误只进日志」断言用）。
 type captureHandler struct {
 	msgs []string
 }
@@ -222,7 +222,7 @@ func TestSubstrateReconSubstrateErrorIsNotMissing(t *testing.T) {
 	}
 }
 
-// TestSubstrateReconTimeGateSkipsBeats tick duty 的时间闸频控：闸内拍子不
+// TestSubstrateReconTimeGateSkipsBeats tick tick 步的时间闸频控：闸内拍子不
 // 触达底座（ServiceInspect 计数不增长），闸过恢复扫描。
 func TestSubstrateReconTimeGateSkipsBeats(t *testing.T) {
 	h := newHarness(t)

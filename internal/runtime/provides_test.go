@@ -142,7 +142,7 @@ func TestNewServicesStopOrder(t *testing.T) {
 		"build.queue", "engine.release", "ingress.traefik", "logs.collector", "notify.webhook",
 		// 第三段：资源层（最后停；backup 晚于 engine 等 post-deploy
 		// 在途快照，rustfs/victorialogs/metrics/database/execrelay 收敛
-		// duty、cron 调度器、通知投递器同层，store 殿后）。
+		// 收敛管理器、cron 调度器、通知投递器同层，store 殿后）。
 		"state.identity", "state.observer", "state.janitor",
 		"state.backup", "objectstore.rustfs", "logs.victorialogs", "metrics.stack", "database.converge", "execrelay", "cron.schedule", "state.secrets", "state.store",
 	}

@@ -1,6 +1,6 @@
 package execrelay
 
-// relay duty 单测：收敛幂等（缺失创建/漂移更新/开关关闭移除）、spec 形态
+// relay 部署收敛管理器单测：收敛幂等（缺失创建/漂移更新/开关关闭移除）、spec 形态
 // 钉死（global + host 网络 + docker sock RO 挂载 + secret 引用 + advertise
 // env + wss/wss 退化）、集群 token 供给（首拍生成落哈希、secret 丢失重生
 // 成——meta 哈希随之更换）。
@@ -15,16 +15,16 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
-// fakeDutyDocker 是 dutyDocker 假实现。
-type fakeDutyDocker struct {
+// fakeDockerPort 是 dockerPort 假实现。
+type fakeDockerPort struct {
 	mu       sync.Mutex
 	active   bool
 	nodeAddr string
-	services map[string]dutydocker.ServiceSnapshot
+	services map[string]dockerapi.ServiceSnapshot
 	specs    map[string]swarm.ServiceSpec
 	created  []string
 	updated  []string
@@ -34,30 +34,30 @@ type fakeDutyDocker struct {
 	secretData map[string][]byte
 }
 
-func newFakeDutyDocker(active bool) *fakeDutyDocker {
-	return &fakeDutyDocker{
+func newFakeDockerPort(active bool) *fakeDockerPort {
+	return &fakeDockerPort{
 		active:     active,
 		nodeAddr:   "10.99.0.10",
-		services:   map[string]dutydocker.ServiceSnapshot{},
+		services:   map[string]dockerapi.ServiceSnapshot{},
 		specs:      map[string]swarm.ServiceSpec{},
 		secrets:    map[string]string{},
 		secretData: map[string][]byte{},
 	}
 }
 
-func (d *fakeDutyDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
+func (d *fakeDockerPort) Info(_ context.Context) (dockerapi.InfoSnapshot, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return dutydocker.InfoSnapshot{SwarmActive: d.active, NodeAddr: d.nodeAddr}, nil
+	return dockerapi.InfoSnapshot{SwarmActive: d.active, NodeAddr: d.nodeAddr}, nil
 }
 
-func (d *fakeDutyDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (d *fakeDockerPort) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.services[name], nil
 }
 
-func (d *fakeDutyDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
+func (d *fakeDockerPort) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.created = append(d.created, spec.Name)
@@ -65,7 +65,7 @@ func (d *fakeDutyDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec
 	return nil
 }
 
-func (d *fakeDutyDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spec swarm.ServiceSpec) error {
+func (d *fakeDockerPort) ServiceUpdate(_ context.Context, name string, _ uint64, spec swarm.ServiceSpec) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.updated = append(d.updated, name)
@@ -75,8 +75,8 @@ func (d *fakeDutyDocker) ServiceUpdate(_ context.Context, name string, _ uint64,
 
 // storeSpecLocked 把 spec 转成实况投影（模拟底座存储形态——host 网络目标
 // 归一为 "net-host-id" 以验证比对前的 NetworkName 反解路径）。
-func (d *fakeDutyDocker) storeSpecLocked(spec swarm.ServiceSpec) {
-	st := dutydocker.ServiceSnapshot{Exists: true, Version: 7}
+func (d *fakeDockerPort) storeSpecLocked(spec swarm.ServiceSpec) {
+	st := dockerapi.ServiceSnapshot{Exists: true, Version: 7}
 	if cs := spec.TaskTemplate.ContainerSpec; cs != nil {
 		st.Image = cs.Image
 		st.Env = append([]string{}, cs.Env...)
@@ -101,7 +101,7 @@ func (d *fakeDutyDocker) storeSpecLocked(spec swarm.ServiceSpec) {
 	d.specs[spec.Name] = spec
 }
 
-func (d *fakeDutyDocker) ServiceRemove(_ context.Context, name string) error {
+func (d *fakeDockerPort) ServiceRemove(_ context.Context, name string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.services, name)
@@ -109,14 +109,14 @@ func (d *fakeDutyDocker) ServiceRemove(_ context.Context, name string) error {
 	return nil
 }
 
-func (d *fakeDutyDocker) SecretInspect(_ context.Context, name string) (string, bool, error) {
+func (d *fakeDockerPort) SecretInspect(_ context.Context, name string) (string, bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	id, ok := d.secrets[name]
 	return id, ok, nil
 }
 
-func (d *fakeDutyDocker) SecretEnsure(_ context.Context, name string, data []byte, _ map[string]string) (string, error) {
+func (d *fakeDockerPort) SecretEnsure(_ context.Context, name string, data []byte, _ map[string]string) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	id := "sec-" + name
@@ -126,14 +126,14 @@ func (d *fakeDutyDocker) SecretEnsure(_ context.Context, name string, data []byt
 }
 
 // NetworkName 把 ID 反解回名（比对同锚路径的模拟）。
-func (d *fakeDutyDocker) NetworkName(_ context.Context, target string) (string, error) {
+func (d *fakeDockerPort) NetworkName(_ context.Context, target string) (string, error) {
 	if target == "net-host-id" {
 		return "host", nil
 	}
 	return target, nil
 }
 
-func newDutyFixture(t *testing.T, enabled bool, d *fakeDutyDocker) (*Manager, *state.Store) {
+func newManagerFixture(t *testing.T, enabled bool, d *fakeDockerPort) (*Manager, *state.Store) {
 	t.Helper()
 	st, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -144,9 +144,9 @@ func newDutyFixture(t *testing.T, enabled bool, d *fakeDutyDocker) (*Manager, *s
 	return mgr, st
 }
 
-func TestDutyEnsureCreatesService(t *testing.T) {
-	d := newFakeDutyDocker(true)
-	mgr, st := newDutyFixture(t, true, d)
+func TestManagerEnsureCreatesService(t *testing.T) {
+	d := newFakeDockerPort(true)
+	mgr, st := newManagerFixture(t, true, d)
 	ctx := context.Background()
 	if err := mgr.Ensure(ctx); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -204,9 +204,9 @@ func TestDutyEnsureCreatesService(t *testing.T) {
 	}
 }
 
-func TestDutyEnsureDrift(t *testing.T) {
-	d := newFakeDutyDocker(true)
-	mgr, _ := newDutyFixture(t, true, d)
+func TestManagerEnsureDrift(t *testing.T) {
+	d := newFakeDockerPort(true)
+	mgr, _ := newManagerFixture(t, true, d)
 	ctx := context.Background()
 	if err := mgr.Ensure(ctx); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -225,10 +225,10 @@ func TestDutyEnsureDrift(t *testing.T) {
 	}
 }
 
-func TestDutyDisabledRemoves(t *testing.T) {
-	d := newFakeDutyDocker(true)
+func TestManagerDisabledRemoves(t *testing.T) {
+	d := newFakeDockerPort(true)
 	enabled := true
-	mgr, _ := newDutyFixture(t, enabled, d)
+	mgr, _ := newManagerFixture(t, enabled, d)
 	ctx := context.Background()
 	if err := mgr.Ensure(ctx); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -247,9 +247,9 @@ func TestDutyDisabledRemoves(t *testing.T) {
 	}
 }
 
-func TestDutyTokenRegeneration(t *testing.T) {
-	d := newFakeDutyDocker(true)
-	mgr, st := newDutyFixture(t, true, d)
+func TestManagerTokenRegeneration(t *testing.T) {
+	d := newFakeDockerPort(true)
+	mgr, st := newManagerFixture(t, true, d)
 	ctx := context.Background()
 	if err := mgr.Ensure(ctx); err != nil {
 		t.Fatalf("Ensure: %v", err)
@@ -271,10 +271,10 @@ func TestDutyTokenRegeneration(t *testing.T) {
 	}
 }
 
-// TestDutyTLSNameInjection platform 模式：tlsName 注入 wss 校验名；off/manual
+// TestManagerTLSNameInjection platform 模式：tlsName 注入 wss 校验名；off/manual
 // 诚实降级（不注入 = ws://）。
-func TestDutyTLSNameInjection(t *testing.T) {
-	d := newFakeDutyDocker(true)
+func TestManagerTLSNameInjection(t *testing.T) {
+	d := newFakeDockerPort(true)
 	st, err := state.Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("state.Open: %v", err)
@@ -296,11 +296,11 @@ func TestDutyTLSNameInjection(t *testing.T) {
 	}
 }
 
-// TestDutySpecEqual 单元钉死幂等比对的敏感面（env/挂载/secret/网络/global
+// TestManagerSpecEqual 单元钉死幂等比对的敏感面（env/挂载/secret/网络/global
 // ——任何执行面漂移都必须被捕获）。
-func TestDutySpecEqual(t *testing.T) {
+func TestManagerSpecEqual(t *testing.T) {
 	desired := buildSpec("10.0.0.1:8420", "ctrl.example.com", "sec-1")
-	base := dutydocker.ServiceSnapshot{Exists: true, Image: DefaultExecRelayImage,
+	base := dockerapi.ServiceSnapshot{Exists: true, Image: DefaultExecRelayImage,
 		Env:       []string{EnvControlAddr + "=10.0.0.1:8420", EnvControlTLSName + "=ctrl.example.com"},
 		Networks:  []string{"host"},
 		Mounts:    []mount.Mount{{Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"}},
@@ -309,14 +309,14 @@ func TestDutySpecEqual(t *testing.T) {
 	if !specEqual(base, desired) {
 		t.Fatal("identical spec must compare equal")
 	}
-	cases := map[string]func(*dutydocker.ServiceSnapshot){
-		"image drift":   func(s *dutydocker.ServiceSnapshot) { s.Image = "other:1" },
-		"env drift":     func(s *dutydocker.ServiceSnapshot) { s.Env = []string{EnvControlAddr + "=10.0.0.2:8420"} },
-		"mount drift":   func(s *dutydocker.ServiceSnapshot) { s.Mounts[0].Source = "/other.sock" },
-		"network drift": func(s *dutydocker.ServiceSnapshot) { s.Networks = []string{"bridge"} },
-		"secret drift":  func(s *dutydocker.ServiceSnapshot) { s.SecretIDs[0] = "sec-2" },
-		"mode drift":    func(s *dutydocker.ServiceSnapshot) { s.Global = false },
-		"limit drift":   func(s *dutydocker.ServiceSnapshot) { s.MemoryBytes = 1 },
+	cases := map[string]func(*dockerapi.ServiceSnapshot){
+		"image drift":   func(s *dockerapi.ServiceSnapshot) { s.Image = "other:1" },
+		"env drift":     func(s *dockerapi.ServiceSnapshot) { s.Env = []string{EnvControlAddr + "=10.0.0.2:8420"} },
+		"mount drift":   func(s *dockerapi.ServiceSnapshot) { s.Mounts[0].Source = "/other.sock" },
+		"network drift": func(s *dockerapi.ServiceSnapshot) { s.Networks = []string{"bridge"} },
+		"secret drift":  func(s *dockerapi.ServiceSnapshot) { s.SecretIDs[0] = "sec-2" },
+		"mode drift":    func(s *dockerapi.ServiceSnapshot) { s.Global = false },
+		"limit drift":   func(s *dockerapi.ServiceSnapshot) { s.MemoryBytes = 1 },
 	}
 	for name, mutate := range cases {
 		cur := base
@@ -327,10 +327,10 @@ func TestDutySpecEqual(t *testing.T) {
 	}
 }
 
-// TestDutyNotSwarmReady swarm 未就绪 → 哨兵错误（duty 退避重试态）。
-func TestDutyNotSwarmReady(t *testing.T) {
-	d := newFakeDutyDocker(false)
-	mgr, _ := newDutyFixture(t, true, d)
+// TestManagerNotSwarmReady swarm 未就绪 → 哨兵错误（收敛循环退避重试态）。
+func TestManagerNotSwarmReady(t *testing.T) {
+	d := newFakeDockerPort(false)
+	mgr, _ := newManagerFixture(t, true, d)
 	if err := mgr.Ensure(context.Background()); err == nil {
 		t.Fatal("Ensure must fail when swarm is not active")
 	}

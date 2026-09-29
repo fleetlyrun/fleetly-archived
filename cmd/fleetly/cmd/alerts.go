@@ -170,7 +170,7 @@ func (c *alertsRulesCreateCmd) Run(ctx context.Context, env *commands.Environmen
 		}
 		r := resp.GetRule()
 		_, err = fmt.Fprintf(env.Stdout,
-			"alert rule %q created (id %s; the duty re-renders the rule file shortly)\n",
+			"alert rule %q created (id %s; the manager re-renders the rule file shortly)\n",
 			r.GetName(), r.GetId())
 		return err
 	})
@@ -205,7 +205,7 @@ func (c *alertsRulesRmCmd) Run(ctx context.Context, env *commands.Environment, a
 		if _, err := cl.Alerts().DeleteAlertRule(ctx, &serverv1.DeleteAlertRuleRequest{Id: id}); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(env.Stdout, "alert rule %q removed (the duty re-renders the rule file shortly)\n", args[0])
+		_, err = fmt.Fprintf(env.Stdout, "alert rule %q removed (the manager re-renders the rule file shortly)\n", args[0])
 		return err
 	})
 }
@@ -303,7 +303,7 @@ func (c *alertsModeCmd) Run(ctx context.Context, env *commands.Environment, args
 			state = "deployed"
 		}
 		_, err = fmt.Fprintf(env.Stdout,
-			"alerts mode set to %s (vmalert: %s; rules: %d; metrics.mode: %s — the duty converges the stack shortly)\n",
+			"alerts mode set to %s (vmalert: %s; rules: %d; metrics.mode: %s — the manager converges the stack shortly)\n",
 			st.GetMode(), state, st.GetRuleCount(), st.GetMetricsMode())
 		return err
 	})

@@ -49,7 +49,7 @@ type AlertingServiceClient interface {
 	ListAlertRules(ctx context.Context, in *ListAlertRulesRequest, opts ...grpc.CallOption) (*ListAlertRulesResponse, error)
 	// UpdateAlertRule 部分更新（optional 字段语义——未提供不变）。
 	UpdateAlertRule(ctx context.Context, in *UpdateAlertRuleRequest, opts ...grpc.CallOption) (*UpdateAlertRuleResponse, error)
-	// DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。
+	// DeleteAlertRule 删除规则（收敛管理器下一拍重渲染规则文件）。
 	DeleteAlertRule(ctx context.Context, in *DeleteAlertRuleRequest, opts ...grpc.CallOption) (*DeleteAlertRuleResponse, error)
 	// SetAlertsMode 切换 alerts.mode（unset | on；前置门 metrics.mode=on，
 	// 违反 → 409 E_ALERTS_METRICS_REQUIRED 带指引）。
@@ -160,7 +160,7 @@ type AlertingServiceServer interface {
 	ListAlertRules(context.Context, *ListAlertRulesRequest) (*ListAlertRulesResponse, error)
 	// UpdateAlertRule 部分更新（optional 字段语义——未提供不变）。
 	UpdateAlertRule(context.Context, *UpdateAlertRuleRequest) (*UpdateAlertRuleResponse, error)
-	// DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。
+	// DeleteAlertRule 删除规则（收敛管理器下一拍重渲染规则文件）。
 	DeleteAlertRule(context.Context, *DeleteAlertRuleRequest) (*DeleteAlertRuleResponse, error)
 	// SetAlertsMode 切换 alerts.mode（unset | on；前置门 metrics.mode=on，
 	// 违反 → 409 E_ALERTS_METRICS_REQUIRED 带指引）。

@@ -2,7 +2,7 @@ package engine
 
 // IMPL-T15-1/OT-1 项目网连线与对账测试：成员服务双挂投影（守卫①/④的 spec
 // 级断言）、attach/detach 重部署滚动语义、recon networks 扩面（孤儿网注入
-// 一个对账周期内暴露——守卫②；期望项目网缺失披露）、项目网收敛 duty
+// 一个对账周期内暴露——守卫②；期望项目网缺失披露）、项目网收敛步
 // （缺失 ensure + 空网回收）、瞬态读错不结论、MoveApp 保留参与位。
 
 import (
@@ -93,7 +93,7 @@ func TestProjectNetworkAttachmentProjectsMembersServices(t *testing.T) {
 	if len(projectAttach.Aliases) != 1 || projectAttach.Aliases[0] != "demo-web" {
 		t.Fatalf("project net aliases = %v, want [demo-web] only (cross-app short-name mixing is structurally impossible)", projectAttach.Aliases)
 	}
-	// 平台侧 ensure 面（attach 前置由 API 组合；此处 duty 亦幂等确保）。
+	// 平台侧 ensure 面（attach 前置由 API 组合；此处收敛步亦幂等确保）。
 	if !h.nets.has(projectNet) {
 		t.Fatalf("project network %s not ensured", projectNet)
 	}
@@ -338,7 +338,7 @@ func TestNetworkReconExemptsEveryOwnershipAnchor(t *testing.T) {
 
 // TestProjectNetworkReconDisclosesMissingMemberNetwork state→swarm 方向：
 // 成员项目的项目网在底座缺失（外部移除）→ network.missing 披露（一个对账
-// 周期内暴露）；项目网收敛 duty 幂等重 ensure（派生修正）后不再重复披露。
+// 周期内暴露）；项目网收敛步 幂等重 ensure（派生修正）后不再重复披露。
 func TestProjectNetworkReconDisclosesMissingMemberNetwork(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -350,17 +350,17 @@ func TestProjectNetworkReconDisclosesMissingMemberNetwork(t *testing.T) {
 		t.Fatalf("network.missing events = %d, want exactly 1 after the substrate removal", got)
 	}
 	if h.nets.has(projectNet) {
-		t.Fatalf("recon must not auto-create the network (disclosure only; recreation is the convergence duty's role)")
+		t.Fatalf("recon must not auto-create the network (disclosure only; recreation is the convergence step's role)")
 	}
 	h.eng.SubstrateRecon(ctx)
 	if got := countEventsByName(t, h, "network.missing"); got != 1 {
 		t.Fatalf("network.missing events = %d after rescan, want still 1 (throttle broken)", got)
 	}
 
-	// 收敛 duty：幂等重 ensure（缺失自愈）→ 下一拍 recon 清记忆、零新事件。
+	// 收敛步：幂等重 ensure（缺失自愈）→ 下一拍 recon 清记忆、零新事件。
 	h.eng.ReconcileProjectNetworks(ctx)
 	if !h.nets.has(projectNet) {
-		t.Fatalf("convergence duty did not re-ensure the missing project network %s", projectNet)
+		t.Fatalf("convergence step did not re-ensure the missing project network %s", projectNet)
 	}
 	h.eng.SubstrateRecon(ctx)
 	if got := countEventsByName(t, h, "network.missing"); got != 1 {
@@ -419,7 +419,7 @@ func TestNetworkReconSubstrateReadErrorDisclosesNothing(t *testing.T) {
 	}
 	h.eng.ReconcileProjectNetworks(ctx)
 	if h.nets.removeCount() != 0 {
-		t.Fatalf("convergence duty acted on a failed read: removes=%d", h.nets.removeCount())
+		t.Fatalf("convergence step acted on a failed read: removes=%d", h.nets.removeCount())
 	}
 
 	h.nets.failListErr = nil
@@ -432,7 +432,7 @@ func TestNetworkReconSubstrateReadErrorDisclosesNothing(t *testing.T) {
 // TestMoveAppPreservesProjectNetworkParticipation MoveApp 交叉语义（票面
 // 裁决）：参与位是 app 级属性，改派保留；投影随**当前**项目——换名重部署
 // 后的新服务双挂新项目网（别名 = <app>-<service> 不变），旧项目网在失去
-// 最后一名成员后由收敛 duty 回收。
+// 最后一名成员后由收敛步回收。
 func TestMoveAppPreservesProjectNetworkParticipation(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -479,7 +479,7 @@ func TestMoveAppPreservesProjectNetworkParticipation(t *testing.T) {
 		t.Fatalf("project alias after move = %v, want [demo-web] (app name unchanged)", nets[1].Aliases)
 	}
 
-	// 旧项目网：无成员 + 零端点 → 收敛 duty 回收。
+	// 旧项目网：无成员 + 零端点 → 收敛步回收。
 	h.eng.ReconcileProjectNetworks(ctx)
 	if h.nets.has(oldProjectNet) {
 		t.Fatalf("old project network %s not reclaimed after the last member moved away", oldProjectNet)

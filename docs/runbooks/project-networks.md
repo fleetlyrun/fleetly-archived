@@ -19,7 +19,7 @@
   `project.network_changed`）→ 入队重部署（复用最近一次 succeeded 部署的
   compose；无部署史 = 仅落位）。新 revision 的成员服务在网络集合上滚动。
 - **回收**：项目网在失去最后一名成员（app 删除/改派/逐出）且**零挂接容器**
-  后由平台收敛 duty（30s 频控）回收；仍被服务引用时保留、下拍重试（底座对
+  后由平台收敛步（30s 频控）回收；仍被服务引用时保留、下拍重试（底座对
   in-use 移除另有 `FailedPrecondition` 拒绝兜底——真机实证）。
   ⚠️ 实测注记（Docker 29.7.2 本机 swarm）：`network inspect` 的 `Services`
   字段在受管 overlay 上**未填充**（恒 0）——零引用判据实际由 `Containers`
@@ -96,7 +96,7 @@ overlay 数据面跨节点走 **VXLAN（UDP 4789）** 与 **gossip（UDP 7946）
 | 事件 | 含义 | 处置 |
 |---|---|---|
 | `project.network_changed` | 参与位变更（attach/detach） | 通知/审计面事实 |
-| `network.missing` | 有成员项目的项目网在底座缺失（外部 `docker network rm` 等） | 披露 + 收敛 duty 幂等重 ensure（自愈）；反复出现查外部脚本 |
+| `network.missing` | 有成员项目的项目网在底座缺失（外部 `docker network rm` 等） | 披露 + 收敛步幂等重 ensure（自愈）；反复出现查外部脚本 |
 | `network.orphaned` | `fleetly-` 前缀受管网无 state 归因 | **只披露不自动删**（无法归因 ⇒ 不静默删他人物件）；人工确认后清理 |
 
 孤儿/缺失持续形态**每进程只报一次**（恢复后清零可再报）。

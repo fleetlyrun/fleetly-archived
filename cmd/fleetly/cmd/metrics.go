@@ -5,7 +5,7 @@ package cmd
 //	status  —— 托管三件套状态视图（模式/三件部署态/节点上报比/retention——
 //	           「N/M nodes reporting」的诚实口径：跨节点采集走节点 advertise
 //	           地址直连（VPC/LAN），缺席 = 节点不 Ready 或防火墙拦 VPC）；
-//	mode    —— 模式切换（unset|on；保存即生效——duty 收敛部署/移除，
+//	mode    —— 模式切换（unset|on；保存即生效——后台收敛部署/移除，
 //	           数据卷保留）；
 //	query   —— PromQL 区间查询（透传——操作员工具，不做查询沙箱；
 //	           VM 不可达/未启用以服务端信封诚实报错）。
@@ -221,7 +221,7 @@ func (c *metricsModeSetCmd) Run(ctx context.Context, env *commands.Environment, 
 			}
 		}
 		_, err = fmt.Fprintf(env.Stdout,
-			"metrics mode set to %s (components deployed: %d/3; the duty converges the stack shortly; the data volume survives switching off)\n",
+			"metrics mode set to %s (components deployed: %d/3; the manager converges the stack shortly; the data volume survives switching off)\n",
 			st.GetMode(), deployed)
 		return err
 	})

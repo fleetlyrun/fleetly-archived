@@ -32,7 +32,7 @@ const (
 )
 
 // LoadRustfsCredentialsCiphertext 读取已存的托管 RustFS 凭据密文。
-// found=false = 尚未生成（duty 据此走生成路径；探针面据此如实报
+// found=false = 尚未生成（管理器据此走生成路径；探针面据此如实报
 // 「未备便」）。任一键存在而另一键缺失 = 存储损坏（loud-fail，不静默
 // 回落再生成——半份密文可能是磁盘/库损坏的信号，覆盖写会掩盖现场）。
 func (s *Store) LoadRustfsCredentialsCiphertext(ctx context.Context) (accessCT, secretCT string, found bool, err error) {
@@ -84,7 +84,7 @@ func (s *Store) SaveRustfsCredentialsCiphertext(ctx context.Context, accessCT, s
 }
 
 // DeleteRustfsCredentialsCiphertext 移除凭据密文（mode 离开 rustfs 的清场
-// 路径，E3-5 duty 调用；幂等——键不存在即成功）。凭据是运行时配置：
+// 路径，E3-5 管理器调用；幂等——键不存在即成功）。凭据是运行时配置：
 // 清场后再启用走重新生成，数据卷内容与凭据零绑定（设计 §2.5）。
 func (s *Store) DeleteRustfsCredentialsCiphertext(ctx context.Context) error {
 	err := s.InTx(ctx, func(tx *Tx) error {

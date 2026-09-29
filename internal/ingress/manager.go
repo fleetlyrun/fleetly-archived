@@ -20,7 +20,7 @@ import (
 	"github.com/go-acme/lego/v4/registration"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -84,10 +84,10 @@ type Manager struct {
 	// 单测注入假签发器（计数 + 自签证书）断言并发串行化与单次签发，
 	// 不依赖真实 CA。
 	obtainFn func(ctx context.Context, app string, user registration.User, domains []string) (certPEM, keyPEM []byte, err error)
-	// platformRetryInterval 是平台证书 duty 的重试退避（E1-3；零值回落
+	// platformRetryInterval 是平台证书控制器 的重试退避（E1-3；零值回落
 	// platformCertRetryInterval 常量，单测注入短退避驱动重试次序断言）。
 	platformRetryInterval time.Duration
-	// s3PublicScanInterval 是 s3 公网开关 duty 的稳态扫描周期（E3-6；零值
+	// s3PublicScanInterval 是 s3 公网开关控制器 的稳态扫描周期（E3-6；零值
 	// 回落 s3PublicScanInterval 常量，单测注入短周期驱动开关收敛断言）。
 	s3PublicScanInterval time.Duration
 	// dnsProviderFn 是 DNS-01 插件解析缝（W5-S3，dns01.go；生产 = 装配点
@@ -102,7 +102,7 @@ func NewManager(cfg Config, store *state.Store, log *slog.Logger) (*Manager, fun
 	if err := norm.Validate(); err != nil {
 		return nil, nil, err
 	}
-	dc, err := dutydocker.New("")
+	dc, err := dockerapi.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -209,14 +209,14 @@ func (m *Manager) TLSHandler(ctx context.Context) (http.Handler, error) {
 }
 
 // Run 是周期任务：Traefik 收敛 + 全量重发布 + 证书续期扫描（sweep）+
-// 平台证书 duty（E1-3，仅 base_domain 非空时活动）+ registry 部署 duty
-// （E1-4，仅 base_domain 非空时活动——与证书 duty 无次序依赖，设计 §2.4
+// 平台证书控制器（E1-3，仅 base_domain 非空时活动）+ registry 部署控制器
+// （E1-4，仅 base_domain 非空时活动——与证书 控制器无次序依赖，设计 §2.4
 // 次序⑤）。由 fleetlyd ingress 服务壳调用（ctx 取消返回）。收敛失败只
 // 降级日志（下轮重试），不影响控制面其余服务。
 func (m *Manager) Run(ctx context.Context) error {
-	go m.runPlatformCertDuty(ctx)
-	go m.runRegistryDuty(ctx)
-	go m.runS3PublicDuty(ctx)
+	go m.runPlatformCertController(ctx)
+	go m.runRegistryController(ctx)
+	go m.runS3PublicController(ctx)
 	m.sweep(ctx)
 	ticker := time.NewTicker(m.cfg.RenewScanInterval)
 	defer ticker.Stop()
@@ -560,7 +560,7 @@ func (m *Manager) republishAll(ctx context.Context) error {
 
 // Status 是入口状态投影（fleetlyd 诊断）。
 type Status struct {
-	Traefik     dutydocker.ServiceSnapshot
+	Traefik     dockerapi.ServiceSnapshot
 	AdvertiseIP string
 	Responder   string
 }

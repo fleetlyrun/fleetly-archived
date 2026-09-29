@@ -55,7 +55,7 @@ func (f *fakeRotator) callCount() int {
 
 func (f *fakeRotator) release() { close(f.gate) }
 
-// newRotateHarness 构造带轮换接线的锚定 duty 测试环境（真实 store +
+// newRotateHarness 构造带轮换接线的锚定循环测试环境（真实 store +
 // fakeDocker + fakeRotator）。
 func newRotateHarness(t *testing.T, mode string, rotErr error) (*ClusterAnchor, *Store, *fakeDocker, *fakeRotator) {
 	t.Helper()

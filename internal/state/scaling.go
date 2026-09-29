@@ -237,7 +237,7 @@ func (s *Store) RemoveScalingPolicy(ctx context.Context, appID, service string, 
 	})
 }
 
-// ListScalingPolicies 返回全部策略行（引擎 duty 的评估候选集；创建序无关
+// ListScalingPolicies 返回全部策略行（引擎收敛步的评估候选集；创建序无关
 // ——调用方按 app/service 自行分组）。
 func (s *Store) ListScalingPolicies(ctx context.Context) ([]ScalingPolicy, error) {
 	rows, err := s.db.QueryContext(ctx,

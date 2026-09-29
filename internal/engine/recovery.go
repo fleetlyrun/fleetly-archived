@@ -210,7 +210,7 @@ func (e *Engine) armRecoveryRetry(stuck map[string]bool) {
 // 间隔限噪；恢复动作幂等，重复执行只做确定性收敛）。
 const recoveryRetryInterval = 30 * time.Second
 
-// retryRecoveryIfNeeded 是 tick 的恢复重试 duty（M1-8）：恢复未完成且频控
+// retryRecoveryIfNeeded 是 tick 的恢复重试步（M1-8）：恢复未完成且频控
 // 窗已过 → 重跑 recoverInterrupted（幂等：整轮或定向卡住记录）。
 func (e *Engine) retryRecoveryIfNeeded(ctx context.Context) {
 	if !e.recoveryPending || e.now().Before(e.recoveryNextAt) {

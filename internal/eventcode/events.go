@@ -122,7 +122,7 @@ var builtins = []Event{
 	{Name: "app.deleted",
 		Source:  "B6/H10 added during implementation (MG-3; app deletion second-beat terminal event)",
 		Summary: "app deletion completed (tombstone second beat: managed services removed, name enters retention hold)"},
-	// T0-V2.2 实现期新增（调研 R2 运行期 DB↔Swarm 对账，引擎周期 duty）：
+	// T0-V2.2 实现期新增（调研 R2 运行期 DB↔Swarm 对账，引擎周期循环）：
 	// 派生态声称 running 的 app 其期望服务在 substrate 整体缺失（外部
 	// docker service rm）——只披露与修正派生态（running → down），不自动
 	// 重建；判据是 service 存在性而非副本数，底座读错误不算缺失。
@@ -149,7 +149,7 @@ var builtins = []Event{
 	{Name: "placement.unresolved",
 		Source:  "stateful-placement §2.8",
 		Summary: "binding undecidable after DR; explicit placement required (no guessing)"},
-	// v0.2 E1-6 接线：节点观测事件族由锚定 duty 差分发出（v0.1 的「不产生
+	// v0.2 E1-6 接线：节点观测事件族由锚定循环差分发出（v0.1 的「不产生
 	// 产品事件」注记解除，multi-node §2.7）。
 	{Name: "node.joined",
 		Source:  "stateful-placement §2.8",
@@ -258,7 +258,7 @@ var builtins = []Event{
 		Summary: "build stayed queued/building past 2x the build timeout budget (surfaces state-machine bugs; no self-healing)"},
 
 	// ── 对象存储 S3 面（E3 对象存储专项设计 §5.3，2026-09-21 裁决轮落定，
-	//    注册表只增；s3.updated 由 E3-2 接线，rustfs duty 差分事件由 E3-5
+	//    注册表只增；s3.updated 由 E3-2 接线，rustfs 管理器差分事件由 E3-5
 	//    接线——W3-S3）──
 	// 发出来源：platform_settings 的 S3 设置保存事务（internal/state/
 	// s3settings.go，与业务写同事务 = Outbox 模式）。payload 只带模式与
@@ -273,16 +273,16 @@ var builtins = []Event{
 	{Name: "registry.updated",
 		Source:  "IMPL-T1-2 added during implementation (DT-2 platform registry credentials change; payload carries the host and the password fingerprint, never credentials)",
 		Summary: "platform registry credentials changed (payload carries the host and the password fingerprint, never credentials)"},
-	// E3-5 rustfs duty 差分事件（node.* 同型；发出来源 = internal/rustfs
+	// E3-5 rustfs 管理器差分事件（node.* 同型；发出来源 = internal/rustfs
 	// 的收敛拍——服务缺失创建/spec 漂移更新发 deployed（payload 带 reason
 	// created|updated），mode 离开 rustfs 服务移除发 removed（payload 带
 	// volume_retained=true——数据卷保留语义的显性化面）。payload 不含任何
 	// 凭据材料（凭据指纹只在日志面）。
 	{Name: "s3.rustfs_deployed",
-		Source:  "E3 object-storage §5.3 added during implementation (W3-S3 rustfs duty converge diff; payload carries service/image/reason, never credentials)",
+		Source:  "E3 object-storage §5.3 added during implementation (W3-S3 rustfs manager converge diff; payload carries service/image/reason, never credentials)",
 		Summary: "managed RustFS deployed or converged to the desired spec (payload carries service/image/reason, never credentials)"},
 	{Name: "s3.rustfs_removed",
-		Source:  "E3 object-storage §5.3 added during implementation (W3-S3 rustfs duty converge diff; data volume retained)",
+		Source:  "E3 object-storage §5.3 added during implementation (W3-S3 rustfs manager converge diff; data volume retained)",
 		Summary: "managed RustFS removed after s3.mode left rustfs (data volume retained; payload carries volume_retained=true)"},
 
 	// ── 状态备份上传轨（E3-3，§2.3/D-S3-4；W3-S2 接线）──
@@ -366,15 +366,15 @@ var builtins = []Event{
 	// 发出来源：SaveLogsSettings 保存事务（internal/state/logsettings.go，
 	// 与业务写同事务 = Outbox；payload 只带后端值，词表内枚举）。
 	{Name: "logs.backend_updated",
-		Source:  "E6 observability §2.2 (settings save transaction; switch triggers the duty deploy/remove)",
-		Summary: "log backend setting changed (payload carries the backend value; switch triggers the duty to deploy or remove VictoriaLogs, the data volume is retained)"},
-	// 发出来源：victorialogs duty 收敛拍差分（internal/victorialogs/
+		Source:  "E6 observability §2.2 (settings save transaction; switch triggers the manager deploy/remove)",
+		Summary: "log backend setting changed (payload carries the backend value; switch triggers the manager to deploy or remove VictoriaLogs, the data volume is retained)"},
+	// 发出来源：victorialogs 管理器收敛拍差分（internal/victorialogs/
 	// victorialogs.go——服务缺失创建/spec 漂移更新发 deployed（payload 带
 	// reason created|updated），backend 离开 victorialogs 服务移除发
 	// removed（payload 带 volume_retained=true）。VL 无凭据面，payload
 	// 零敏感材料）。
 	{Name: "logs.victorialogs_deployed",
-		Source:  "E6 observability §2.1 (duty converge diff; payload carries service/image/reason)",
+		Source:  "E6 observability §2.1 (manager converge diff; payload carries service/image/reason)",
 		Summary: "managed VictoriaLogs deployed or converged to the desired spec (payload carries service/image/reason)"},
 	{Name: "logs.victorialogs_removed",
 		Source:  "E6 observability §2.2 (backend left victorialogs; data volume retained)",
@@ -397,13 +397,13 @@ var builtins = []Event{
 	{Name: "metrics.mode_updated",
 		Source:  "E6 observability §4.1 (settings save transaction; opt-in switch deploys or removes the managed stack, volume retained)",
 		Summary: "metrics mode setting changed (payload carries the mode value; switching on deploys the managed VictoriaMetrics/cAdvisor/node-exporter stack, switching off removes the services — the data volume is retained)"},
-	// 发出来源：metrics duty 收敛拍差分（internal/metrics/metrics.go——服务
+	// 发出来源：metrics 管理器收敛拍差分（internal/metrics/metrics.go——服务
 	// 缺失创建/spec 漂移更新各发一条 deployed（payload 带 service/image/
 	// reason created|updated），mode 离开 on 三件移除发 removed（payload 带
 	// volume_retained=true——数据卷保留语义的显性化面）。全链无凭据面，
 	// payload 零敏感材料。
 	{Name: "metrics.stack_deployed",
-		Source:  "E6 observability §4.1 (duty converge diff; payload carries service/image/reason)",
+		Source:  "E6 observability §4.1 (manager converge diff; payload carries service/image/reason)",
 		Summary: "managed metrics stack service deployed or converged to the desired spec (payload carries service/image/reason)"},
 	{Name: "metrics.stack_removed",
 		Source:  "E6 observability §4.1 (mode left on; data volume retained)",
@@ -493,7 +493,7 @@ var builtins = []Event{
 	//    swarm service 承载（restart-condition none：崩溃上抛不静默自愈），
 	//    平台管 API/网络/配额/审计/回收。发出/消费点 = internal/state
 	//    tasks.go 原语（与业务写同事务 = Outbox）与 internal/engine 任务
-	//    duty。payload 只带事实字段（task/image/scope/network/ttl/reason/
+	//    收敛步。payload 只带事实字段（task/image/scope/network/ttl/reason/
 	//    error），env 值与镜像凭证零出现）──
 	{Name: "task.created",
 		Source:  "T-line DT-5/IMPL-T2-1 dynamic tasks (task accepted; state tasks.go, same transaction; payload carries image/scope/network/ttl, never env values)",
@@ -522,13 +522,13 @@ var builtins = []Event{
 	// 不复用，此处不再登记；历史事件流中的存量行不受影响。
 
 	// ── 自动扩缩（B 线 W5 设计 §1，D-V3W5-2，v0.3 W5-S1 接线；注册表只增。
-	//    发出来源 = engine 收敛拍尾部的扩缩 duty，internal/engine/
+	//    发出来源 = engine 收敛拍尾部的扩缩步，internal/engine/
 	//    autoscaling.go）。策略 CRUD 零事件（审计 scaling.policy_changed 承
 	//    载——设计 §1.2 的事件面是运行期动作与披露）──
 	// 副本调整动作：payload 带 service/dimension（cpu|mem|cpu+mem）/
 	// replicas_before/replicas_after/实测水位百分数。
 	{Name: "scaling.adjusted",
-		Source:  "B-line W5 §1 D-V3W5-2 (autoscaler adjusted a service's replica count; engine autoscaling duty; payload carries dimension/before-after replicas/utilization)",
+		Source:  "B-line W5 §1 D-V3W5-2 (autoscaler adjusted a service's replica count; engine autoscaling step; payload carries dimension/before-after replicas/utilization)",
 		Summary: "autoscaler adjusted a service's replica count (payload carries the triggering dimension, before/after replicas and measured utilization)"},
 	// 披露面（每策略一次性；条件解除后可再披露）：
 	{Name: "scaling.dormant",

@@ -56,7 +56,7 @@ const (
 
 // JanitorConfig 是 janitor 的保留窗与预算参数集（S18-A7/A10 装配扩展：
 // 构造参数从两个散装天数收口为结构体——新增 duties 的参数不再逐个膨胀
-// 构造签名）。零值字段回落默认；目录/根为空时对应 duty 整体跳过。
+// 构造签名）。零值字段回落默认；目录/根为空时对应清理步整体跳过。
 type JanitorConfig struct {
 	// EventRetentionDays / AuditRetentionDays 是事件/审计保留天数。
 	EventRetentionDays int
@@ -198,7 +198,7 @@ func (j *Janitor) auditRetentionFor(ctx context.Context) time.Duration {
 // PruneOnce 执行一轮清理（now 为基准时刻），返回 (事件条数, 审计条数)。
 // 独立导出供测试直接驱动。S18-A7/A10：一轮内顺次执行全部 duties——
 // 事件/审计分批删除 → builds 终态行 → 产物目录 → 部署 compose 目录 →
-// 非终态超龄扫描；各 duty 失败独立记日志不中断后续（单 duty 失败不该
+// 非终态超龄扫描；各步失败独立记日志不中断后续（单步失败不该
 // 瘫痪整轮保留期治理），事件/审计错误仍向上返回（既有契约）。
 func (j *Janitor) PruneOnce(ctx context.Context, now time.Time) (events int64, audits int64, err error) {
 	events, err = j.store.PruneExpiredEvents(ctx, now.Add(-j.eventRetention))
@@ -356,7 +356,7 @@ func (j *Janitor) pruneDeploymentDirs(ctx context.Context, now time.Time) {
 }
 
 // pruneUploadSessions 清理上传构建会话目录的孤儿残留（IMPL-T2-2/DT-6：
-// 正常终态清理由 Builder/Queue 钩子承担；本 duty 兜底「解包后建行前进程
+// 正常终态清理由 Builder/Queue 钩子承担；本步兜底「解包后建行前进程
 // 崩溃」等无行形态，并按行状态保护在途构建）。
 //   - 行存在且非终态（queued/building）→ 保留（构建还要消费上下文）；
 //   - 行存在且终态，或无对应行 → 目录 mtime 过保留窗即回收；

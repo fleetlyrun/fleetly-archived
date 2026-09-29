@@ -24,7 +24,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -111,7 +111,7 @@ func buildSpec(controlAddr, tlsName, secretID string) swarm.ServiceSpec {
 // specEqual 幂等比对（镜像/env/挂载/secret/网络/global/限额——服务的全部
 // 执行面都由期望 spec 权威表达；label 不参与，服务名即身份。env 含
 // FLEETLY_CONTROL_ADDR/TLS_NAME——relay 拨号面的漂移必被本比对捕获）。
-func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -167,7 +167,7 @@ func sameStrings(a, b []string) bool {
 	return true
 }
 
-// fmtControlAddr 拼 advertise:port（duty 的 FLEETLY_CONTROL_ADDR 值）。
+// fmtControlAddr 拼 advertise:port（部署 spec 的 FLEETLY_CONTROL_ADDR 值）。
 func fmtControlAddr(advertise, httpPort string) string {
 	return fmt.Sprintf("%s:%s", advertise, httpPort)
 }

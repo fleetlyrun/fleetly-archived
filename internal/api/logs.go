@@ -23,7 +23,7 @@ import (
 //
 // E6 W5-S1 扩展：SearchLogs 统一检索（VL LogsQL 后端——backend=jsonl 或
 // VL 不可达都以 E_LOGS_BACKEND_UNAVAILABLE 诚实报错，不返回空列表冒充）；
-// GetLogsBackend/SetLogsBackend 日志后端视图与切换（set 即生效——duty 收敛
+// GetLogsBackend/SetLogsBackend 日志后端视图与切换（set 即生效——后台收敛
 // 由 victorialogs.Manager 常驻循环承载，本面只落设置）。vl/vm 可为 nil
 //（测试/精简装配形态——SearchLogs 如实报后端不可用，backend 面部署态
 // 如实报 unknown）。
@@ -33,7 +33,7 @@ type LogsService struct {
 	mg *logs.Manager
 	// vl 是 VL 查询/入湖消费端（nil = 未装配——SearchLogs 如实报不可用）。
 	vl *victorialogs.Backend
-	// vm 是 VL duty 管理器（nil = 未装配——backend 视图部署态 unknown）。
+	// vm 是 VL 收敛管理器（nil = 未装配——backend 视图部署态 unknown）。
 	vm *victorialogs.Manager
 }
 
@@ -42,7 +42,7 @@ func NewLogsService(st *state.Store, mg *logs.Manager) *LogsService {
 	return &LogsService{st: st, mg: mg}
 }
 
-// WithVictorialogs 注入 VL 消费端与 duty 管理器（W5-S1；链式装配，nil
+// WithVictorialogs 注入 VL 消费端与收敛管理器（W5-S1；链式装配，nil
 // 合法）。
 func (s *LogsService) WithVictorialogs(vl *victorialogs.Backend, vm *victorialogs.Manager) *LogsService {
 	s.vl = vl
@@ -310,11 +310,11 @@ func (s *LogsService) GetLogsBackend(ctx context.Context, _ *serverv1.GetLogsBac
 }
 
 // SetLogsBackend 切换日志后端（victorialogs | jsonl）：设置保存 + 审计 +
-// 事件同事务（state 层 fail-closed）；duty 下一拍按新值收敛（部署或移除，
+// 事件同事务（state 层 fail-closed）；收敛循环下一拍按新值收敛（部署或移除，
 // 卷保留）。返回保存后的视图。
 func (s *LogsService) SetLogsBackend(ctx context.Context, req *serverv1.SetLogsBackendRequest) (*serverv1.SetLogsBackendResponse, error) {
 	// 平台面写门（v0.3 W3-S2 扩全，rbac-teams §3.2「全局设置 → 仅平台管理
-	// 员」）：日志后端切换触发 duty 收敛与采集路由翻转，属平台全局设置写
+	// 员」）：日志后端切换触发后台收敛与采集路由翻转，属平台全局设置写
 	// 面——用户 principal 须平台管理员（机具令牌沿 scope 门现状）。
 	if err := requirePlatformWriteFace(ctx, s.st); err != nil {
 		return nil, err

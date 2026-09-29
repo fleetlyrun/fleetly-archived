@@ -152,7 +152,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "title": "终端功能是否启用（config terminal.enabled；false = duty 不部署 relay，\nCreateTerminalTicket 报 E_TERMINAL_DISABLED）。"
+          "title": "终端功能是否启用（config terminal.enabled；false = 不部署 relay，\nCreateTerminalTicket 报 E_TERMINAL_DISABLED）。"
         },
         "relay_deployed": {
           "type": "boolean",

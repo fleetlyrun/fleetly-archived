@@ -40,7 +40,7 @@
 #     挂载/删除守卫全链；dbtools 私有镜像经 GITHUB_TOKEN 登录 ghcr 后由脚
 #     本 save|load 注入 dind）。
 #   - logs-victorialogs-e2e：E6 W5-S1 VictoriaLogs 默认捆绑端到端
-#     （e2e/logs-victorialogs.sh，单 dind；s3-rustfs 同骨架）：duty 缺省
+#     （e2e/logs-victorialogs.sh，单 dind；s3-rustfs 同骨架）：收敛管理器缺省
 #     收敛/回环健康/入湖可查（SearchLogs 命中）/keyword 过滤/注入负向/
 #     降级 streak + 直播不受影响/backend 切换（卷保留）+ 复切收敛。
 #
@@ -450,7 +450,7 @@ jobs:
   s3-rustfs-e2e:
     # E3 对象存储端到端（E3-4/E3-5 真机闭环，e2e/s3-rustfs.sh 单 dind；
     # multinode-rehearsal 同骨架——编排自足、镜像钉 digest 在脚本头常量）：
-    # A0 前置校验（E_S3_NOT_CONFIGURED）→ A1 duty 收敛+探针 → A2 注入与
+    # A0 前置校验（E_S3_NOT_CONFIGURED）→ A1 收敛管理器收敛+探针 → A2 注入与
     # 读写闭环 → A3 上传轨 → A3.5 诚实口径 → A4 禁用留卷 → A5 状态面。
     # 与 conformance-objectstore 分立为两个 job：前者纯客户端面（分钟级），
     # 本 job 交叉编译 + dind 编排（十分钟级），失败域互不牵连。
@@ -688,7 +688,7 @@ jobs:
   terminal-e2e:
     # Web 终端端到端（E7 W5-S6，e2e/terminal.sh 单 dind；web-terminal 专项
     # 设计 §2 + §4 安全面套件，control-plane-tls 同骨架——编排自足）。relay
-    # duty 收敛 → status RPC 反向常连证据 → 受管应用部署 → 真 PTY 回显
+    # 收敛管理器收敛 → status RPC 反向常连证据 → 受管应用部署 → 真 PTY 回显
     #（alpine 无 bash → 白名单探测退 sh）→ read token 取票拒 → terminal
     # scope 独立 token 全会话走通 → ticket 重放拒 → per-token 并发上限
     # （双 hold 占满 + 第 3 条 close 429）→ terminal.opened/closed 事件 →

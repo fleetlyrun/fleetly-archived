@@ -62,7 +62,7 @@ service DatabaseService {
     option (fleetly.annotations.v1.scope) = "read";
   }
   // DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；
-  // reap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
+  // reap 收敛步幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
   // delete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。
   rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse) {
     option (google.api.http) = { delete: "/v1/databases/{name}" };

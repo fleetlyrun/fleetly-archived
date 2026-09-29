@@ -6,7 +6,7 @@
 // detached 同型数据安全语义）+ 凭据清场（凭据是运行时配置不烙进数据，
 // 再启用重新生成并复用卷）。
 //
-// duty 形态：常驻收敛循环（ingress registry duty 同款——失败退避重试、
+// 形态：常驻收敛循环（ingress registry 控制器同款——失败退避重试、
 // 收敛后按扫描周期复检漂移），由 fleetlyd 装配壳启动（runtime 服务壳，
 // 资源层，晚于 engine 停）。差分事件：s3.rustfs_deployed / s3.rustfs_removed
 // （注册表只增，node.* 同型；payload 不含任何凭据材料）。
@@ -30,7 +30,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/statebackup"
@@ -40,7 +40,7 @@ import (
 // 无 ctx 形态的自有预算）。
 const s3SettingsLoadTimeout = 3 * time.Second
 
-// Manager 是托管 RustFS duty 管理器。
+// Manager 是托管 RustFS 收敛管理器。
 type Manager struct {
 	store  *state.Store
 	box    *secrets.Box
@@ -59,9 +59,9 @@ type Manager struct {
 	ensureBucketFn func(ctx context.Context) error
 }
 
-// NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放）。
+// NewManager 构造收敛管理器（自建 Docker 连接；cleanup 释放）。
 func NewManager(store *state.Store, box *secrets.Box, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := dutydocker.New("")
+	dc, err := dockerapi.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,7 +80,7 @@ func (m *Manager) WithProbeRunner(r statebackup.ResticRunner) *Manager { m.probe
 // Run 是常驻收敛循环（fleetlyd 装配壳调用；ctx 取消返回）：
 // 每拍 LoadS3Settings 现读（运行期设置不缓存长驻）——mode=rustfs 走部署
 // 收敛，其他值走移除清场（幂等，收敛即稳态）；失败退避重试，收敛后按
-// 扫描周期复检漂移（ingress registry duty 同款节奏）。
+// 扫描周期复检漂移（ingress registry 控制器同款节奏）。
 func (m *Manager) Run(ctx context.Context) error {
 	retry := m.retryInterval
 	if retry <= 0 {
@@ -140,14 +140,14 @@ func (m *Manager) converge(ctx context.Context) error {
 	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
-	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
+	// manager 平台 ID（meta 单值真源；identity 铸造尚未完成时显式失败
 	// 退避重试——约束引用空 ID 会得到永不调度的任务，宁缺毋错）。
 	platformID, err := m.store.GetMeta(ctx, state.MetaKeyPlatformNodeID)
 	if err != nil {
 		return fmt.Errorf("rustfs: read platform node id: %w", err)
 	}
 	if platformID == "" {
-		return errors.New("rustfs: platform node id not ensured yet (identity duty pending; the pin constraint requires it)")
+		return errors.New("rustfs: platform node id not ensured yet (identity bootstrap pending; the pin constraint requires it)")
 	}
 	creds, err := m.ensureCredentials(ctx)
 	if err != nil {
@@ -214,7 +214,7 @@ func (m *Manager) converge(ctx context.Context) error {
 	}
 	// ⑥ 服务就绪后 EnsureBucket（设计 §2.5；幂等——桶/探针仓库在即 no-op；
 	// 宿主进程不可达 overlay，建桶经探针容器入网执行；服务未 running 时
-	// restic 如实报错，duty 退避重试）。
+	// restic 如实报错，收敛循环退避重试）。
 	if m.ensureBucketFn != nil {
 		return m.ensureBucketFn(ctx)
 	}
@@ -308,7 +308,7 @@ func (m *Manager) loadCredentials(ctx context.Context) (credentials, error) {
 	}
 	if !found {
 		return credentials{}, errors.New(
-			"rustfs: managed credentials not provisioned yet (the duty generates them shortly after s3.mode=rustfs is saved)")
+			"rustfs: managed credentials not provisioned yet (the manager generates them shortly after s3.mode=rustfs is saved)")
 	}
 	plain, err := m.box.Decrypt([]byte(accessCT))
 	if err != nil {
@@ -347,7 +347,7 @@ func (m *Manager) ensureSecret(ctx context.Context, name string, data []byte) (s
 
 // removeStaleSecrets 清场本组件的全部凭据 secret（label 选择），保留
 // keep 集合（当前期望引用）。幂等；in-use（服务引用未释放）如实报错由
-// duty 退避重试。
+// 收敛循环退避重试。
 func (m *Manager) removeStaleSecrets(ctx context.Context, keep ...string) error {
 	names, err := m.docker.SecretList(ctx, map[string]string{rustfsLabel: "true"})
 	if err != nil {
@@ -387,7 +387,7 @@ func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload m
 
 // CheckHealth 是 system status 组件检查器（objectstore.rustfs）：mode 非
 // rustfs = 无所欠（健康）；rustfs 模式下服务应在位且凭据应已备便——缺失
-// 即收敛未完成（duty 会继续收敛，红是过渡态的如实表达）。桶与可达性面由
+// 即收敛未完成（收敛循环会继续收敛，红是过渡态的如实表达）。桶与可达性面由
 // TestConnection 探针（容器内执行）承载（本检查不做网络往返——健康检查
 // 是热路径）。
 func (m *Manager) CheckHealth() error {
@@ -405,10 +405,10 @@ func (m *Manager) CheckHealth() error {
 		return fmt.Errorf("rustfs: service inspect: %w", err)
 	}
 	if !cur.Exists {
-		return fmt.Errorf("rustfs: s3.mode=rustfs but service %s is not deployed yet (duty converging)", ServiceName)
+		return fmt.Errorf("rustfs: s3.mode=rustfs but service %s is not deployed yet (convergence in progress)", ServiceName)
 	}
 	if _, _, found, err := m.store.LoadRustfsCredentialsCiphertext(ctx); err != nil || !found {
-		return fmt.Errorf("rustfs: managed credentials not provisioned yet (duty converging)")
+		return fmt.Errorf("rustfs: managed credentials not provisioned yet (convergence in progress)")
 	}
 	return nil
 }

@@ -43,7 +43,7 @@ type MetricsServiceClient interface {
 	// GetMetricsStatus 托管 metrics 栈状态视图（read scope）：模式 / 三件
 	// 部署态 / 节点上报比 / retention——「N/M nodes reporting」的诚实口径。
 	GetMetricsStatus(ctx context.Context, in *GetMetricsStatusRequest, opts ...grpc.CallOption) (*GetMetricsStatusResponse, error)
-	// SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛
+	// SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——后台收敛
 	// 部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。
 	SetMetricsMode(ctx context.Context, in *SetMetricsModeRequest, opts ...grpc.CallOption) (*SetMetricsModeResponse, error)
 }
@@ -105,7 +105,7 @@ type MetricsServiceServer interface {
 	// GetMetricsStatus 托管 metrics 栈状态视图（read scope）：模式 / 三件
 	// 部署态 / 节点上报比 / retention——「N/M nodes reporting」的诚实口径。
 	GetMetricsStatus(context.Context, *GetMetricsStatusRequest) (*GetMetricsStatusResponse, error)
-	// SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛
+	// SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——后台收敛
 	// 部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。
 	SetMetricsMode(context.Context, *SetMetricsModeRequest) (*SetMetricsModeResponse, error)
 	mustEmbedUnimplementedMetricsServiceServer()

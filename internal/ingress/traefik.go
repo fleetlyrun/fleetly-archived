@@ -13,7 +13,7 @@ package ingress
 // 是一次 service update（任务重建一次，v0.1 接受；配置视图在控制面，
 // Traefik 重启即重新拉取，入口不丢配置）。
 //
-// Docker 消费面收编进 internal/dutydocker（2026-09-29 架构评审 C1）：连接
+// Docker 消费面收编进 internal/dockerapi（2026-09-29 架构评审 C1）：连接
 // 构造/服务写原语/实况投影由共享适配层唯一承载——本文件只保留消费方窄
 // 端口与包内哨兵。本文件是第三方适配面：moby/swarm 类型不出本文件（出口
 // 只有 error、Status 投影与部署器接口）。
@@ -29,7 +29,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -50,19 +50,19 @@ const legacyCertSeedContainerName = "fleetly-ingress-cert-seeder"
 var traefikHealthcheckArgs = []string{"CMD", "traefik", "healthcheck", "--ping"}
 
 // dockerClient 是部署器对 Docker API 的最小消费面（2026-09-29 架构评审 C1
-// 起 Docker 适配面收编进 internal/dutydocker：连接构造/服务写原语/实况
+// 起 Docker 适配面收编进 internal/dockerapi：连接构造/服务写原语/实况
 // 投影由共享适配层唯一承载——此前本包自持一份逐字拷贝的 realDockerClient；
-// *dutydocker.Client 以方法集超集满足，测试假件在本包注入）。端口面按入
+// *dockerapi.Client 以方法集超集满足，测试假件在本包注入）。端口面按入
 // 口部署器需要裁剪：无 secret/config、无任务 IP 直达。第三方（moby/swarm）
 // 类型不出消费面——swarm.ServiceSpec 是第三方构造载荷，只进不出（出口只
-// 有投影与 error）；实况投影与 Info 投影是共享类型（dutydocker.
+// 有投影与 error）；实况投影与 Info 投影是共享类型（dockerapi.
 // ServiceSnapshot / InfoSnapshot）——消费方只读自己比对用到的字段。
 type dockerClient interface {
 	// Info 报告 swarm 状态投影（active 位由部署器判定并映射包内哨兵）。
-	Info(ctx context.Context) (dutydocker.InfoSnapshot, error)
+	Info(ctx context.Context) (dockerapi.InfoSnapshot, error)
 	// ServiceInspect 按名取服务实况；缺失返回 Exists=false（不是错误——
 	// 「不存在」是收敛的正常输入）。
-	ServiceInspect(ctx context.Context, name string) (dutydocker.ServiceSnapshot, error)
+	ServiceInspect(ctx context.Context, name string) (dockerapi.ServiceSnapshot, error)
 	// ServiceCreate 创建服务（收敛保证仅缺失时调用）。
 	ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error
 	// ServiceUpdate 以乐观令牌推进服务（version 取自先前的 ServiceInspect）。
@@ -179,7 +179,7 @@ func (m *Manager) attachNetwork(ctx context.Context, team, prj, app string) erro
 }
 
 // attachNetworkByName 是网络接入的通用形态（E1-4：平台 overlay
-// fleetly-system 由 registry 部署 duty 接入 Traefik——registry 路由段
+// fleetly-system 由 registry 部署控制器 接入 Traefik——registry 路由段
 // 的后端 VIP 只在同网络内可达）。语义与 attachNetwork 一致：幂等、以
 // 服务实况网络集为基准、ID 判据。网络不存在时**代建**（普通 overlay——
 // 仅限允许代建的平台网络；attachable 语义的网络走
@@ -301,7 +301,7 @@ func (m *Manager) buildTraefikSpec(endpoint, token string) swarm.ServiceSpec {
 		//      拨号主机名与连接地址分离（Traefik providers.http 无此配置）。
 		//   诚实行内态：IP 端点 + insecureSkipVerify + VPC 边界（传输 TLS
 		//   加密与 token 鉴权不受影响）；spec 参数形态由
-		//   TestProviderEndpointVPCIPForm / TestPlatformCertDutyInertWhen
+		//   TestProviderEndpointVPCIPForm / TestPlatformCertControllerInertWhen
 		//   BaseDomainEmpty 钉死——改参数必先改测试，防无声回退。
 		//   出路（设计级，需立项）：内部 CA + swarm secret 分发 CA 到各节点
 		//   （控制面外通道，无鸡生蛋）+ 8423 换 CA 签发的 IP SAN 证书 +
@@ -403,7 +403,7 @@ func portUint(port int) uint32 {
 
 // traefikSpecEqual 幂等比对（镜像/参数/端口/挂载/健康检查；网络集由
 // attachNetwork 增量管理，不参与本比对）。
-func traefikSpecEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
+func traefikSpecEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

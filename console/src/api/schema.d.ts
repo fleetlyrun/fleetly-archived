@@ -1040,7 +1040,7 @@ export interface paths {
         get: operations["LogsService_GetLogsBackend"];
         /**
          * SetLogsBackend 切换日志后端（victorialogs | jsonl）：保存即生效——
-         *     duty 收敛部署/移除（卷保留），采集路由下拍切换。
+         *     后台收敛部署/移除（卷保留），采集路由下拍切换。
          */
         put: operations["LogsService_SetLogsBackend"];
         post?: never;
@@ -1059,7 +1059,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛
+         * SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——后台收敛
          *     部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。
          */
         put: operations["MetricsService_SetMetricsMode"];
@@ -1159,7 +1159,7 @@ export interface paths {
         /** UpdateAlertRule 部分更新（optional 字段语义——未提供不变）。 */
         put: operations["AlertingService_UpdateAlertRule"];
         post?: never;
-        /** DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。 */
+        /** DeleteAlertRule 删除规则（收敛管理器下一拍重渲染规则文件）。 */
         delete: operations["AlertingService_DeleteAlertRule"];
         options?: never;
         head?: never;
@@ -1642,7 +1642,7 @@ export interface paths {
         post?: never;
         /**
          * DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；
-         *     reap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
+         *     reap 收敛步幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
          *     delete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。
          */
         delete: operations["DatabaseService_DeleteDatabase"];
@@ -3280,7 +3280,7 @@ export interface components {
             backend_set?: boolean;
             /**
              * 部署态（backend=victorialogs 时）：deployed（服务在位）| pending
-             *     （duty 收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
+             *     （后台收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
              *     （测试形态）= unknown。
              */
             deployment?: string;
@@ -3367,7 +3367,7 @@ export interface components {
         /** MetricsComponentView 是单件托管服务的部署态投影。 */
         v1MetricsComponentView: {
             name?: string;
-            /** 服务是否在位（mode=on 且 false = duty 收敛中——过渡态红面）。 */
+            /** 服务是否在位（mode=on 且 false = 后台收敛中——过渡态红面）。 */
             exists?: boolean;
             /** 实况镜像引用（不在位为空）。 */
             image?: string;
@@ -3452,7 +3452,7 @@ export interface components {
             /** 生效模式：unset | on（缺省 unset；set 区分「缺省生效」）。 */
             mode?: string;
             mode_set?: boolean;
-            /** vmalert 服务部署态（mode=on 且 exists=false = duty 收敛中——过渡态）。 */
+            /** vmalert 服务部署态（mode=on 且 exists=false = 后台收敛中——过渡态）。 */
             vmalert_exists?: boolean;
             vmalert_image?: string;
             /**
@@ -4681,7 +4681,7 @@ export interface components {
         };
         v1GetTerminalStatusResponse: {
             /**
-             * 终端功能是否启用（config terminal.enabled；false = duty 不部署 relay，
+             * 终端功能是否启用（config terminal.enabled；false = 不部署 relay，
              *     CreateTerminalTicket 报 E_TERMINAL_DISABLED）。
              */
             enabled?: boolean;

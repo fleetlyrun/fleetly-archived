@@ -217,7 +217,7 @@ func (s *Store) GetRuntimeNodeRef(ctx context.Context, platformID string) (Runti
 	return r, nil
 }
 
-// GetRuntimeNodeRefBySwarmID 按 swarm node ID 反查映射（锚定 duty 的冲突
+// GetRuntimeNodeRefBySwarmID 按 swarm node ID 反查映射（锚定循环的冲突
 // 判定面：label 缺失时判断该底座节点是否已有平台身份占用）。未锚定返回
 // ErrRefNotFound。
 func (s *Store) GetRuntimeNodeRefBySwarmID(ctx context.Context, swarmNodeID string) (RuntimeNodeRef, error) {

@@ -44,7 +44,7 @@ type AppConfig struct {
 	// V2-7 可选安装项）。空 = 单节点 v0.1 形态（本地 digest、明文 8422
 	// provider，行为逐字不变）；非空 = 控制面派生三平台子域
 	//（ctrl/registry/console.<base>）、启用 8423 配置端点 TLS 面与平台
-	// 证书 duty（E1-2/E1-3：证书经动态配置内联下发、Traefik endpoint 切
+	// 证书控制器（E1-2/E1-3：证书经动态配置内联下发、Traefik endpoint 切
 	// https://ctrl.<base>:8423）、多节点 join 门禁放行（D-MN-13：join 时
 	// 为空即 E_MULTI_NODE_REQUIRES_BASE_DOMAIN——E1-8 接线）。
 	BaseDomain string `mapstructure:"base_domain"`
@@ -123,7 +123,7 @@ func (c *AppConfig) SessionTTL() time.Duration {
 // 限额（per-token 2 / 全局 8）+ 会话时限已足，不另设 opt-in——缺省 true。
 type TerminalConfig struct {
 	// Enabled 报告是否启用 Web 终端（terminal.enabled；缺省 true）。false =
-	// duty 移除 relay 服务 + API 报 E_TERMINAL_DISABLED（Console 面板按
+	// 收敛管理器移除 relay 服务 + API 报 E_TERMINAL_DISABLED（Console 面板按
 	// 禁用态渲染）。
 	Enabled *bool `mapstructure:"enabled"`
 }
@@ -194,7 +194,7 @@ type ControlPlaneConfig struct {
 
 // ControlPlaneTLSConfig 是控制面双面（8420 HTTP / 8421 gRPC）TLS 配置
 //（E7 同批 V2-8，设计 §3.1：off = 今日行为零变化；platform 复用平台证书
-// ——LE 签发/续期由平台证书 duty 既有机制承接；manual = 显式证书文件对）。
+// ——LE 签发/续期由平台证书控制器既有机制承接；manual = 显式证书文件对）。
 // 不含 mTLS/客户端证书（v0.2 不做——Bearer 仍是唯一认证）。
 type ControlPlaneTLSConfig struct {
 	// Mode 是 TLS 模式（control_plane.tls.mode）：off（缺省/空串，明文）|
@@ -245,7 +245,7 @@ func (c *AppConfig) TLSMinVersion() uint16 {
 
 // ValidateControlPlaneTLS 校验控制面 TLS 配置（启动期 loud-fail，装配期
 // NewControlPlaneTLS 调用）：mode 取值合法；platform 需 base_domain 非空
-//（平台证书 duty 依赖它签发/落盘）；manual 需 cert_file/key_file 双路径
+//（平台证书控制器依赖它签发/落盘）；manual 需 cert_file/key_file 双路径
 // 且文件可读。off（缺省）无约束——cert_file 等键在 off 下被忽略（不报错，
 // 键位只增惯例下的宽容口径）。
 func (c *AppConfig) ValidateControlPlaneTLS() error {
@@ -254,7 +254,7 @@ func (c *AppConfig) ValidateControlPlaneTLS() error {
 		return nil
 	case ControlPlaneTLSPlatform:
 		if c.BaseDomain == "" {
-			return fmt.Errorf("control_plane.tls.mode=platform requires base_domain to be set (the platform certificate duty issues and stores the certificate under it)")
+			return fmt.Errorf("control_plane.tls.mode=platform requires base_domain to be set (the platform certificate controller issues and stores the certificate under it)")
 		}
 		if c.TLSMinVersion() == 0 {
 			return fmt.Errorf("control_plane.tls.min_version: unknown value %q (supported: tls1.2, tls1.3)", c.ControlPlane.TLS.MinVersion)
@@ -560,7 +560,7 @@ func (c *AppConfig) IngressSettings() ingress.Config {
 		TokenFile:         c.Ingress.TokenFile,
 		CertDir:           c.Ingress.CertDir,
 		// BaseDomain 透传（E1-3）：非空启用 8423 TLS 配置面与平台证书
-		// duty；空 = 单节点 v0.1 形态（ingress 侧零行为差异）。
+		// 控制器；空 = 单节点 v0.1 形态（ingress 侧零行为差异）。
 		BaseDomain: c.BaseDomain,
 		// zot 部署面（E1-4）：镜像钉版（registry.image 显式配置优先，空 =
 		// ingress.Normalize 回落钉版缺省 DefaultZotImage）与凭据文件绝对
@@ -698,7 +698,7 @@ func (c *AppConfig) BuildSettings() build.Config {
 		ManageDaemon:        c.Build.ManageDaemon == nil || *c.Build.ManageDaemon,
 		// registry 模式（E1-5）：base_domain 非空时产物推送 zot 并按
 		// registry digest 引用记账；凭据文件经 RegistryAuthFile 回落（构建
-		// 执行时点现读——凭据可能由 zot 部署 duty 晚于装配期生成）。空
+		// 执行时点现读——凭据可能由 zot 部署控制器 晚于装配期生成）。空
 		// base_domain = 本地模式（零额外字段，v0.1 管线逐字不变——凭据
 		// 路径仅在 registry 模式下发）。
 		RegistryHost:     c.RegistryHost(),

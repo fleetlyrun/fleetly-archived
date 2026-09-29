@@ -85,11 +85,11 @@ func (f *fakeOps) Upgrade(_ context.Context, name string) (string, string, error
 	return f.upgradeOld, f.upgradeNew, f.err
 }
 
-// mustReady 推进实例到 ready（模拟 duty 健康门）。
+// mustReady 推进实例到 ready（模拟收敛循环健康门）。
 func mustReady(t *testing.T, st *state.Store, id string) {
 	t.Helper()
 	if err := st.EnterDbPhase(context.Background(), id, state.DatabaseProvisioning, state.DatabaseReady); err != nil {
-		t.Fatalf("duty ready: %v", err)
+		t.Fatalf("converge ready: %v", err)
 	}
 }
 

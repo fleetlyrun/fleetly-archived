@@ -683,7 +683,7 @@ type LogsBackendView struct {
 	// 该键是否被显式保存过（false = 缺省态生效）。
 	BackendSet bool `protobuf:"varint,2,opt,name=backend_set,json=backendSet,proto3" json:"backend_set,omitempty"`
 	// 部署态（backend=victorialogs 时）：deployed（服务在位）| pending
-	// （duty 收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
+	// （后台收敛中）| removed（backend=jsonl 或服务已移除）；面未装配
 	// （测试形态）= unknown。
 	Deployment string `protobuf:"bytes,3,opt,name=deployment,proto3" json:"deployment,omitempty"`
 	// 入湖 streak 是否降级中（VL 不可达——检索降级，直播不受影响）。

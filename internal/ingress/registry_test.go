@@ -6,8 +6,8 @@ package ingress
 //     挂载/零宿主端口）；
 //   - 凭据链：auth_file 生成（user:password 单行）→ bcrypt htpasswd 工件
 //     （zot 消费面）→ zot 配置工件（鉴权路径/端口），幂等无 churn；
-//   - 前置门：swarm 未就绪 / 平台 ID 未铸显式失败（duty 退避收敛面）；
-//   - 单节点等价：base_domain 空 = 零部署、零网络、零挂载、duty 不活动；
+//   - 前置门：swarm 未就绪 / 平台 ID 未铸显式失败（收敛循环退避收敛面）；
+//   - 单节点等价：base_domain 空 = 零部署、零网络、零挂载、控制器不活动；
 //   - 路由段：registry.<base> 路由进动态配置（80 恒在；平台证书就绪后
 //     443 + 内联证书段）；单节点视图零平台路由；
 //   - 镜像钉版缺省与约束公式的字面钉死。
@@ -28,12 +28,12 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
 // newRegistryTestManager 构造 base_domain 非空 + ACME 关闭的部署器测试
-// 管理器（独立凭据文件；短退避供 duty 用例）。
+// 管理器（独立凭据文件；短退避供 控制器用例）。
 func newRegistryTestManager(t *testing.T, baseDomain string) (*Manager, *fakeDocker, *state.Store) {
 	t.Helper()
 	dir := t.TempDir()
@@ -57,7 +57,7 @@ func newRegistryTestManager(t *testing.T, baseDomain string) (*Manager, *fakeDoc
 	return m, dc, st
 }
 
-// ensureManagerPlatformID 在 meta 铸造平台 ID（identity duty 的装配期半——
+// ensureManagerPlatformID 在 meta 铸造平台 ID（identity 铸造的装配期半——
 // EnsureRegistry 的约束锚输入）。
 func ensureManagerPlatformID(t *testing.T, st *state.Store) string {
 	t.Helper()
@@ -219,7 +219,7 @@ func TestEnsureRegistryDriftConverges(t *testing.T) {
 	}
 	// 外部漂移（人改/版本遗留）：镜像、约束、挂载、网络、副本数全变。
 	dc.mu.Lock()
-	dc.services[RegistryServiceName] = dutydocker.ServiceSnapshot{
+	dc.services[RegistryServiceName] = dockerapi.ServiceSnapshot{
 		Exists:  true,
 		Version: 7,
 		Image:   "ghcr.io/project-zot/zot:v0.1.0",
@@ -239,7 +239,7 @@ func TestEnsureRegistryDriftConverges(t *testing.T) {
 }
 
 func TestEnsureRegistryPreconditions(t *testing.T) {
-	// swarm 未就绪：显式哨兵（duty 退避重试面）。
+	// swarm 未就绪：显式哨兵（收敛循环退避重试面）。
 	m, _, st := newRegistryTestManager(t, "x.test")
 	ensureManagerPlatformID(t, st)
 	m.docker.(*fakeDocker).mu.Lock()
@@ -276,20 +276,20 @@ func TestEnsureRegistryNoopSingleNode(t *testing.T) {
 		t.Fatalf("single-node ensure must be a full no-op, got volumes=%v nets=%v creates=%v",
 			dc.volumeEns, dc.netEns, dc.creates)
 	}
-	// duty 不活动：同步调用立即返回。
+	// 控制器不活动：同步调用立即返回。
 	done := make(chan struct{})
 	go func() {
-		m.runRegistryDuty(context.Background())
+		m.runRegistryController(context.Background())
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("registry duty must not run on a single-node install")
+		t.Fatal("registry controller must not run on a single-node install")
 	}
 }
 
-func TestRunRegistryDutyConverges(t *testing.T) {
+func TestRunRegistryControllerConverges(t *testing.T) {
 	m, dc, st := newRegistryTestManager(t, "x.test")
 	ensureManagerPlatformID(t, st)
 	if err := m.EnsureTraefik(context.Background()); err != nil {
@@ -297,8 +297,8 @@ func TestRunRegistryDutyConverges(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go m.runRegistryDuty(ctx)
-	awaitUntil(t, "registry service creation by the duty", 5*time.Second, func() bool {
+	go m.runRegistryController(ctx)
+	awaitUntil(t, "registry service creation by the controller", 5*time.Second, func() bool {
 		return dc.serviceState(RegistryServiceName).Exists
 	})
 }

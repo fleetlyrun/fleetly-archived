@@ -3,7 +3,7 @@
 //
 // 两个职责面：
 //
-//  1. duty（本文件 + spec.go + docker.go，rustfs manager 同款形态）：设置
+//  1. 收敛管理器（本文件 + spec.go + docker.go，rustfs manager 同款形态）：设置
 //     驱动——logs.backend=victorialogs 时幂等部署/收敛 Swarm 服务
 //     fleetly-victorialogs（钉版镜像、卷钉 manager、内部网络、host-mode
 //     回环发布 9428〔D-W5-4〕、-retentionPeriod 对齐 logs.retention_days）；
@@ -16,7 +16,7 @@
 //     LogsQL 查询构造（keyword 转义注入安全）、/select/logsql/query 查询
 //     与 /health 健康拨测。
 //
-// 与 rustfs duty 的差异（设计裁决的落地）：无凭据（VL 无认证端点，隔离 =
+// 与 rustfs 管理器的差异（设计裁决的落地）：无凭据（VL 无认证端点，隔离 =
 // 回环绑定 + 内网）；无探针容器（宿主进程经回环直连 9428——D-W5-4 的
 // host-mode 发布使宿主可达，不再需要入网容器）。
 package victorialogs
@@ -29,7 +29,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -37,7 +37,7 @@ import (
 // 无 ctx 形态的自有预算，rustfs 同款）。
 const settingsLoadTimeout = 3 * time.Second
 
-// Manager 是托管 VictoriaLogs duty 管理器。
+// Manager 是托管 VictoriaLogs 收敛管理器。
 type Manager struct {
 	store  *state.Store
 	docker dockerPort
@@ -54,9 +54,9 @@ type Manager struct {
 	health func(ctx context.Context) error
 }
 
-// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
+// NewManager 构造收敛管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, retentionDays int, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := dutydocker.New("")
+	dc, err := dockerapi.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,14 +136,14 @@ func (m *Manager) converge(ctx context.Context) error {
 	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
-	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
+	// manager 平台 ID（meta 单值真源；identity 铸造尚未完成时显式失败
 	// 退避重试——约束引用空 ID 会得到永不调度的任务，宁缺毋错）。
 	platformID, err := m.store.GetMeta(ctx, state.MetaKeyPlatformNodeID)
 	if err != nil {
 		return fmt.Errorf("victorialogs: read platform node id: %w", err)
 	}
 	if platformID == "" {
-		return errors.New("victorialogs: platform node id not ensured yet (identity duty pending; the pin constraint requires it)")
+		return errors.New("victorialogs: platform node id not ensured yet (identity bootstrap pending; the pin constraint requires it)")
 	}
 	// ① 数据卷（本地命名卷——数据重力钉 manager）。
 	if err := m.docker.VolumeEnsure(ctx, VolumeName); err != nil {
@@ -233,7 +233,7 @@ func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload m
 // 部署态投影。
 type DeploymentStatus struct {
 	// Exists 报告服务是否在位（backend=victorialogs 且 Exists=false =
-	// 部署中/未部署——duty 退避收敛中）。
+	// 部署中/未部署——收敛循环退避收敛中）。
 	Exists bool
 	// Image 是实况镜像引用（不在位为空）。
 	Image string
@@ -250,7 +250,7 @@ func (m *Manager) DeploymentStatus(ctx context.Context) (DeploymentStatus, error
 
 // CheckHealth 是 system status 组件检查器（victorialogs）的部署面：mode
 // 非 victorialogs = 无所欠（健康）；victorialogs 模式下服务应在位——缺失
-// 即收敛未完成（duty 会继续收敛，红是过渡态的如实表达）。ingest streak
+// 即收敛未完成（收敛循环会继续收敛，红是过渡态的如实表达）。ingest streak
 // 面由 internal/logs 批量器承载，装配点组合（设计：healthy = 部署符合
 // 预期且 streak 无降级）。健康检查是热路径：拨测预算 2s，不可达即红
 //（检索降级，直播面不受影响——诚实口径）。
@@ -269,7 +269,7 @@ func (m *Manager) CheckHealth() error {
 		return fmt.Errorf("victorialogs: service inspect: %w", err)
 	}
 	if !cur.Exists {
-		return fmt.Errorf("victorialogs: logs.backend=victorialogs but service %s is not deployed yet (duty converging)", ServiceName)
+		return fmt.Errorf("victorialogs: logs.backend=victorialogs but service %s is not deployed yet (convergence in progress)", ServiceName)
 	}
 	if m.health != nil {
 		hctx, hcancel := context.WithTimeout(ctx, 2*time.Second)

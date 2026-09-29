@@ -1364,7 +1364,7 @@ staging/真机待执行项（本环境无 staging 访问权，未虚构）：
 | scope 门/令牌词表 | `TestTasksServiceScopeRegistration`（六 RPC 登记 `tasks`；read/deploy 不蕴含、admin 蕴含） |
 | 事件/错误码只增纪律 | eventcode `TestDocEventSetMatchesRegistry`/`TestGoldenSnapshot`（95）+ errcode `TestDocCodeSetMatchesRegistry`/`TestRegisteredCountByKind`（82 E/5 W；勘误 2026-09-29：该计数断言测试已于 IMPL-ARCH-F1 删除（22915fa），计数漂移兜底改由 golden 快照 + docCodes 集相等承担）/`TestGoldenSnapshot`（均显式再生成） |
 | 迁移纪律 | `TestMigrationsAreAdditiveOnly`（00026 + golden 再生成） |
-| 结构纪律 | `TestTickDutiesAllGoThroughSafeCall`（tick duty 清单 11 条含两新 duty）；apex `TestReservedTeamSlugs`（taskgroup 保留） |
+| 结构纪律 | `TestTickStepsAllGoThroughSafeCall`（tick 步清单 11 条含两新步）；apex `TestReservedTeamSlugs`（taskgroup 保留） |
 | CLI 面 | `TestTasksCLISurface`（network ensure → run --json → ls → stop → rm → logs 诚实报错 + 用法 64） |
 
 一手验证证据（原始输出摘要）：

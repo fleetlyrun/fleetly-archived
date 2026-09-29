@@ -67,7 +67,7 @@ type DatabaseServiceClient interface {
 	// ——与 apps 列表同口径）。
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	// DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；
-	// reap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
+	// reap 收敛步幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
 	// delete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。
 	DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*DeleteDatabaseResponse, error)
 	// SuspendDatabase 暂停（scale 0 保留服务与卷；引用方连不上是诚实暴露）。
@@ -294,7 +294,7 @@ type DatabaseServiceServer interface {
 	// ——与 apps 列表同口径）。
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	// DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；
-	// reap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
+	// reap 收敛步幂等清理受管对象。confirm = 实例名——数据安全两段式确认；
 	// delete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。
 	DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*DeleteDatabaseResponse, error)
 	// SuspendDatabase 暂停（scale 0 保留服务与卷；引用方连不上是诚实暴露）。

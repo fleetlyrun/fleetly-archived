@@ -94,7 +94,7 @@ type Config struct {
 	// §2.2；ingress 侧派生面）。空 = 单节点 v0.1 形态：8423 TLS 面不启用、
 	// provider endpoint 维持明文 8422、zot 部署器不活动、无平台路由段，
 	// 行为逐字不变。非空 = 派生平台子域（ctrl/registry/console.<base>）+
-	// 启用平台证书 duty 与 8423 配置端点 TLS 面（E1-3）+ zot registry 部署
+	// 启用平台证书控制器 与 8423 配置端点 TLS 面（E1-3）+ zot registry 部署
 	// 与 registry.<base> 路由段（E1-4，D-MN-5 配置即部署）。本包不做 DNS
 	// 校验，字符串原样进入域名合成。
 	BaseDomain string

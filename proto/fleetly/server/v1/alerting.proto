@@ -50,7 +50,7 @@ service AlertingService {
     option (google.api.http) = { put: "/v1/alerting/rules/{id}" body: "*" };
     option (fleetly.annotations.v1.scope) = "admin";
   }
-  // DeleteAlertRule 删除规则（duty 下一拍重渲染规则文件）。
+  // DeleteAlertRule 删除规则（收敛管理器下一拍重渲染规则文件）。
   rpc DeleteAlertRule(DeleteAlertRuleRequest) returns (DeleteAlertRuleResponse) {
     option (google.api.http) = { delete: "/v1/alerting/rules/{id}" };
     option (fleetly.annotations.v1.scope) = "admin";
@@ -145,7 +145,7 @@ message GetAlertsStatusResponse {
   // 生效模式：unset | on（缺省 unset；set 区分「缺省生效」）。
   string mode = 1;
   bool mode_set = 2;
-  // vmalert 服务部署态（mode=on 且 exists=false = duty 收敛中——过渡态）。
+  // vmalert 服务部署态（mode=on 且 exists=false = 后台收敛中——过渡态）。
   bool vmalert_exists = 3;
   string vmalert_image = 4;
   // 平台规则数。

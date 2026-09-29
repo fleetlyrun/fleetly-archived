@@ -21,17 +21,17 @@
 
 ## 集群 token（fleetly-exec ↔ 控制面）
 
-- 生成/分发：平台 duty 首拍生成 48B crypto/rand，写入 Swarm secret
+- 生成/分发：relay 部署收敛管理器首拍生成 48B crypto/rand，写入 Swarm secret
   `fleetly-exec-token`，sha256 哈希落 meta（`execrelay_cluster_token_hash`
   ——控制面永不持明文）。**用户面轮换不提供**（v0.2 裁决）。
-- 运维轮换路径（需要时手动执行，之后 duty 自动收敛）：
+- 运维轮换路径（需要时手动执行，之后收敛循环自动收敛）：
   1. `docker secret rm fleetly-exec-token`（等旧 secret 无人引用；
      必要时先 `terminal.enabled: false` 重启 fleetlyd 移除服务）；
   2. 清 meta 哈希（SQLite：`DELETE FROM meta WHERE key =
      'execrelay_cluster_token_hash'`，fleetlyd 停止态执行）；
-  3. 重启 fleetlyd——duty 下一拍生成新 token、重建 secret、更新服务
+  3. 重启 fleetlyd——收敛循环下一拍生成新 token、重建 secret、更新服务
      （relay 任务重启领新证；旧 relay 连接因 token 不符被拒）。
-- Swarm 状态丢失（secret 不在但 meta 哈希在）：duty 自动重生成换哈希并
+- Swarm 状态丢失（secret 不在但 meta 哈希在）：收敛循环自动重生成换哈希并
   更新服务，无需人工介入（日志锚点：`cluster token secret missing from
   the swarm state (regenerating ...)`）。
 
@@ -58,6 +58,6 @@ deploy/image-pin-allowlist.txt 有据）。**CI 首推后的收紧票**须完成
 
 ## 功能开关
 
-`terminal.enabled: false`（重启生效）：duty 移除 fleetly-exec 服务；ticket
+`terminal.enabled: false`（重启生效）：收敛管理器移除 fleetly-exec 服务；ticket
 受理与 WS 接入报 `E_TERMINAL_DISABLED`；system status 组件 `execrelay`
 恒绿（无所欠）。secret 与 meta 哈希保留——重新启用复用同一 token 身份。

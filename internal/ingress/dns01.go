@@ -12,9 +12,9 @@ package ingress
 // 无需路由改动）。
 //
 // 失败语义（诚实不静默）：wildcard=true 而设置不可读 / provider 未配 /
-// 凭证解密失败 → 签发显式失败（duty 退避重试 + cert 审计 error 行）——
+// 凭证解密失败 → 签发显式失败（收敛循环退避重试 + cert 审计 error 行）——
 // **不回落 HTTP-01**：回落会按残缺方式打 CA 限额（wildcard SAN 的
-// HTTP-01 必然失败），与平台证书 duty「不得按残缺集签发」同口径。
+// HTTP-01 必然失败），与平台证书控制器「不得按残缺集签发」同口径。
 
 import (
 	"context"
@@ -85,7 +85,7 @@ func (m *Manager) dns01ForPlatform(ctx context.Context) (bool, error) {
 }
 
 // resolveDNSProvider 把 DNS-01 插件解析缝求值（wildcard 开启时调用）：
-// 未装配缝 = 显式错误（签发面缺件——诚实失败，duty 退避）。
+// 未装配缝 = 显式错误（签发面缺件——诚实失败，收敛循环退避）。
 func (m *Manager) resolveDNSProvider(ctx context.Context) (acmedns.Provider, error) {
 	if m.dnsProviderFn == nil {
 		return nil, fmt.Errorf("ingress: dns provider resolver not assembled (dns-01 unavailable; wildcard issuance cannot proceed)")

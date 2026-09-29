@@ -93,7 +93,7 @@ func (m *Manager) MoveDatabaseRedeploy(ctx context.Context, inst state.DatabaseI
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("database: move new service %s did not converge within %s (convergence duty retried on next beats)", newSvcName, moveNewServiceTimeout)
+			return fmt.Errorf("database: move new service %s did not converge within %s (convergence retried on next beats)", newSvcName, moveNewServiceTimeout)
 		}
 		select {
 		case <-ctx.Done():

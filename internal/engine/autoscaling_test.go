@@ -221,9 +221,9 @@ services:
 	return h, q, app
 }
 
-// TestScalingDutyAdjustsReplicas 红线①：策略调整经平台写通道生效——底座
+// TestAutoscalingAppsAdjustsReplicas 红线①：策略调整经平台写通道生效——底座
 // 副本更新 + 覆盖行落库 + scaling.adjusted 事件/审计。
-func TestScalingDutyAdjustsReplicas(t *testing.T) {
+func TestAutoscalingAppsAdjustsReplicas(t *testing.T) {
 	h, q, app := scalingSetup(t)
 	ctx := context.Background()
 	svcName := h.svc("web")
@@ -506,7 +506,7 @@ func TestScalingGlobalServiceSkipped(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed succeeded row: %v", err)
 	}
-	// 派生态推导（ duty 的 running 门会查；直推一次使门槛通过——本测试的
+	// 派生态推导（本步的 running 门会查；直推一次使门槛通过——本测试的
 	// 被测面是 global 跳过，不是 running 门）。
 	if err := h.eng.refreshDerivedState(ctx, app.ID, "demo"); err != nil {
 		t.Fatalf("refresh derived: %v", err)

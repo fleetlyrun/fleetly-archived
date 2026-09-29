@@ -31,7 +31,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
 )
@@ -39,10 +39,10 @@ import (
 // fakeDocker 是 dockerClient 的假实现（服务/网络内存态 + 调用记录；E1-2
 // 起无卷/seed 路径——迁移收敛面以 legacySeedPresent 模拟 v0.1 残留）。
 // mu 串行化全部方法（底座 client 是并发安全的，假实现同构——平台证书
-// duty 后台 goroutine 与测试轮询并发访问）。
+// 控制器后台 goroutine 与测试轮询并发访问）。
 type fakeDocker struct {
 	mu          sync.Mutex
-	services    map[string]dutydocker.ServiceSnapshot
+	services    map[string]dockerapi.ServiceSnapshot
 	networks    map[string]bool
 	creates     []string
 	updates     []string
@@ -50,39 +50,39 @@ type fakeDocker struct {
 	netEns      []string
 	netRemoved  []string
 	volumeEns   []string
-	info        dutydocker.InfoSnapshot
+	info        dockerapi.InfoSnapshot
 	// legacySeedPresent 模拟 v0.1 证书 seed 容器残留（ContainerRemoveForce
 	// 消费并清零——底座语义：移除后不复存在）。
 	legacySeedPresent bool
 	seedRemoved       []string
 	// netMissing 模拟网络缺位（NetworkID 对名单内名字返回错误——E3-6：
-	// 「rustfs duty 尚未建网」的 attach 负路径底座语义）。
+	// 「rustfs 收敛循环尚未建网」的 attach 负路径底座语义）。
 	netMissing map[string]bool
 }
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services:   map[string]dutydocker.ServiceSnapshot{},
+		services:   map[string]dockerapi.ServiceSnapshot{},
 		networks:   map[string]bool{},
 		netMissing: map[string]bool{},
-		info:       dutydocker.InfoSnapshot{SwarmActive: true, NodeAddr: "127.0.0.1"},
+		info:       dockerapi.InfoSnapshot{SwarmActive: true, NodeAddr: "127.0.0.1"},
 	}
 }
 
 // serviceState 是服务实况的加锁读取出口（并发轮询场景的规范读法）。
-func (f *fakeDocker) serviceState(name string) dutydocker.ServiceSnapshot {
+func (f *fakeDocker) serviceState(name string) dockerapi.ServiceSnapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.services[name]
 }
 
-func (f *fakeDocker) Info(context.Context) (dutydocker.InfoSnapshot, error) {
+func (f *fakeDocker) Info(context.Context) (dockerapi.InfoSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.info, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.services[name], nil
@@ -92,7 +92,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.creates = append(f.creates, spec.Name)
-	f.services[spec.Name] = dutydocker.ServiceSnapshot{
+	f.services[spec.Name] = dockerapi.ServiceSnapshot{
 		Exists:  true,
 		Version: 1,
 		Image:   spec.TaskTemplate.ContainerSpec.Image,

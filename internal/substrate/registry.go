@@ -14,7 +14,7 @@ package substrate
 //     registry 的 Basic Auth 凭据以 X-Registry-Auth 编码头随 service
 //     create/update 提交，Swarm 原生分发到拉取节点。引擎不感知凭据存在
 //     ——适配器在镜像引用命中平台 registry（build.IsRegistryImageRef）时
-//     自动附带，凭据经装配期注入的惰性读取函数现读（zot 部署 duty 可能
+//     自动附带，凭据经装配期注入的惰性读取函数现读（zot 部署控制器 可能
 //     晚于装配期生成凭据文件；轮换后新部署即刻生效）。
 //
 //   - 外部 registry 解析与凭证（IMPL-T1-2/DT-2）：tag 引用经

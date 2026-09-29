@@ -15,7 +15,7 @@
 //     → Docker exec attach（Tty + 三流）→ resize 透传 → 会话时限（空闲
 //     10min / 硬上限 30min）。
 //
-//  3. duty（duty.go + spec.go）：控制面收敛 global 服务 fleetly-exec（host
+//  3. 部署收敛（manager.go + spec.go）：控制面收敛 global 服务 fleetly-exec（host
 //     网络 + docker.sock 只读挂载 + Swarm secret fleetly-exec-token——平台
 //     生成 48B、哈希落 meta，不暴露用户面轮换）；terminal.enabled=false 时
 //     移除服务。

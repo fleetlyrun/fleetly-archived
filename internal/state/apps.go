@@ -306,7 +306,7 @@ func (s *Store) MarkAppDeleted(ctx context.Context, appID string) error {
 }
 
 // MarkAppDeleted 是事务内 tombstone 第二拍（H10/MG-3：与终局事件/审计
-// 同事务组合的形态——引擎 deleting 回收 duty 在受管服务全部移除后原子
+// 同事务组合的形态——引擎 deleting 回收步 在受管服务全部移除后原子
 // 落终态，进程在「迁移已落、事件未发」之间崩溃的披露缺口不存在）。
 // IMPL-T15-1：同步清项目网参与位（删后不参加任何项目网——成员计数与项目网
 // GC 不因墓碑行悬挂；无独立事件，终局 app.deleted 已承载删除语义）。

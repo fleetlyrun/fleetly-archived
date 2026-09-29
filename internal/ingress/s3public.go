@@ -16,7 +16,7 @@ package ingress
 //	         为基准合并——traefik.go 的实机回归纪律：网络目标集不由期望
 //	         spec 重建）。
 //
-// 收敛载体：常驻 duty（runS3PublicDuty，registry duty 同款节奏——设置变更
+// 收敛载体：常驻控制器（runS3PublicController，registry 控制器同款节奏——设置变更
 // 在一个扫描周期内收敛，稳态期只做网络挂接的幂等漂移复检；路由/证书面另
 // 由 sweep 与发布路径对账兜底）。默认关 = 单节点零成本、零路由、零 SAN 变
 // 化（单节点 v0.1 形态逐字不变）；开关门禁（rustfs 才可开、需 base_domain）
@@ -44,11 +44,11 @@ const (
 	// rustfsBackendPort 是 RustFS 的 S3 API 监听端口（overlay 内明文）。
 	rustfsBackendPort = "9000"
 
-	// s3PublicRetryInterval 是公网开关 duty 的收敛失败退避缺省（平台证书/
-	// registry duty 同款注入缝——Manager.platformRetryInterval 可覆盖）。
+	// s3PublicRetryInterval 是公网开关控制器 的收敛失败退避缺省（平台证书/
+	// registry 控制器 同款注入缝——Manager.platformRetryInterval 可覆盖）。
 	s3PublicRetryInterval = 30 * time.Second
 	// s3PublicScanInterval 是已收敛后的设置变更侦测/漂移复检周期（rustfs
-	// duty 同款 60s——设置保存到公网面收敛的窗口与托管部署同量级）。
+	// 控制器同款 60s——设置保存到公网面收敛的窗口与托管部署同量级）。
 	s3PublicScanInterval = 60 * time.Second
 )
 
@@ -84,7 +84,7 @@ func (m *Manager) platformS3Route() Route {
 // + console 免端口直访路由（2026-09-24，base_domain 门）+ s3.<base> 路由
 //（E3-6，公网开关门）。开关关闭或设置读取失败 → 不追加（fail-closed：设置
 // 损坏时路由面缺席 = 公网面关闭，全量发布照常——设置读取故障不放大成全
-// 平台入口发布失败；duty 侧同错误走退避重试并告警）。
+// 平台入口发布失败；控制器侧同错误走退避重试并告警）。
 func (m *Manager) withPlatformRoutes(ctx context.Context, routes []Route) []Route {
 	if !m.ConfigTLSEnabled() {
 		return routes
@@ -122,7 +122,7 @@ const (
 // 认证由 VPC 边界承担）；明文形态走 http。App=平台证书保留名：
 // publishWithCerts 的按 app 挂证书循环自动挂 443 路由与内联证书段
 //（registry 路由同构，零特判）。advertiseIP 未定（EnsureTraefik 未跑过）
-// 时不追加——路由面无地址可指；duty 收敛链恒在 EnsureTraefik 之后重发布，
+// 时不追加——路由面无地址可指；控制器收敛链恒在 EnsureTraefik 之后重发布，
 // 最终一致。前提（诚实记录）：网关须绑定非回环（远程访问 Console 的安装
 // 形态天然满足；纯回环绑定下本路由 502）。
 func (m *Manager) platformConsoleRoute() (Route, bool) {
@@ -197,7 +197,7 @@ func (m *Manager) acmeWildcard(ctx context.Context) (bool, error) {
 // convergeS3Public 执行一拍公网面收敛（开关状态变化后的全链；幂等）：
 // Traefik 就绪（lastSpec 前置）→ 网络挂接/摘除 → 视图重发布（路由增/摘）
 // → 平台证书 SAN 期望态对账（集合变化即重签发）→ 新证书换入视图。
-// ACME 关闭时证书步惰性告警（路由/网络面照常收敛——与平台证书 duty 的
+// ACME 关闭时证书步惰性告警（路由/网络面照常收敛——与平台证书控制器 的
 // inert 口径一致：无签发面就没有 SAN 面，诚实降级不静默）。
 func (m *Manager) convergeS3Public(ctx context.Context, exposed bool) error {
 	if err := m.EnsureTraefik(ctx); err != nil {
@@ -255,14 +255,14 @@ func (m *Manager) convergeS3PublicNetwork(ctx context.Context, exposed bool) err
 
 // attachPlatformNetworkIfPresent 是平台网络挂接的守恒形态：与
 // attachNetworkByName 的唯一差别是**不代建网络**——NetworkEnsure 会创建非
-// attachable 的普通 overlay，而 fleetly-rustfs-net 必须由 rustfs duty 以
+// attachable 的普通 overlay，而 fleetly-rustfs-net 必须由 rustfs 收敛循环以
 // attachable 形态创建（restic 上传轨/探针一次性容器经它入网，设计 §2.5/
 // §2.6）；此处抢建会在「mode=rustfs + public_exposed 同拍保存」的竞态下
-// 破坏该不变量。网络未建（rustfs duty 尚未收敛）→ 可重试错误，duty 退避。
+// 破坏该不变量。网络未建（rustfs 收敛循环尚未收敛）→ 可重试错误，收敛循环退避。
 func (m *Manager) attachPlatformNetworkIfPresent(ctx context.Context, netName string) error {
 	netID, err := m.docker.NetworkID(ctx, netName)
 	if err != nil {
-		return fmt.Errorf("ingress: platform network %s not present yet (rustfs duty pending): %w", netName, err)
+		return fmt.Errorf("ingress: platform network %s not present yet (rustfs convergence pending): %w", netName, err)
 	}
 	return m.attachNetworkID(ctx, netName, netID)
 }
@@ -270,7 +270,7 @@ func (m *Manager) attachPlatformNetworkIfPresent(ctx context.Context, netName st
 // detachPlatformNetwork 确保 Traefik **不**挂接指定平台网络（公网开关关闭
 // 侧；幂等：未挂接即 no-op）。网络目标集以服务实况为基准做减法（其余挂载
 // ——app 网络等——原样保留，specWithNetworks 整组替换语义；期望 spec 不得
-// 参与重建，traefik.go 实机回归纪律）。网络本体不动（rustfs duty 的数据
+// 参与重建，traefik.go 实机回归纪律）。网络本体不动（rustfs 收敛循环的数据
 // 面语义：禁用保留网络与卷）。
 func (m *Manager) detachPlatformNetwork(ctx context.Context, netName string) error {
 	netID, err := m.docker.NetworkID(ctx, netName)
@@ -316,16 +316,16 @@ func (m *Manager) detachPlatformNetwork(ctx context.Context, netName string) err
 	return nil
 }
 
-// runS3PublicDuty 是公网子域开关的常驻收敛循环（Manager.Run 启动的独立
+// runS3PublicController 是公网子域开关的常驻收敛循环（Manager.Run 启动的独立
 // goroutine；ctx 取消返回）。W5-S3 起同拍守望 acme.wildcard（两者都只改
 // 平台证书 SAN 期望态集 + 平台路由段——收敛链共用 convergeS3Public：证书
 // 集合变化经 ensurePlatformCertificate 的「域名集变化即重签」判据收敛）：
 //
 //	base_domain 为空 → 不启动（单节点形态零成本，开关在设置面即被拒）；
-//	状态变化拍 → convergeS3Public 全链（失败退避重试，registry duty 同款）；
+//	状态变化拍 → convergeS3Public 全链（失败退避重试，registry 控制器 同款）；
 //	稳态拍 → 只做网络挂接的幂等漂移复检（路由/证书面由 sweep 与发布路径
 //	对账兜底——设置现读语义使任何一次全量发布都按当前开关取态）。
-func (m *Manager) runS3PublicDuty(ctx context.Context) {
+func (m *Manager) runS3PublicController(ctx context.Context) {
 	if !m.ConfigTLSEnabled() {
 		return
 	}

@@ -44,7 +44,7 @@ service MetricsService {
     option (google.api.http) = { get: "/v1/metrics/status" };
     option (fleetly.annotations.v1.scope) = "read";
   }
-  // SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——duty 收敛
+  // SetMetricsMode 切换 metrics 模式（unset | on）：保存即生效——后台收敛
   // 部署/移除（数据卷保留），deploy scope（同 SetLogsBackend 分级理由）。
   rpc SetMetricsMode(SetMetricsModeRequest) returns (SetMetricsModeResponse) {
     option (google.api.http) = { put: "/v1/metrics/mode" body: "*" };
@@ -87,7 +87,7 @@ message GetMetricsStatusRequest {}
 // MetricsComponentView 是单件托管服务的部署态投影。
 message MetricsComponentView {
   string name = 1;
-  // 服务是否在位（mode=on 且 false = duty 收敛中——过渡态红面）。
+  // 服务是否在位（mode=on 且 false = 后台收敛中——过渡态红面）。
   bool exists = 2;
   // 实况镜像引用（不在位为空）。
   string image = 3;

@@ -49,7 +49,7 @@ const substrateReconInterval = 30 * time.Second
 // 闸；生产由 tick 周期驱动）。
 func (e *Engine) SubstrateRecon(ctx context.Context) { e.substrateRecon(ctx, true) }
 
-// substrateRecon 是 tick 的存在性对账 duty（T0-V2.2/R2）。IMPL-T15-1 起
+// substrateRecon 是 tick 的存在性对账步（T0-V2.2/R2）。IMPL-T15-1 起
 // 含 networks 面（reconNetworks——孤儿网/缺失项目网披露；票面 DT-5 对账
 // 兜底守卫）。频控：非 force 形态受 substrateScanGate 时间闸（tick
 // goroutine 专用，scanGate 单点见 disclosure.go；重启即清零 = 重启后立即
@@ -272,7 +272,7 @@ func (e *Engine) reportSubstrateMissing(ctx context.Context, appID, appName stri
 			return err
 		}
 		if cur != DerivedRunning {
-			return nil // 并发翻转已离开 running：离开本 duty 范围（扫描时与写入时双重校验）
+			return nil // 并发翻转已离开 running：离开本步范围（扫描时与写入时双重校验）
 		}
 		if err := tx.SetAppDerivedState(ctx, appID, cur, DerivedDown); err != nil {
 			return err

@@ -77,7 +77,7 @@ type Engine struct {
 	netSub NetworkSubstrate
 	// platformNetworks 是 recon networks 面的平台组件网名白名单（装配层
 	// 注入：ingress/state 的固定名常量；engine 不 import ingress——方向
-	// 纪律。组件网生命周期归各组件 duty，本 duty 不判罚）。
+	// 纪律。组件网生命周期归各组件管理器，本步不判罚）。
 	platformNetworks map[string]bool
 	// waterMarks 是副本水位不足判定的进程内计时（观察窗辅助信号；引擎
 	// 重启后重摆——窗口本身持久化，重启代价可接受）。
@@ -86,7 +86,7 @@ type Engine struct {
 	// 散文单点在 disclosure.go）——持续异常形态只报一次；恢复/条件解除
 	// 清零可再报；进程重启清零 = 重报一次，重复优于漏报。八面对账披露
 	// 共用同一类型与一份逻辑（此前 8 个裸 map 字段各带一份逐字近同的
-	// 契约散文）；事件+审计同事务配对同文件。非并发安全：只在对账 duty
+	// 契约散文）；事件+审计同事务配对同文件。非并发安全：只在对账步
 	// 调用栈上使用（tick goroutine 专用，与收敛前的裸 map 同纪律）──
 	driftSeen            disclosureSet // 漂移面：no-drift → drift 迁移判定（T2.13）
 	substrateMissingSeen disclosureSet // 存在性对账：服务缺失（T0-V2.2/R2）
@@ -118,18 +118,18 @@ type Engine struct {
 	deleteScanGate         scanGate // deleting 应用回收扫描（H10/MG-3）
 	initScanGate           scanGate // init 孤儿服务清扫（DT-4）
 	substrateScanGate      scanGate // 运行期存在性对账扫描（T0-V2.2/R2；含 networks/tasks 面）
-	projectNetworkScanGate scanGate // 项目网收敛 duty（IMPL-T15-1）
+	projectNetworkScanGate scanGate // 项目网收敛步（IMPL-T15-1）
 	scalingScanGate        scanGate // 扩缩评估扫描（W5-S1）
-	// metricsQ 是 VM 瞬时查询端口（autoscaler 评估器的数据面；nil = duty
+	// metricsQ 是 VM 瞬时查询端口（autoscaler 评估器的数据面；nil = 本步
 	// 整体不在评估域——装配层经 WithMetricsQuerier 注入）。
 	metricsQ MetricsQuerier
-	// dutyPanicOn / dutyCalls 是 safeCall 的测试注入缝（MG-5 覆盖面测试）：
-	// 前者按 duty 名注入 panic（验证包壳隔离），后者记录经 safeCall 执行的
-	// duty 名与次数（验证 duty 清单全部收口；Run goroutine 写、测试 goroutine
-	// 读——dutyMu 保护）。生产恒为 nil/不读。
-	dutyMu      sync.Mutex
-	dutyPanicOn map[string]bool
-	dutyCalls   map[string]int
+	// stepPanicOn / stepCalls 是 safeCall 的测试注入缝（MG-5 覆盖面测试）：
+	// 前者按步名注入 panic（验证包壳隔离），后者记录经 safeCall 执行的
+	// 步名与次数（验证步清单全部收口；Run goroutine 写、测试 goroutine
+	// 读——stepMu 保护）。生产恒为 nil/不读。
+	stepMu      sync.Mutex
+	stepPanicOn map[string]bool
+	stepCalls   map[string]int
 }
 
 // PlacementResolver 是引擎对放置层的消费端口（internal/placement.Resolver
@@ -225,43 +225,43 @@ func (e *Engine) Run(ctx context.Context) error {
 // Tick 单步推进（测试与诊断入口；生产由 Run 驱动）。
 func (e *Engine) Tick(ctx context.Context) { e.tick(ctx) }
 
-// dutyCallCount 是测试注入缝的读面（dutyMu 保护；测试外恒为零值——
+// stepCallCount 是测试注入缝的读面（stepMu 保护；测试外恒为零值——
 // MG-5 测试专用，不进业务路径）。
-func (e *Engine) dutyCallCount(name string) int {
-	e.dutyMu.Lock()
-	defer e.dutyMu.Unlock()
-	return e.dutyCalls[name]
+func (e *Engine) stepCallCount(name string) int {
+	e.stepMu.Lock()
+	defer e.stepMu.Unlock()
+	return e.stepCalls[name]
 }
 
-// safeCall 是 tick 路径 duty 的统一 panic 包壳（MG-5/M1-7）：defer recover
-// → Error 日志（含栈）+ 跳过本拍——单个 duty 的 panic 不打死 tick 循环
-// （毒数据/适配器违约只损失一拍，其余 duty 与后续 tick 照常）。
+// safeCall 是 tick 路径步 的统一 panic 包壳（MG-5/M1-7）：defer recover
+// → Error 日志（含栈）+ 跳过本拍——单个步的 panic 不打死 tick 循环
+// （毒数据/适配器违约只损失一拍，其余步与后续 tick 照常）。
 // advanceOne 另有 per-record 兜底（panic → 该部署 E_RUNTIME_UNAVAILABLE
-// 终态），与本包壳分层：记录级处置在先、duty 级兜底在后。
+// 终态），与本包壳分层：记录级处置在先、步级兜底在后。
 //
-// 契约：tick 与 drift ticker 的全部 duty 调用点必须经本包壳收口（新增
-// duty 不走 safeCall 即违反 MG-5 覆盖面断言——safecall_test.go 的源扫描
-// 测试钉死该契约）。dutyPanicOn/dutyCalls 是测试注入缝，生产恒 nil。
+// 契约：tick 与 drift ticker 的全部步调用点必须经本包壳收口（新增
+// 步不走 safeCall 即违反 MG-5 覆盖面断言——safecall_test.go 的源扫描
+// 测试钉死该契约）。stepPanicOn/stepCalls 是测试注入缝，生产恒 nil。
 func (e *Engine) safeCall(name string, fn func()) {
 	// recover 先装（含测试注入路径——包壳对入口注入同样兜底）。
 	defer func() {
 		if r := recover(); r != nil {
-			e.log.Error("engine: duty panic recovered (skipping this tick, tick continues)",
-				"duty", name, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+			e.log.Error("engine: tick step panic recovered (skipping this tick, tick continues)",
+				"step", name, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
 		}
 	}()
-	e.dutyMu.Lock()
-	if e.dutyPanicOn != nil && e.dutyPanicOn[name] {
-		if e.dutyCalls != nil {
-			e.dutyCalls[name]++
+	e.stepMu.Lock()
+	if e.stepPanicOn != nil && e.stepPanicOn[name] {
+		if e.stepCalls != nil {
+			e.stepCalls[name]++
 		}
-		e.dutyMu.Unlock()
-		panic("injected duty panic (MG-5 test): " + name)
+		e.stepMu.Unlock()
+		panic("injected step panic (MG-5 test): " + name)
 	}
-	if e.dutyCalls != nil {
-		e.dutyCalls[name]++
+	if e.stepCalls != nil {
+		e.stepCalls[name]++
 	}
-	e.dutyMu.Unlock()
+	e.stepMu.Unlock()
 	fn()
 }
 
@@ -270,7 +270,7 @@ func (e *Engine) safeCall(name string, fn func()) {
 // （T0-V2.2/R2，时间闸降频；IMPL-T15-1 起含 networks 面）→ init 孤儿服务
 // 清扫（DT-4，时间闸降频）→ 项目网 GC（IMPL-T15-1，时间闸降频）→ 任务
 // TTL 回收 + 任务收敛（DT-5/IMPL-T2-1，每拍；任务生命周期是秒级语义）。
-// 全部 duty 经 safeCall 收口（MG-5）。
+// 全部步经 safeCall 收口（MG-5）。
 func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("recoveryRetry", func() { e.retryRecoveryIfNeeded(ctx) })
 	e.safeCall("pickQueued", func() { e.pickQueued(ctx) })
@@ -286,8 +286,8 @@ func (e *Engine) tick(ctx context.Context) {
 	e.safeCall("reapExpiredTasks", func() { e.reapExpiredTasks(ctx) })
 	e.safeCall("advanceTasks", func() { e.advanceTasks(ctx) })
 	// 扩缩评估（W5-S1，D-V3W5-2）：收敛拍尾部——发布链路推进完毕后的稳态
-	// 求值（自有 30s 频控闸；查询面未装配时 duty 空转）。
-	e.safeCall("dutyAutoscaling", func() { e.dutyAutoscaling(ctx, false) })
+	// 求值（自有 30s 频控闸；查询面未装配时 本步空转）。
+	e.safeCall("autoscaleApps", func() { e.autoscaleApps(ctx, false) })
 }
 
 // pickQueued 拾取可启动的 queued 部署：同 app 互斥——仅当该 app 无其他
@@ -588,7 +588,7 @@ func (e *Engine) prepareInputs(ctx context.Context, rec state.DeployRecord) (*pr
 	}
 
 	// S3 注入面（E3-4）：label fleetly.s3=true 的服务解析 system env 与
-	// 网络牵线。托管凭据未备便是暂态（duty 生成拍未到）——返回哨兵，调用
+	// 网络牵线。托管凭据未备便是暂态（rustfs 管理器生成拍未到）——返回哨兵，调用
 	// 方停留 preparing 下一拍重试（预算由 preparing 看门狗守门）。
 	s3Env, attachRustfs, err := e.resolveS3Injection(ctx, spec)
 	if err != nil {

@@ -118,7 +118,7 @@
         ]
       },
       "delete": {
-        "summary": "DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；\nreap duty 幂等清理受管对象。confirm = 实例名——数据安全两段式确认；\ndelete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。",
+        "summary": "DeleteDatabase 删除受理（引用守卫通过后 → deleting tombstone 第一拍；\nreap 收敛步幂等清理受管对象。confirm = 实例名——数据安全两段式确认；\ndelete_volumes 默认 false = 卷保留转 orphaned，true = 删数据卷不可逆）。",
         "operationId": "DatabaseService_DeleteDatabase",
         "responses": {
           "200": {

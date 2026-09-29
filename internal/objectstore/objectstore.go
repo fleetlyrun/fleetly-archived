@@ -1,6 +1,6 @@
 // Package objectstore 是平台对 S3 兼容端点的唯一客户端面（E3 对象存储专项
 // 设计 §2.1，D-S3-1）：minio-go/v7 的封闭封装，全仓库只有本包 import
-// minio-go；其余代码（备份上传轨/凭证注入/RustFS duty）一律经本包消费 S3。
+// minio-go；其余代码（备份上传轨/凭证注入/RustFS 管理器）一律经本包消费 S3。
 //
 // 操作面 = 平台实际用到的封闭集（操作面即 conformance 面，§2.7）：
 // EnsureBucket（幂等建桶）/Put/Get/Stat/Delete/List（前缀列举）。

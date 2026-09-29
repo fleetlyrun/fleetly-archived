@@ -138,11 +138,11 @@ func (s backupService) Start(ctx context.Context) error {
 }
 func (s backupService) Stop(ctx context.Context) error { return s.bm.Stop(ctx) }
 
-// rustfsService 是托管 RustFS duty 服务壳（E3-5）：Start 阶段进入常驻收敛
+// rustfsService 是托管 RustFS 收敛管理器服务壳（E3-5）：Start 阶段进入常驻收敛
 // 循环（mode=rustfs 幂等部署/漂移收敛；mode 离开移除服务保留卷；失败退避
 // 重试）。Start 阻塞到关停（actor 契约同上），Stop 无资源动作（循环随
 // 服务 ctx 退出；收敛幂等，控制面重启自然续跑）。健康面由 SystemService
-// 组件 objectstore.rustfs（duty Manager.CheckHealth）承载。
+// 组件 objectstore.rustfs（管理器 Manager.CheckHealth）承载。
 type rustfsService struct {
 	m *rustfs.Manager
 }
@@ -155,10 +155,10 @@ func (s rustfsService) Start(ctx context.Context) error {
 	return s.m.Run(ctx)
 }
 
-// Stop 无资源动作：Run 随服务 ctx 取消返回（duty 收敛全部幂等——重启续跑）。
+// Stop 无资源动作：Run 随服务 ctx 取消返回（收敛全部幂等——重启续跑）。
 func (s rustfsService) Stop(_ context.Context) error { return nil }
 
-// victorialogsService 是托管 VictoriaLogs duty 服务壳（E6 W5-S1，设计
+// victorialogsService 是托管 VictoriaLogs 收敛管理器服务壳（E6 W5-S1，设计
 // §2.1）：Start 阶段进入常驻收敛循环（logs.backend=victorialogs〔缺省〕
 // 幂等部署/漂移收敛——单副本钉 manager/卷/内部网络/host-mode 回环发布
 // 9428/-retentionPeriod 对齐 logs.retention_days；切回 jsonl 移除服务
@@ -177,11 +177,11 @@ func (s victorialogsService) Start(ctx context.Context) error {
 	return s.m.Run(ctx)
 }
 
-// Stop 无资源动作：Run 随服务 ctx 取消返回（duty 收敛全部幂等——重启续跑；
+// Stop 无资源动作：Run 随服务 ctx 取消返回（收敛全部幂等——重启续跑；
 // 批量器 flush 循环同 ctx 排水，关停前 best-effort 排空在途行）。
 func (s victorialogsService) Stop(_ context.Context) error { return nil }
 
-// metricsService 是托管 metrics 三件套 duty 服务壳（E6 W5-S3，设计 §4.1，
+// metricsService 是托管 metrics 三件套收敛管理器服务壳（E6 W5-S3，设计 §4.1，
 // D-W5-2 opt-in）：Start 阶段进入常驻收敛循环（metrics.mode=on 时幂等部署/
 // 漂移收敛三件——VM 单副本钉 manager/卷/host 网络回环监听 8428/retention
 // 对齐 + 抓取 config 对象；cAdvisor 与 node_exporter global；切回 unset 三
@@ -200,10 +200,10 @@ func (s metricsService) Start(ctx context.Context) error {
 	return s.m.Run(ctx)
 }
 
-// Stop 无资源动作：Run 随服务 ctx 取消返回（duty 收敛全部幂等——重启续跑）。
+// Stop 无资源动作：Run 随服务 ctx 取消返回（收敛全部幂等——重启续跑）。
 func (s metricsService) Stop(_ context.Context) error { return nil }
 
-// execRelayService 是托管 exec relay duty 服务壳（E7 W5-S6，web-terminal
+// execRelayService 是托管 exec relay 收敛管理器服务壳（E7 W5-S6，web-terminal
 // §2.1 D-W5-3）：Start 阶段进入常驻收敛循环（terminal.enabled=true 时幂等
 // 部署/漂移收敛 global 服务 fleetly-exec——host 网络 + docker.sock RO 挂载
 // + 集群 token secret（首拍生成 48B、哈希落 meta）；false 时移除服务；
@@ -221,7 +221,7 @@ func (s execRelayService) Start(ctx context.Context) error {
 	return s.m.Run(ctx)
 }
 
-// Stop 无资源动作：Run 随服务 ctx 取消返回（duty 收敛全部幂等——重启续跑）。
+// Stop 无资源动作：Run 随服务 ctx 取消返回（收敛全部幂等——重启续跑）。
 func (s execRelayService) Stop(_ context.Context) error { return nil }
 
 // notifyService 是通知投递器服务壳（E6 W5-S4，observability §5.2）：Start
@@ -267,7 +267,7 @@ func (s cronSchedulerService) Start(ctx context.Context) error {
 }
 func (s cronSchedulerService) Stop(ctx context.Context) error { return s.m.Stop(ctx) }
 
-// databaseService 是库实例收敛 duty 服务壳（E4 W4-S2）：Start 阶段进入收敛
+// databaseService 是库实例收敛管理器服务壳（E4 W4-S2）：Start 阶段进入收敛
 // 循环（provisioning 建现场过健康门 / ready-degraded 健康观察 / paused 保
 // 持 scale-0 / deleting 幂等 reap；tick 拍 + API 受理后的 kick 拍）。Start
 // 阻塞到关停（actor 契约同上），Stop 等待在途一拍收口（收敛幂等——重启续

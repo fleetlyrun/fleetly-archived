@@ -1,6 +1,6 @@
 package victorialogs
 
-// duty 收敛流程的 hermetic 单测（fake dockerPort——rustfs duty 测试同型）：
+// 收敛管理器的 hermetic 单测（fake dockerPort——rustfs 管理器测试同型）：
 // 缺省即部署（V2-1 默认捆绑语义——logs.backend 未设置 = victorialogs）、
 // 幂等稳态、漂移更新、切回 jsonl 移除服务保留卷、差分事件、负面
 //（swarm 未就绪、平台 ID 未铸）、健康检查面。
@@ -17,7 +17,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
-	"github.com/fleetlyrun/fleetly/internal/dutydocker"
+	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -27,7 +27,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]dutydocker.ServiceSnapshot
+	services map[string]dockerapi.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -38,18 +38,18 @@ type fakeDocker struct {
 }
 
 func newFakeDocker() *fakeDocker {
-	return &fakeDocker{services: map[string]dutydocker.ServiceSnapshot{}}
+	return &fakeDocker{services: map[string]dockerapi.ServiceSnapshot{}}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
-	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+func (f *fakeDocker) Info(_ context.Context) (dockerapi.InfoSnapshot, error) {
+	return dockerapi.InfoSnapshot{SwarmActive: f.swarmActive}, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dockerapi.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return dutydocker.ServiceSnapshot{}, f.inspectErr
+		return dockerapi.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -58,7 +58,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, spec.Name)
-	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	cur := dockerapi.ServiceSnapshot{Exists: true, Version: 1}
 	fillSnapshotFrom(&cur, spec)
 	normalizeNetworkIDs(&cur)
 	f.services[spec.Name] = cur
@@ -78,9 +78,9 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 }
 
 // normalizeNetworkIDs 模拟 engine 创建期行为：网络挂载目标按名归一为网络
-// ID 存储（"host" 亦然——W5-S3 真机/dind 实证）。duty 的幂等比对必须经
+// ID 存储（"host" 亦然——W5-S3 真机/dind 实证）。收敛管理器的幂等比对必须经
 // NetworkName 解析回名同锚比较（见 converge 注记）。
-func normalizeNetworkIDs(s *dutydocker.ServiceSnapshot) {
+func normalizeNetworkIDs(s *dockerapi.ServiceSnapshot) {
 	for i, t := range s.Networks {
 		s.Networks[i] = "netid:" + t
 	}
@@ -241,7 +241,7 @@ func TestEnsureUpdatesOnDrift(t *testing.T) {
 }
 
 // TestEnsureRemovesOnJSONL 切回 jsonl：服务移除 + removed 事件（payload
-// 带 volume_retained=true）；卷对象永不被 duty 删除（数据安全语义）；
+// 带 volume_retained=true）；卷对象永不被收敛管理器删除（数据安全语义）；
 // 稳态幂等（无服务时 removeIfPresent no-op）。
 func TestEnsureRemovesOnJSONL(t *testing.T) {
 	h := newHarness(t)
@@ -285,7 +285,7 @@ func TestEnsureSwarmNotReady(t *testing.T) {
 	}
 }
 
-// TestEnsureMissingPlatformID 负面：平台 ID 未铸（identity duty 未跑）→
+// TestEnsureMissingPlatformID 负面：平台 ID 未铸（identity 铸造未跑）→
 // 显式错误退避重试，宁缺毋错（约束引用空 ID = 永不调度）。
 func TestEnsureMissingPlatformID(t *testing.T) {
 	h := newHarness(t)

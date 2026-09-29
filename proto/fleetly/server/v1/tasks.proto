@@ -56,7 +56,7 @@ service TasksService {
     option (fleetly.annotations.v1.scope) = "tasks";
   }
   // CreateTask 受理任务（owner = 调用令牌；TTL/资源配额 fail-closed 校验；
-  // 状态收敛由引擎 duty 承载——本 RPC 返回 queued 形态）。
+  // 状态收敛由引擎 tick 收敛循环承载——本 RPC 返回 queued 形态）。
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {
     option (google.api.http) = {
       post: "/v1/tasks"

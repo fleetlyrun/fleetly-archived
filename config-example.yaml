@@ -18,7 +18,7 @@ control_plane:
     # TLS 模式：
     #   off      明文（缺省/留空）。
     #   platform 复用平台证书（_fleetly-platform 多 SAN 单证书：ctrl/
-    #            registry/console.<base>；LE 签发与续期由平台证书 duty 承
+    #            registry/console.<base>；LE 签发与续期由平台证书控制器承
     #            接）。要求 base_domain 非空（否则启动报错）。证书续期落
     #            盘后热重载（约 60s 内生效，新连接用新证书）。证书就绪前
     #            TLS 面照常监听、握手失败（等待签发的诚实形态，日志有
@@ -45,7 +45,7 @@ terminal:
   # 是否启用 Web 终端（缺省 true）。安全基线 = terminal 独立 scope（默认仅
   # admin；`fleetly tokens create --scopes terminal` 可独立授予）+ 并发限额
   # （per-token 2 / 全局 8）+ 会话时限（空闲 10min / 硬上限 30min）。
-  # false = duty 移除 fleetly-exec 服务、ticket 受理报 E_TERMINAL_DISABLED；
+  # false = 收敛管理器移除 fleetly-exec 服务、ticket 受理报 E_TERMINAL_DISABLED；
   # 集群 token secret 保留（重启用同一 token 身份；运维轮换路径见
   # docs/runbooks/web-terminal.md）。
   enabled: true
@@ -235,7 +235,7 @@ logs:
 
 # 托管 metrics 栈（E6 W5-S3；D-W5-2 opt-in）。metrics.mode 是运行期设置
 #（`fleetly metrics mode set <unset|on>` / Console metrics 卡），不在本
-# 配置节——缺省 unset（零新增常驻），显式 on 后 duty 部署三件套
+# 配置节——缺省 unset（零新增常驻），显式 on 后收敛管理器部署三件套
 #（VictoriaMetrics 单机版 + cAdvisor + node_exporter，全部回环监听）。
 metrics:
   # VictoriaMetrics 数据保留天数（metrics.retention_days；缺省 14——

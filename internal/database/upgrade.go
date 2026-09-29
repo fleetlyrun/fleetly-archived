@@ -14,7 +14,7 @@ package database
 // 就地保持 degraded——digest 已归位，健康恢复由既有观察路径收口（观察恢
 // 复到 ready 是系统诚实性的自然结果，degraded 是失败时刻的告警位）。
 //
-// 可升级检测（db.upgrade_available）：收敛拍尾部 duty——instance.digest ≠
+// 可升级检测（db.upgrade_available）：收敛拍尾部步——instance.digest ≠
 // 模板当前 Image 即公告，per (实例, 目标 digest) 进程内去重（重启重公告
 // 一次，诚实冗余优于静默）。
 //
@@ -230,7 +230,7 @@ func (m *Manager) upgradeFail(ctx context.Context, inst *state.DatabaseInstance,
 	} else {
 		inst.ImageDigest = oldDigest
 		if _, err := m.applyDesiredService(ctx, inst, 1); err != nil {
-			m.log.Error("database: digest rollback rebuild failed (converge duty will retry from the authoritative row)", "instance", inst.Name, "error", err)
+			m.log.Error("database: digest rollback rebuild failed (convergence will retry from the authoritative row)", "instance", inst.Name, "error", err)
 		}
 	}
 	// 状态落 degraded（§2.2）：ready→degraded 合法边；degraded 保持；
@@ -273,11 +273,11 @@ func replicasOf(s state.DatabaseState) uint64 {
 	return 1
 }
 
-// dutyUpgradeAdvertisement 是收敛拍尾部的可升级公告 duty：instance.digest ≠
+// advertiseUpgrades 是收敛拍尾部的可升级公告步：instance.digest ≠
 // 模板当前 Image → db.upgrade_available（per (实例, 目标 digest) 进程内去
 // 重——重启重公告一次）。upgrade 的 opt-in 受理面不受此影响（重复公告不产
 // 生重复受理）。
-func (m *Manager) dutyUpgradeAdvertisement(ctx context.Context, rows []state.DatabaseInstance) {
+func (m *Manager) advertiseUpgrades(ctx context.Context, rows []state.DatabaseInstance) {
 	for i := range rows {
 		inst := &rows[i]
 		if inst.State == state.DatabaseDeleting || inst.State == state.DatabaseDeleted {

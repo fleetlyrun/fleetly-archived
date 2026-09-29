@@ -5,7 +5,7 @@ package engine
 // 第二拍（deleting → deleted）此前无执行者——MarkAppDeleted 零生产调用方，
 // ServiceRemove 唯一调用点是发布对账的「省略=删除」。删除后无新部署 →
 // Swarm 服务永久运行、名字不释放，且 ListActiveApps 过滤后日志采集/漂移
-// 监控对残留服务失明。裁决：收敛 duty 放引擎——它已持有 store + substrate，
+// 监控对残留服务失明。裁决：收敛步放引擎——它已持有 store + substrate，
 // 关停底座（受管服务移除）本就是期望态收敛的一部分。
 
 import (
@@ -26,7 +26,7 @@ const appDeleteScanInterval = 10 * time.Second
 // 直通频控闸；生产由 tick 周期驱动）。
 func (e *Engine) ReapDeletingApps(ctx context.Context) { e.reapDeletingApps(ctx, true) }
 
-// reapDeletingApps 是 tick 的 deleting 回收 duty（H10/MG-3）：扫描全部
+// reapDeletingApps 是 tick 的 deleting 回收步（H10/MG-3）：扫描全部
 // deleting 应用并逐个收敛（受管服务移除 → deleting → deleted + 终局事件
 // 与审计）。频控：非 force 形态受 deleteScanGate 时间闸（tick goroutine
 // 专用，scanGate 单点见 disclosure.go）。
@@ -63,7 +63,7 @@ func (e *Engine) reapDeletingApp(ctx context.Context, app state.App) {
 	// **无**一次性 job 豁免：app 删除是全量清场，job 服务一并移除。
 	existing, err := e.sub.ServiceList(ctx, appServiceFilter(app))
 	if err != nil {
-		// 底座瞬态（不可达/超时）：duty 内消化，不落 app 终态——下拍重试。
+		// 底座瞬态（不可达/超时）：步内消化，不落 app 终态——下拍重试。
 		e.log.Warn("engine: deleting-app service scan", "app", app.Name, "error", err)
 		return
 	}

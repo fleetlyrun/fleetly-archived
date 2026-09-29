@@ -543,7 +543,7 @@ func TestParseResticOutput(t *testing.T) {
 }
 
 // saveRustfsSettings 落一份 rustfs 模式设置（外部四字段为空——互斥校验），
-// 并把托管凭据密文预置入库（模拟 E3-5 duty 已生成；密文入参与生产一致）。
+// 并把托管凭据密文预置入库（模拟 E3-5 管理器已生成；密文入参与生产一致）。
 func saveRustfsSettings(t *testing.T, st *state.Store, box *secrets.Box) {
 	t.Helper()
 	if err := st.SaveS3Settings(context.Background(), state.S3Settings{Mode: state.S3ModeRustfs},
@@ -599,7 +599,7 @@ func TestUploadRustfsModeUsesManagedCredentials(t *testing.T) {
 	}
 }
 
-// TestUploadRustfsModeWithoutCredentials 托管凭据未备便（duty 生成拍未到）
+// TestUploadRustfsModeWithoutCredentials 托管凭据未备便（生成拍未到）
 // → 上传如实 failed，错误指明缺凭据（不静默跳过——诚实红，下次触发自然重试）。
 func TestUploadRustfsModeWithoutCredentials(t *testing.T) {
 	fr := &fakeRestic{}
