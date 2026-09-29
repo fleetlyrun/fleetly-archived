@@ -69,3 +69,5 @@ bootstrap-token
 
 # e2e 本地工作产物（中断跑批的日志/二进制）
 .e2ebin/
+
+.zcode/
