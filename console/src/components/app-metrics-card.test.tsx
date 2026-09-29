@@ -1,6 +1,7 @@
-// 应用资源卡测试（E6 W5-S3）：opt-in 引导 + 开关（unset 态）、诚实
-// 「采集中」态（组件未收敛不画空线）、on 态曲线与每副本水位表（uPlot
-// mock——jsdom 无 canvas）、错误信封。
+// 应用资源卡测试（E6 W5-S3）：opt-in 引导 + 开关（unset 态；开关写面 =
+// requirePlatformWriteFace 平台管理员专属——平台管理员见钮可点、非平台
+// 管理员原位说明）、诚实「采集中」态（组件未收敛不画空线）、on 态曲线
+// 与每副本水位表（uPlot mock——jsdom 无 canvas）、错误信封。
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -33,6 +34,26 @@ const ALL_READY = {
   retention_days: 14,
 };
 
+const UNSET_STATUS = {
+  mode: "unset",
+  mode_set: false,
+  components: [],
+  nodes_reporting: 0,
+  nodes_total: 1,
+  retention_days: 14,
+};
+
+/** /auth/me 投影（is_platform_admin 开关——写面门按服务端语义反转后钉双侧）。 */
+function meResponse(isPlatformAdmin: boolean) {
+  return jsonResponse({
+    user: { id: "01U1", email: "f@t.test", is_platform_admin: isPlatformAdmin },
+    teams: [
+      { team_id: "01TEAM", team_slug: "acme", team_name: "Acme", role: "owner" },
+    ],
+    project_overrides: [],
+  });
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -60,8 +81,11 @@ describe("AppMetricsCard", () => {
       vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         log.push({ url, method: init?.method ?? "GET", body: init?.body });
+        if (url.endsWith("/auth/me")) {
+          return meResponse(true);
+        }
         if (url.endsWith("/metrics/status")) {
-          return jsonResponse({ mode: "unset", mode_set: false, components: [], nodes_reporting: 0, nodes_total: 1, retention_days: 14 });
+          return jsonResponse(UNSET_STATUS);
         }
         return jsonResponse({});
       }),
@@ -81,6 +105,26 @@ describe("AppMetricsCard", () => {
       expect(put).toBeTruthy();
       expect(JSON.parse(String(put?.body))).toEqual({ mode: "on" });
     });
+  });
+
+  it("shows the platform-admin-required note instead of the toggle for non-admins (server gate is requirePlatformWriteFace)", async () => {
+    setToken("flt_test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/auth/me")) return meResponse(false);
+        if (url.endsWith("/metrics/status")) return jsonResponse(UNSET_STATUS);
+        return jsonResponse({});
+      }),
+    );
+    renderCard();
+    await waitFor(() =>
+      expect(screen.getByTestId("app-metrics-card").textContent).toContain("opt-in"),
+    );
+    const note = screen.getByTestId("metrics-mode-readonly-note");
+    expect(note.textContent).toContain("Platform administrator required");
+    expect(screen.queryByTestId("metrics-mode-toggle")).not.toBeInTheDocument();
   });
 
   it("shows the honest collecting state (no empty charts) while components converge", async () => {

@@ -3,7 +3,9 @@
 //（按 swarm service 维度聚合，service 名 fleetly-<app>-<svc> 前缀匹配）
 // + 每副本（task 维度）水位表；mode=on 组件未就绪 → 诚实「采集中」态
 //（不画空线——设计 §4.2 原文）；mode=unset → opt-in 引导 + 开关入口
-//（deploy scope；权限不足时服务端信封如实呈现）。
+//（写面 = SetMetricsMode 走 requirePlatformWriteFace——平台全局设置，
+// 仅平台管理员可写；非平台管理员原位说明，与平台设置页 MetricsSettingsCard
+// 同一门）。
 //
 // PromQL 最小集写死在 Console 侧（锚点只增：app-metrics-card /
 // metrics-mode-toggle / replicas-watermark；图表锚点在 metrics-chart）。
@@ -70,10 +72,12 @@ interface AppMetricsCardProps {
 
 export function AppMetricsCard({ app }: AppMetricsCardProps) {
   const queryClient = useQueryClient();
-  // 平台管理员资源面只读（P0-3 双门）：metrics 开栈是资源写动作——开关
-  // 隐藏、原位说明（CLI 等价 fleetly metrics mode，文案如实指路）；本卡
-  // 原本就无角色门，非平台管理员各角色渲染零变化。
-  const platformReadonly = useIsPlatformAdmin();
+  // metrics 模式切换是平台全局设置写面（服务端 SetMetricsMode 走
+  // requirePlatformWriteFace——用户 principal 须平台管理员）：平台管理员
+  // 见开关，非平台管理员原位说明。此前按 P0-3「资源面只读」归类是误判
+  //（开关曾对平台管理员隐藏、对无权写者可见，2026-09-29 反转对齐服务端
+  // ——与平台设置页 metrics-mode-toggle 同一门）。
+  const isPlatformAdmin = useIsPlatformAdmin();
   const status = useQuery({
     queryKey: ["metrics", "status"],
     queryFn: getMetricsStatus,
@@ -187,15 +191,7 @@ export function AppMetricsCard({ app }: AppMetricsCardProps) {
           {enable.isError ? (
             <EnvelopeAlertFrom envelope={errorEnvelopeFrom(enable.error)} />
           ) : null}
-          {platformReadonly ? (
-            // P0-3：平台管理员只读——说明行。
-            <p className="text-xs text-muted-foreground" data-testid="platform-readonly-note">
-              Platform administrators have read-only access to resources
-              (separation of duties). Manage the metrics stack from the CLI
-              with a machine token (<code>fleetly metrics mode</code>), or ask
-              a team owner for a member role.
-            </p>
-          ) : (
+          {isPlatformAdmin ? (
             <Button
               size="sm"
               data-testid="metrics-mode-toggle"
@@ -204,6 +200,16 @@ export function AppMetricsCard({ app }: AppMetricsCardProps) {
             >
               {enable.isPending ? "Enabling…" : "Enable metrics"}
             </Button>
+          ) : (
+            // 写面说明（与平台设置页 metrics-mode-readonly-note 同语义）。
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="metrics-mode-readonly-note"
+            >
+              Platform administrator required — enabling deploys a platform-wide
+              collection stack. Ask your platform administrator, or use the CLI
+              with a machine token (<code>fleetly metrics mode</code>).
+            </p>
           )}
         </CardContent>
       </Card>

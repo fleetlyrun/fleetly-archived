@@ -166,7 +166,9 @@ describe("AppOverviewPage services list (E5 Cron)", () => {
 describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
   // /auth/me 包装：owner 成员关系 + is_platform_admin 开关（其余请求透传
   // 给既有分路 stub）。注意 metrics status 的分路：stub 的兜底返回无 mode
-  // 字段 → AppMetricsCard 走 opt-in 缺省态（Enable metrics 开关可见）。
+  // 字段 → AppMetricsCard 走 opt-in 缺省态；metrics 开关写面 =
+  // requirePlatformWriteFace（平台管理员专属）——2026-09-29 前端反转对齐
+  // 服务端后，平台管理员见钮、非管理员见说明（资源写钮仍按 P0-3 隐藏）。
   function stubMe(isPlatformAdmin: boolean, inner: ReturnType<typeof stubOverviewFetch>) {
     return vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith("/auth/me")) {
@@ -207,11 +209,12 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
     );
   }
 
-  it("平台管理员（owner 角色）：cron 触发/metrics 开关/扩缩策略写钮隐藏，只读说明原位渲染，读面骨架照常", async () => {
+  it("平台管理员（owner 角色）：cron 触发/扩缩策略等资源写钮隐藏，metrics 开关可见（平台设置写面），读面骨架照常", async () => {
     setToken("flt_test");
     renderOverviewInTeamContext(true);
 
-    // 说明（cron 区块 + metrics 卡 + 扩缩策略卡 ≥3 处）。
+    // 说明（cron 区块 + 项目网络卡 + 扩缩策略卡 = 3 处资源面只读说明；
+    // metrics 卡不在内——其写面是平台设置，平台管理员正是有权方）。
     await waitFor(() => {
       const notes = screen.getAllByTestId("platform-readonly-note");
       expect(notes.length).toBeGreaterThanOrEqual(3);
@@ -219,10 +222,11 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
         "Platform administrators have read-only access to resources",
       );
     });
-    // 写钮不再渲染。
+    // 资源写钮不再渲染；metrics 开关（平台全局设置写面）照常可见。
     expect(screen.queryByRole("button", { name: "Run now" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("cron-trigger-button")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("metrics-mode-toggle")).not.toBeInTheDocument();
+    expect(screen.getByTestId("metrics-mode-toggle")).toBeInTheDocument();
+    expect(screen.queryByTestId("metrics-mode-readonly-note")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add policy" })).not.toBeInTheDocument();
     // 读面骨架不塌：服务清单 + cron 台账照常。
     await waitFor(() =>
@@ -231,7 +235,7 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
     expect(screen.getByText("*/5 * * * *")).toBeInTheDocument();
   });
 
-  it("非管理员 owner：写钮照常渲染、无只读说明（零变化防回归）", async () => {
+  it("非管理员 owner：资源写钮照常渲染、metrics 卡只见平台管理员说明（零变化防回归）", async () => {
     setToken("flt_test");
     renderOverviewInTeamContext(false);
 
@@ -239,7 +243,11 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
       expect(screen.getByTestId("cron-runs-list")).toBeInTheDocument(),
     );
     expect(screen.getByRole("button", { name: "Run now" })).toBeInTheDocument();
-    expect(screen.getByTestId("metrics-mode-toggle")).toBeInTheDocument();
+    // metrics 开关对非平台管理员隐藏，原位说明代之（服务端写门同口径）。
+    expect(screen.queryByTestId("metrics-mode-toggle")).not.toBeInTheDocument();
+    expect(screen.getByTestId("metrics-mode-readonly-note")).toHaveTextContent(
+      "Platform administrator required",
+    );
     expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
   });
 });
