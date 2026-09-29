@@ -17,6 +17,7 @@ export function SectionCard({
   children,
   className,
   contentClassName,
+  testId,
 }: {
   icon?: LucideIcon;
   title: ReactNode;
@@ -25,9 +26,11 @@ export function SectionCard({
   children: ReactNode;
   className?: string;
   contentClassName?: string;
+  /** 根元素 data-testid（测试锚点；Card 不透传任意 props，此处显式承载）。 */
+  testId?: string;
 }) {
   return (
-    <Card className={className}>
+    <Card className={className} data-testid={testId}>
       <CardHeader className="flex-row items-center gap-2 space-y-0 border-b pb-3">
         {Icon ? (
           <Icon aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />

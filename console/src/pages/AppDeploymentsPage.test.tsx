@@ -3,19 +3,25 @@
 // 失败（M9-5）：错误信封一等渲染而非永远转圈；refetchInterval 回调对空
 // data 形态可选链守卫（M9-7）。平台管理员双门（P0-3）：资源面写卡换成
 // 只读说明卡（不做静默消失），非管理员 owner 的写卡不受扰（防回归）。
-// Deploy triggers 卡（P1-8）：读态字段（git_remote_hint/分支/secret configured
-// 位/接收端 URL）/secret 载荷与不回显断言/source 载荷（整体替换、none 不带
-// 材料键）/角色门三态（admin+ 见卡；成员说明态；平台管理员职责分离说明态）。
+// 部署方式切换（2026-09-29 二次重设计「一个应用一种部署方式」）：单一
+// Deploy 卡 + 方式 pills（Compose/Git/Webhook，localStorage 每应用记忆，
+// 角色门投影可用方式）；触发面 testid 全保留（内移进 Git/Webhook pane）；
+// 回滚收编为历史行内操作（确认框 + POST /rollbacks 载荷断言）。
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppDeploymentsPage } from "@/pages/AppDeploymentsPage";
 import { TeamProjectProvider } from "@/lib/context";
 import { setToken } from "@/api/client";
+
+beforeEach(() => {
+  // 部署方式选择按应用持久化在 localStorage——跨用例清场防泄漏。
+  window.localStorage.clear();
+});
 
 function ok(body: unknown) {
   return {
@@ -208,14 +214,17 @@ describe("AppDeploymentsPage platform-admin read-only (P0-3)", () => {
     await waitFor(() => expect(screen.getByText("No deployments yet.")).toBeInTheDocument());
   });
 
-  it("非管理员 owner：Deploy/Rollback 卡照常渲染、无只读说明（防回归）", async () => {
+  it("非管理员 owner：Deploy 卡照常渲染（默认 Compose 方式）、无只读说明（防回归）", async () => {
     setToken("flt_test");
     vi.stubGlobal("fetch", stubMe(false));
     renderPageInTeamContext();
 
-    await waitFor(() => expect(screen.getByText("Deploy compose")).toBeInTheDocument());
+    // 单一 Deploy 卡默认呈现 Compose 方式（textarea 可见即就绪信号）。
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("deploy-card")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
     expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
   });
 });
@@ -348,35 +357,72 @@ describe("AppDeploymentsPage deploy triggers (P1-8)", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderTriggersPage();
 
-    // admin+（owner）见卡。
-    await waitFor(() => expect(screen.getByTestId("deploy-triggers-card")).toBeInTheDocument());
-    // 读态字段全部来自 ShowAppWebhook 响应（异步到达——以远端提示为就绪信号）。
+    // admin+（owner）见 Deploy 卡，三种方式 pill 齐备；默认 Compose。
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
+
+    // 切到 Git 方式：读态字段全部来自 ShowAppWebhook 响应（异步到达——以
+    // 远端提示为就绪信号）。
+    fireEvent.click(screen.getByRole("tab", { name: "Git" }));
     await waitFor(() =>
       expect(screen.getByTestId("triggers-git-remote")).toHaveTextContent("ssh://git@10.0.0.8:8424/demo.git"),
     );
     expect(screen.getByTestId("triggers-branch")).toHaveTextContent("release");
-    expect(screen.getByTestId("triggers-secret-configured")).toHaveTextContent("Configured (never displayed)");
     expect(screen.getByTestId("triggers-source-state")).toHaveTextContent("https://git.example.com/acme/demo.git");
-    // 接收端 URL（gateway 既有路由拼装）：路径段用响应的业务名（name
-    // 字段）而非路由参数（平台 id）——id 形态永不匹配服务端接收端分派
-    // 正则，拼进去就是恒 404 死链。
-    const receiver = screen.getByTestId("triggers-webhook-url");
-    expect(receiver).toHaveTextContent("/v1/apps/demo/webhooks/github");
-    expect(receiver.textContent).not.toContain(APP_REF);
 
+    // 切到 Webhook 方式：接收端 URL（gateway 既有路由拼装）——路径段用
+    // 响应的业务名（name 字段）而非路由参数（平台 id）：id 形态永不匹配
+    // 服务端接收端分派正则，拼进去就是恒 404 死链。
+    fireEvent.click(screen.getByRole("tab", { name: "Webhook" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("triggers-webhook-url")).toHaveTextContent("/v1/apps/demo/webhooks/github"),
+    );
+    expect(screen.getByTestId("triggers-webhook-url").textContent).not.toContain(APP_REF);
+    expect(screen.getByTestId("triggers-secret-configured")).toHaveTextContent("Configured (never displayed)");
+
+    // 切回 Git 验证复制钮（方式切换后 pane 内容随 pill 走）。
+    fireEvent.click(screen.getByRole("tab", { name: "Git" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("triggers-git-remote")).toBeInTheDocument(),
+    );
     const user = userEvent.setup();
     await user.click(screen.getByTestId("triggers-git-remote-copy"));
     expect(screen.getByTestId("triggers-git-remote-copy")).toHaveTextContent("Copied");
   });
 
+  it("remembers the chosen deploy method per app (localStorage)", async () => {
+    setToken("flt_test");
+    const { fetchMock } = stubTriggers("owner", false, WEBHOOK_CFG);
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = renderTriggersPage();
+
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Git" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("deploy-git-pane")).toBeInTheDocument(),
+    );
+    unmount();
+
+    // 重挂载：方式记忆生效——直接落在 Git pane（不再回 Compose 缺省）。
+    renderTriggersPage();
+    await waitFor(() =>
+      expect(screen.getByTestId("deploy-git-pane")).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText("Compose YAML")).not.toBeInTheDocument();
+  });
+
   it("discloses honestly when the app name cannot match the receiver path pattern", async () => {
     setToken("flt_test");
     // 下划线名：服务端接收端分派正则（[a-z0-9][a-z0-9-]{0,62}）不收——
-    // URL 照拼（如实展示），卡内出说明（服务端限制），不静默冒充可用。
+    // URL 照拼（如实展示），pane 内出说明（服务端限制），不静默冒充可用。
     const { fetchMock } = stubTriggers("owner", false, { ...WEBHOOK_CFG, name: "demo_app" });
     vi.stubGlobal("fetch", fetchMock);
     renderTriggersPage();
 
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Webhook" }));
     await waitFor(() =>
       expect(screen.getByTestId("triggers-webhook-url")).toHaveTextContent(
         "/v1/apps/demo_app/webhooks/github",
@@ -395,6 +441,8 @@ describe("AppDeploymentsPage deploy triggers (P1-8)", () => {
     renderTriggersPage();
     const user = userEvent.setup();
 
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Webhook" }));
     await waitFor(() => expect(screen.getByTestId("triggers-secret-missing")).toBeInTheDocument());
 
     const secretValue = "whsec-0123456789abcdef";
@@ -424,7 +472,11 @@ describe("AppDeploymentsPage deploy triggers (P1-8)", () => {
     renderTriggersPage();
     const user = userEvent.setup();
 
-    await waitFor(() => expect(screen.getByTestId("deploy-triggers-card")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: "Git" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("source-branch-input")).toBeInTheDocument(),
+    );
     // 未水合到 source 字段时分支缺省 main（proto source_branch 默认语义）。
     expect(screen.getByTestId("source-branch-input")).toHaveValue("main");
 
@@ -443,32 +495,39 @@ describe("AppDeploymentsPage deploy triggers (P1-8)", () => {
     expect(screen.getByTestId("source-stored")).toBeInTheDocument();
   });
 
-  it("role gate: card for admin+, honest note for developer, separation-of-duties note for platform admin", async () => {
+  it("role gate: pills project by role — developer sees Compose only, platform admin sees the readonly card", async () => {
     setToken("flt_test");
     const { fetchMock: adminFetch } = stubTriggers("owner", false, WEBHOOK_CFG);
     vi.stubGlobal("fetch", adminFetch);
     const { unmount } = renderTriggersPage();
-    await waitFor(() => expect(screen.getByTestId("deploy-triggers-card")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    // admin+（owner）：三种方式 pill 齐备。
+    expect(screen.getByRole("tab", { name: "Compose" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Git" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Webhook" })).toBeInTheDocument();
     unmount();
 
-    // developer（canDeploy ✓ / canAdminResources ✗）：说明态，不发 webhook 读请求之外无卡。
+    // developer（canDeploy ✓ / canAdminResources ✗）：只有 Compose pill，
+    // 触发面以卡内说明态如实披露（不静默消失）。说明态出现 = Me 投影已
+    // 生效（能力门 fail-open 窗口结束）——以它为稳态信号再断言 pill 收窄。
     const { fetchMock: devFetch } = stubTriggers("developer", false, WEBHOOK_CFG);
     vi.stubGlobal("fetch", devFetch);
     const dev = renderTriggersPage();
-    await waitFor(() => expect(screen.getByTestId("triggers-admin-note")).toBeInTheDocument());
-    expect(screen.getByTestId("triggers-admin-note")).toHaveTextContent("visible to team admins only");
-    expect(screen.queryByTestId("deploy-triggers-card")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("deploy-card")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId("triggers-admin-note")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("tab", { name: "Compose" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Git" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Webhook" })).not.toBeInTheDocument();
     dev.unmount();
 
-    // 平台管理员：职责分离口径说明态（P0-3 双门），卡同样不渲染。
+    // 平台管理员：职责分离口径只读说明卡（P0-3 双门），Deploy 卡不渲染。
     const { fetchMock: paFetch } = stubTriggers("owner", true, WEBHOOK_CFG);
     vi.stubGlobal("fetch", paFetch);
     renderTriggersPage();
-    await waitFor(() => expect(screen.getByTestId("triggers-admin-note")).toBeInTheDocument());
-    expect(screen.getByTestId("triggers-admin-note")).toHaveTextContent(
-      "Platform administrators have read-only access to resources",
-    );
-    expect(screen.queryByTestId("deploy-triggers-card")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("platform-readonly-note")).toBeInTheDocument());
+    expect(screen.queryByTestId("deploy-card")).not.toBeInTheDocument();
   });
 });
 
@@ -549,7 +608,9 @@ describe("AppDeploymentsPage DeployCard project context", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderWithContext();
-    await waitFor(() => expect(screen.getByText("Deploy compose")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
     const user = userEvent.setup();
     await user.type(
       screen.getByLabelText("Compose YAML"),
@@ -579,7 +640,9 @@ describe("AppDeploymentsPage DeployCard project context", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderWithContext();
-    await waitFor(() => expect(screen.getByText("Deploy compose")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
     const user = userEvent.setup();
     await user.type(
       screen.getByLabelText("Compose YAML"),
@@ -611,7 +674,9 @@ describe("AppDeploymentsPage DeployCard project context", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderWithContext();
-    await waitFor(() => expect(screen.getByText("Deploy compose")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
     const user = userEvent.setup();
     await user.type(
       screen.getByLabelText("Compose YAML"),
@@ -662,7 +727,9 @@ describe("AppDeploymentsPage DeployCard project context", () => {
     );
 
     renderWithContext();
-    await waitFor(() => expect(screen.getByText("Deploy compose")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Compose YAML")).toBeInTheDocument(),
+    );
     const user = userEvent.setup();
     await user.type(
       screen.getByLabelText("Compose YAML"),
@@ -677,5 +744,72 @@ describe("AppDeploymentsPage DeployCard project context", () => {
       expect(post).toBeTruthy();
       expect(post?.body).not.toHaveProperty("project");
     });
+  });
+});
+
+// ── 行内回滚（2026-09-29 二次重设计：替代独立 Rollback 卡）────────────────
+// 历史里选要回去的那一行 → 确认框承载语义 → POST /rollbacks 载荷携带该行
+// revision；无 revision 的行（失败/进行中）不出回滚钮。
+describe("AppDeploymentsPage per-row rollback", () => {
+  const ROWS = [
+    {
+      id: "dep_new",
+      app: "demo",
+      kind: "deploy",
+      status: "succeeded",
+      phase: "",
+      revision_id: "rev_2",
+      created_at: "2026-09-29T10:00:00Z",
+    },
+    {
+      id: "dep_old",
+      app: "demo",
+      kind: "deploy",
+      status: "succeeded",
+      phase: "",
+      revision_id: "rev_1",
+      created_at: "2026-09-28T10:00:00Z",
+    },
+  ];
+
+  function stubRollback(calls: Array<{ url: string; method?: string; body?: unknown }>) {
+    return vi.fn().mockImplementation((url: string, init?: { method?: string; body?: string }) => {
+      const u = String(url);
+      calls.push({ url: u, method: init?.method, body: init?.body ? JSON.parse(init.body) : undefined });
+      if (init?.method === "POST" && u.endsWith("/rollbacks")) {
+        return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve({ deployment_id: "dep_rb", desired_hash: "h" }) });
+      }
+      if (u.includes("/deployments")) {
+        return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve({ deployments: ROWS }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve({ revisions: [] }) });
+    });
+  }
+
+  it("rolls back to the clicked row's revision after confirm", async () => {
+    setToken("flt_test");
+    const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
+    vi.stubGlobal("fetch", stubRollback(calls));
+
+    renderPage();
+    const rows = await screen.findAllByTestId("deployment-row");
+    expect(rows).toHaveLength(2);
+
+    // 每个带 revision 的行有 Rollback 钮；点旧行（dep_old）。
+    const rollbackButtons = screen.getAllByTestId("deployment-rollback");
+    expect(rollbackButtons).toHaveLength(2);
+    fireEvent.click(rollbackButtons[1]!);
+
+    const dialog = await screen.findByTestId("deployment-rollback-dialog");
+    expect(dialog).toHaveTextContent("Roll back to this deployment?");
+    fireEvent.click(screen.getByTestId("deployment-rollback-confirm"));
+
+    await waitFor(() => {
+      const post = calls.find((c) => c.method === "POST" && c.url.endsWith("/rollbacks"));
+      expect(post?.url.endsWith("/v1/apps/demo/rollbacks")).toBe(true);
+      // 载荷携带被点行的 revision（回滚目标 = 该行固化的版本）。
+      expect(post?.body).toEqual({ target_revision_id: "rev_1" });
+    });
+    expect(screen.queryByTestId("deployment-rollback-dialog")).not.toBeInTheDocument();
   });
 });

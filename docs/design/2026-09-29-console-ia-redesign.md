@@ -95,6 +95,31 @@ runtime 面)/ **Tasks**(running n)。Application 卡收编 ID/lifecycle/times;�
 侧边栏五组(Home/工作区/Workloads/Platform/Administration)是 2026-09-25 走查裁决形态,
 本次不动。平台级 Docker 实况页(全量容器/镜像台账)挂账 v0.4(§8)。
 
+### 4.6 Deployments 页单方式部署源(2026-09-29 二次裁决)
+
+用户复核裁决:「一般情况下,一个应用只需要一种部署方式,而不是所有的部署方式都列出来」。
+此前页面把手动 compose(Deploy 卡)、回滚(Rollback 卡)、git push + webhook + 拉源
+(Deploy triggers 卡)三卡平铺——全部方式同时列出,信息架构把「方式选择」的负担推给了
+用户。重设计为 **单一 Deploy 卡 + 方式切换**:
+
+- **方式 pills**(CardHeader 右侧,SectionCard actions 槽):`Compose │ Git │ Webhook`,
+  一次只呈现当前方式的 pane;选择按应用持久化(localStorage
+  `fleetly.console.deploy-method.<app>`),跨会话记忆该应用的工作方式。
+- **可用方式 = 角色门投影**:Compose=deploy scope(developer+);Git/Webhook=admin
+  scope(admin+,与 ShowAppWebhook 三 RPC 同门)——不可用的方式不出 pill;developer
+  只见 Compose pill + 卡内说明行(triggers-admin-note 语义内移);平台管理员整卡换
+  platform-readonly-note(P0-3 双门不变)。
+- **pane 内容即原三卡内嵌**:Compose pane=粘贴/上传+Deploy+跟踪器(锚点
+  `deployment-tracker`/`deploy-project-context-hint` 不变);Git pane=push 远端+触发
+  分支+拉源表单;Webhook pane=接收端 URL+签名密钥+名字词形披露——全部触发面
+  testid 原样保留(内移进 pane),webhook 读面查询只在 admin+ 且非 compose 方式时
+  发起(developer 挂载不发注定 403 的请求)。
+- **回滚收编为历史行内操作**:独立 Rollback 卡删除;带 revision 的行出 Rollback 钮
+  (deploy scope),确认框承载语义(重放该行 revision 快照=一条新部署走正常发布
+  管线),POST /rollbacks 载荷携带该行 `target_revision_id`。
+- **页面终态 = Deploy 卡(单方式)+ Deployment history 表**——与 dokploy 的
+  Deployments 页签(触发 URL+历史列表)同构,方式选择负担归零。
+
 ## 5. 后端新读面:RuntimeService
 
 引擎端口 `Substrate.TaskList/ServiceList` 已存在(`internal/engine/ports.go:298-317`),
