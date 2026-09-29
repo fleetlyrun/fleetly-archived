@@ -338,10 +338,9 @@ func TestCLIUsageExitCodes(t *testing.T) {
 // 义：64 + "unknown subcommand" 文案 + 外层动词的 usage 提示行。
 func TestCLINestedUnknownSubcommandExitCode(t *testing.T) {
 	for _, args := range [][]string{
-		{"apps", "frobnicate"},        // 单层嵌套（apps 收口）
-		{"tokens", "frobnicate"},      // 第二条外层动词（同一收口的复抽）
-		{"git", "frobnicate"},         // 外层 miss（git 的内层表无此动词）
-		{"git", "keys", "frobnicate"}, // 两层嵌套（git → keys → miss）
+		{"apps", "frobnicate"},   // 单层嵌套（apps 收口）
+		{"tokens", "frobnicate"}, // 第二条外层动词（同一收口的复抽）
+		{"audit", "frobnicate"},  // 第三条外层动词（深嵌套面——audit query 的外层）
 	} {
 		code, _, errOut := runCLI(t, args...)
 		if code != 64 {
@@ -359,8 +358,8 @@ func TestCLINestedUnknownSubcommandExitCode(t *testing.T) {
 // TestREADMEExamplesFlagsBeforePositional H13 回归：README 的 CLI 示例
 // 必须是 flags 前置形态——std flag 在首个位置参数处停止解析，flags 后置
 // 会被原样留在位置参数里（requireArgs 随即报参数数量违规）。逐条以
-// ParseFlags 钉死 README 改过的三条示例（logs follow / git keys add /
-// apps webhook set-source），并对照演示后置形态确属非法。
+// ParseFlags 钉死 README 改过的两条示例（logs follow / apps webhook
+// set-source），并对照演示后置形态确属非法。
 func TestREADMEExamplesFlagsBeforePositional(t *testing.T) {
 	app := commands.New()
 	env := &commands.Environment{Stdout: io.Discard, Stderr: io.Discard}
@@ -373,16 +372,6 @@ func TestREADMEExamplesFlagsBeforePositional(t *testing.T) {
 	}
 	if logs.service != "web" || len(rest) != 1 || rest[0] != "my-api" {
 		t.Fatalf("logs follow: service=%q rest=%v, want web / [my-api]", logs.service, rest)
-	}
-
-	// `fleetly git keys add --note laptop ~/.ssh/id_ed25519.pub`
-	keys := &gitKeysAddCmd{}
-	rest, err = app.ParseFlags(keys, env, []string{"--note", "laptop", "~/.ssh/id_ed25519.pub"})
-	if err != nil {
-		t.Fatalf("git keys add parse failed: %v", err)
-	}
-	if keys.note != "laptop" || len(rest) != 1 || rest[0] != "~/.ssh/id_ed25519.pub" {
-		t.Fatalf("git keys add: note=%q rest=%v, want laptop / [~/.ssh/id_ed25519.pub]", keys.note, rest)
 	}
 
 	// `fleetly apps webhook set-source --branch main --auth-kind none my-api https://…`

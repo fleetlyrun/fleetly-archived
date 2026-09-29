@@ -4,7 +4,7 @@
 // 经 api 层全局处置回登录页，本组件不重复处置。
 
 import { useQuery } from "@tanstack/react-query";
-import { GitBranch, KeyRound, LogOut, Users } from "lucide-react";
+import { KeyRound, LogOut, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -153,22 +153,6 @@ export function UserMenu() {
             >
               <KeyRound aria-hidden className="h-4 w-4" />
               Personal access tokens
-            </Button>
-            {/* Git push keys 自服务页入口（P1-8：git push 通道可发现性——
-                与 PAT 页同族的用户凭据自服务面）。 */}
-            <Button
-              variant="ghost"
-              size="sm"
-              role="menuitem"
-              className="w-full justify-start"
-              data-testid="user-menu-git-keys"
-              onClick={() => {
-                setOpen(false);
-                navigate("/git-keys");
-              }}
-            >
-              <GitBranch aria-hidden className="h-4 w-4" />
-              Git push keys
             </Button>
             <Button
               variant="ghost"

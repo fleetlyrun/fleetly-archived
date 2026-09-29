@@ -84,7 +84,7 @@ dokku 保留两个用途：参考实现（发布流程、零停机、代理配�
 ### 2.1 总体架构
 
 ```
-CLI / Console 端 / MCP 客户端(v0.2) / REST / git push(SSH) / Webhook
+CLI / Console 端 / MCP 客户端(v0.2) / REST / Webhook〔git push(SSH) 面已移除，ADR-0012〕
         │
         ▼
 ┌─ 控制面 fleetlyd server（Go 单二进制，运行于 Swarm manager）─┐
@@ -124,7 +124,7 @@ CLI / Console 端 / MCP 客户端(v0.2) / REST / git push(SSH) / Webhook
 | 状态 | SQLite（modernc 纯 Go）+ goose 迁移 | BSD-3 | schema、对账器、观测缓存与新鲜度契约、审计 |
 | API | **gRPC + grpc-gateway/v2 + buf**（openapiv2 文档派生、protovalidate 校验；torchwood 范式，D21） | Go, Apache-2.0 / BSD-3 | proto 契约（`fleetly.{client,console,server}.vN` 分模块）、拦截器链（鉴权/限流）、自定义错误信封（ErrorResponse + snake_case + `disable_default_errors`）、genproto/SDK 生成 |
 | CLI | lynx-go/commands + 平台 Go SDK（gRPC client，独立模块，torchwood 同型） | Go, MIT | 交互体验、输出格式（--json）；日志/事件长流走 gRPC streaming |
-| git 接收 | 系统 git | GPLv2（独立进程调用，不链接、不随发行物分发，无传染） | SSH 服务、post-receive 接线 |
+| git 拉源 | 系统 git | GPLv2（独立进程调用，不链接、不随发行物分发，无传染） | webhook 拉源 fetch 接线、bare 仓库对象库读取（git push(SSH) 收包面已移除，ADR-0012） |
 | 日志 | 无 | — | 采集、落盘轮转、ring buffer、SSE |
 | 指标(v0.2) | VictoriaMetrics（存储/查询）+ node_exporter（宿主）+ cAdvisor（逐节点容器指标：manager 无远端 Engine API） | Go, Apache-2.0 | 查询面、UI 图表、告警 |
 | S3(v0.2) | 外部 S3 端点（**minio-go** 客户端〔2026-09-17 依赖复核选定〕；provider 抽象；打包 S3 延后到需求证据，见 D4） | Go, Apache-2.0 | 端点配置、凭证注入、备份策略、热备上传/回读 |
@@ -389,7 +389,7 @@ A、B 通过则 v0.1 无未知数；C 通过则 v0.2 无悬念。V1-V7 为 Swarm
 
 ### 4.2 v0.1（单机可用，8 项）
 
-1. 部署闭环：git push(SSH) / Webhook（验签）→ 构建 → 零停机上线 → 回滚；支持 web + worker 双进程（`replicas` 字段 v0.1 即照用；cron 与多副本管理〔缩放 UI/指标水位/自动扩缩〕v0.2）；运行时 = 单节点 Swarm service（安装时隐式 `docker swarm init`）
+1. 部署闭环：Webhook（验签+拉源）/ API（CLI compose 上传）→ 构建 → 零停机上线 → 回滚（git push(SSH) 面已移除，ADR-0012）；支持 web + worker 双进程（`replicas` 字段 v0.1 即照用；cron 与多副本管理〔缩放 UI/指标水位/自动扩缩〕v0.2）；运行时 = 单节点 Swarm service（安装时隐式 `docker swarm init`）
 2. gRPC + REST（gateway）API（OpenAPI 文档自动派生）+ CLI（全命令 `--json`）
 3. 域名 + 自动 HTTPS（每节点 Traefik + 控制面集中 ACME；域名列表契约见 §2.4）
 4. 环境变量/密钥（加密存储、注入、自动连接串）
@@ -398,7 +398,7 @@ A、B 通过则 v0.1 无未知数；C 通过则 v0.2 无悬念。V1-V7 为 Swarm
 7. 发布语义全套：pause 固定、最近 5 版回滚（归一化 compose + 覆盖层）、观察窗默认告警、首发失败 scale 0 保留现场
 8. Compose 子集校验与自动放置：白名单/受管字段校验、有卷应用自动钉住到本机（同一代码路径，见[放置专项](2026-09-17-stateful-placement.md)）
 
-验收：一台干净 VPS 上执行一条安装命令，用已解析的域名，20 分钟内完成 git push 部署并拿到 HTTPS 访问（DNS 传播时间不计入），UI 可见日志与配置，可一键回滚；**信任闭环验收**：控制面状态完成一次备份 → 回读校验 → 按文档恢复演练（L1，首次配置预算 ≤10 分钟）。
+验收：一台干净 VPS 上执行一条安装命令，用已解析的域名，20 分钟内完成部署（API 上传或 webhook 投递）并拿到 HTTPS 访问（DNS 传播时间不计入），UI 可见日志与配置，可一键回滚；**信任闭环验收**：控制面状态完成一次备份 → 回读校验 → 按文档恢复演练（L1，首次配置预算 ≤10 分钟）。
 
 横切硬指标（v0.1 即满足，评审门禁）：
 

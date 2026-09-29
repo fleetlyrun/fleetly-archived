@@ -413,26 +413,12 @@ type GRPCConfig struct {
 	Addr string `mapstructure:"addr"`
 }
 
-// GitConfig 是 git push(SSH) 入口配置节（config 键 git.*，T2.19）。字段与
-// internal/gitserver.Config 一一对应；安全默认基线：enabled 缺省 true、
-// addr 缺省 127.0.0.1:8424（内部服务默认不暴露公网——VPS 上由安装/文档
-// 指引改为对外）、root 缺省与 state 库同目录下 git/。
+// GitConfig 是 git webhook 入口配置节（config 键 git.* 残余，T2.19；git
+// push(SSH) 收包面的 enabled/addr/public_endpoint/host_key_file 四键随该面
+// 2026-09-29 移除——存量配置文件里的这些键被解析层静默忽略，无需清理）。
 type GitConfig struct {
-	// Enabled 报告是否启用 SSH git 面（git.enabled；缺省 true。false =
-	// 显式关闭位——webhook 拉源不依赖 SSH 面，但 bare 仓库根共用）。
-	Enabled *bool `mapstructure:"enabled"`
-	// Addr 是 SSH 监听地址（git.addr；缺省 127.0.0.1:8424）。
-	Addr string `mapstructure:"addr"`
-	// PublicEndpoint 是 git remote 提示的对外 host:port（git.public_endpoint；
-	// 可空）。解析链首位：显式对外地址（如 "git.example.com:8424"，省端口位
-	// 则补监听端口）——服务端无法自行得知公网主机名，须显式告知或由
-	// base_domain 推导（gitEndpointForHint）。空 = 按 base_domain 推导。
-	PublicEndpoint string `mapstructure:"public_endpoint"`
 	// Root 是 bare 仓库根目录（git.root；空 = <state 库同目录>/git）。
 	Root string `mapstructure:"root"`
-	// HostKeyFile 是 SSH host key 文件（git.host_key_file；空 =
-	// <root>/host_ed25519。ed25519 首启生成持久化，绝不打印私钥）。
-	HostKeyFile string `mapstructure:"host_key_file"`
 }
 
 // WebhookConfig 是 webhook 入口配置节（config 键 webhook.*，T2.19）。
@@ -679,18 +665,11 @@ func (c *AppConfig) KeyPath() string {
 // GitSettings 把 git.*/webhook.* 配置节翻译为 git 触发入口核心配置
 // （gitserver.Config，缺省值经 Normalize 回落——单一事实源在
 // internal/gitserver）。Root 依赖 state 库路径，缺省在此计算（<db 同目录>/
-// git）；HookEndpoint 由 HTTP addr 推导（host 位为通配/空时回落 127.0.0.1
-// ——钩子回调走 loopback）。gitEndpoint() 是 SSH 面的 host:port 投影
-// （apps 面的 git remote 提示原料）。
+// git）。
 func (c *AppConfig) GitSettings() gitserver.Config {
-	endpoint := hookEndpointFromAddr(c.Addr)
 	return gitserver.Config{
-		Enabled:      c.Git.Enabled == nil || *c.Git.Enabled,
-		Addr:         c.Git.Addr,
-		Root:         c.GitRoot(),
-		HostKeyFile:  c.Git.HostKeyFile,
-		HookEndpoint: endpoint,
-		ReplayTTL:    time.Duration(c.Webhook.ReplayTTLSecs) * time.Second,
+		Root:      c.GitRoot(),
+		ReplayTTL: time.Duration(c.Webhook.ReplayTTLSecs) * time.Second,
 	}
 }
 
@@ -700,20 +679,6 @@ func (c *AppConfig) GitRoot() string {
 		return c.Git.Root
 	}
 	return filepath.Join(filepath.Dir(c.DBPath()), "git")
-}
-
-// hookEndpointFromAddr 由 HTTP 监听地址推导钩子回调基址（host 位通配或
-// 空回落 127.0.0.1；host 已是具体地址则原样使用）。
-func hookEndpointFromAddr(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil || port == "" {
-		return "http://127.0.0.1:8420"
-	}
-	switch host {
-	case "", "0.0.0.0", "::":
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, port)
 }
 
 // BuildSettings 把 build.* 配置节翻译为构建管线核心配置（build.Config，

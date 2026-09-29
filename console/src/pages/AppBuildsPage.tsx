@@ -4,7 +4,7 @@
 // refetchInterval 模式）。
 //
 // 契约事实（builds.proto / logs.proto；scope 登记见 internal/api/scope.go）：
-// - BuildView 无触发来源字段（git push/webhook/manual 不可辨）、无 commit
+// - BuildView 无触发来源字段（webhook/manual 不可辨）、无 commit
 //   sha、亦无部署关联键（DeploymentView 同样无 build 反向引用）——对应列
 //   与部署页互链均不硬造。
 // - 构建日志不在构建响应内（log_path 是宿主归档路径）；按 logs.proto 的

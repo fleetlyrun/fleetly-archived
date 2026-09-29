@@ -513,17 +513,13 @@ var builtins = []Code{
 		Source:     "v0.3 W2-S3 rbac-teams §3.4 (deploy/database-create targets a project different from the row's ownership — check-consistency ruling; MoveApp guidance, 409)",
 		Summary:    "the request targets a different project than the one the app row already belongs to (ownership on the row wins once assigned)",
 		Suggestion: "Deploy without the project field (it resolves to the row's own project) or move the app first: a platform administrator can reassign ownership with MoveApp (rename redeploy)."},
-	// 消费点：git push 首发路径（internal/gitserver ensureAppRow）——首次
-	// 建行的归属解析失败（push 无署名用户，或署名用户无缺省项目）：先经
-	// CLI/API 携带 project 首发建行，再 push。
-	{ID: "E_APP_PROJECT_REQUIRED", HTTP: 400,
-		Source:     "v0.3 W2-S3 rbac-teams §3.4 (git-push first-deploy cannot derive project ownership: no signed user or no default project; deploy once via CLI/API, 400)",
-		Summary:    "the pushed app does not exist yet and no project ownership can be derived from the push (no signed user or no default project)",
-		Suggestion: "Deploy once via CLI/API passing project \"team/project\" to create the app with ownership, then push; subsequent pushes deploy to the row's own project."},
+	// E_APP_PROJECT_REQUIRED（v0.3 W2-S3，git push 首发归属解析）随 git
+	// push 部署面 2026-09-29 移除退役（ADR-0012）——注册表只增不复用，此处
+	// 不再登记；历史审计/日志中的存量字面不受影响。
 	// 消费点：部署受理的跨项目库引用守卫（v0.3 W2-S4，rbac-teams §4.1/
 	// §4.2 E4——引用实例与 app 不同项目 → 拒绝入队；执行点 = 引擎 preparing
 	// 期解析 fleetly.databases label 的单点，internal/engine/dbinject.go，
-	// 覆盖 API Deploy / git push / webhook 全部入队路径）。
+	// 覆盖 API Deploy / webhook 全部入队路径）。
 	{ID: "E_DB_PROJECT_MISMATCH", HTTP: 409,
 		Source:     "v0.3 W2-S4 rbac-teams §4.1/§4.2 (referenced database instance belongs to a different project than the app — project isolation R6/R7; cross-project database attachment rejected at deploy admission via the engine preparing face, 409)",
 		Summary:    "the referenced database instance belongs to a different project than the app (project isolation, R6/R7): cross-project database attachment is rejected at deploy admission",

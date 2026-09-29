@@ -222,14 +222,9 @@ type GetSystemStatusResponse struct {
 	Components []*ComponentHealth     `protobuf:"bytes,3,rep,name=components,proto3" json:"components,omitempty"`
 	// 状态备份健康视图（T2.22）：最近一次台账行的投影。从未备份 → 不输出
 	// （backup 组件的 ComponentHealth 行会以 ok=false 显式表达不健康）。
-	Backup *BackupHealth `protobuf:"bytes,4,opt,name=backup,proto3" json:"backup,omitempty"`
-	// git SSH host key 的 SHA256 指纹（FZ-12 披露面，D-W0-8；OpenSSH 形态
-	// SHA256:…——公钥指纹为公开材料）。git SSH 面未启用或 host key 未生成
-	// 时为空。客户端钉定（known_hosts）为文档指引：以本字段核对
-	// `ssh-keygen -lf` 的服务端指纹，平台不代管下发 known_hosts。
-	GitSshFingerprint string `protobuf:"bytes,5,opt,name=git_ssh_fingerprint,json=gitSshFingerprint,proto3" json:"git_ssh_fingerprint,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	Backup        *BackupHealth `protobuf:"bytes,4,opt,name=backup,proto3" json:"backup,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetSystemStatusResponse) Reset() {
@@ -288,13 +283,6 @@ func (x *GetSystemStatusResponse) GetBackup() *BackupHealth {
 		return x.Backup
 	}
 	return nil
-}
-
-func (x *GetSystemStatusResponse) GetGitSshFingerprint() string {
-	if x != nil {
-		return x.GitSshFingerprint
-	}
-	return ""
 }
 
 // BackupHealth 是系统状态里备份面的明细视图（组件布尔健康的展开：最近
@@ -3065,15 +3053,14 @@ const file_fleetly_server_v1_system_proto_rawDesc = "" +
 	"\x0fComponentHealth\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xfa\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xe5\x01\n" +
 	"\x17GetSystemStatusResponse\x12\x18\n" +
 	"\aservice\x18\x01 \x01(\tR\aservice\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12B\n" +
 	"\n" +
 	"components\x18\x03 \x03(\v2\".fleetly.server.v1.ComponentHealthR\n" +
 	"components\x127\n" +
-	"\x06backup\x18\x04 \x01(\v2\x1f.fleetly.server.v1.BackupHealthR\x06backup\x12.\n" +
-	"\x13git_ssh_fingerprint\x18\x05 \x01(\tR\x11gitSshFingerprint\"\xe0\x01\n" +
+	"\x06backup\x18\x04 \x01(\v2\x1f.fleetly.server.v1.BackupHealthR\x06backupJ\x04\b\x05\x10\x06R\x13git_ssh_fingerprint\"\xe0\x01\n" +
 	"\fBackupHealth\x12$\n" +
 	"\x0elast_backup_id\x18\x01 \x01(\tR\flastBackupId\x12\x1b\n" +
 	"\tlast_kind\x18\x02 \x01(\tR\blastKind\x12@\n" +

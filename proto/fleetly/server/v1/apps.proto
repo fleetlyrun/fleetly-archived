@@ -61,7 +61,7 @@ service AppsService {
     option (fleetly.annotations.v1.scope) = "admin";
   }
   // SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；
-  // admin）。source_branch 同时是 git push 的触发分支（app 配置分支，
+  // admin）。source_branch 同时是 webhook 投递的触发分支（app 配置分支，
   // 默认 main）。
   // 认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。
   rpc SetAppSource(SetAppSourceRequest) returns (SetAppSourceResponse) {
@@ -226,23 +226,24 @@ message ShowAppWebhookResponse {
   bool secret_configured = 2;
   // 拉源配置（未设置时 url/branch 为空串、auth_kind = none）。
   string source_url = 3;
-  // app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。
+  // app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。
   string source_branch = 4;
   // none | https_token | ssh_key。
   string source_auth_kind = 5;
   // 6 曾为 branch（与 source_branch 同值重复投影，2026-09-20 命名审查删除）。
   reserved 6;
   reserved "branch";
-  // push/webhook 端点提示（SSH git URL，如 ssh://git@host:8424/<app>.git；
-  // 主机位取 control-plane 可达地址的尽力形态）。
-  string git_remote_hint = 7;
+  // 7 曾为 git_remote_hint（SSH push 远端提示；git push 部署面 2026-09-29
+  // 移除，ADR-0012 裁决砍 SSH 收包半、webhook+拉源保留）。
+  reserved 7;
+  reserved "git_remote_hint";
 }
 
 message SetAppSourceRequest {
   string name = 1 [(buf.validate.field).string.min_len = 1];
   // 拉源 remote URL（file:// 与 https://、ssh:// 形态）。
   string source_url = 2 [(buf.validate.field).string.max_len = 2048];
-  // app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。
+  // app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。
   string source_branch = 3 [(buf.validate.field).string = { min_len: 1, max_len: 200 }];
   // 认证形态：none | https_token | ssh_key。
   string source_auth_kind = 4 [(buf.validate.field).string = { in: ["none", "https_token", "ssh_key"] }];

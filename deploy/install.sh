@@ -473,9 +473,8 @@ ln -sfn "$FLEETLY_BIN_DIR/fleetlyd" "$FLEETLY_LINK_DIR/fleetlyd"
 
 # --------------------------------------------------------------- 配置生成
 # 最小可用配置：HTTP 面 0.0.0.0:8420（或 --http-addr 覆盖）、gRPC 只绑回环、
-# git SSH 0.0.0.0:8424（对外提供 git push；关闭改 127.0.0.1:8424——安全默认
-# 基线口径见 config-example.yaml 与 architecture §4.2）、数据路径全部落
-# /var/lib/fleetly。已存在的 config.yaml 保留（升级不覆盖用户配置）。
+# 数据路径全部落 /var/lib/fleetly。已存在的 config.yaml 保留（升级不覆盖
+# 用户配置）。
 if [ -f "$FLEETLY_ETC_DIR/config.yaml" ]; then
     log "config exists, keeping: $FLEETLY_ETC_DIR/config.yaml"
     if [ -n "$BASE_DOMAIN" ]; then
@@ -513,10 +512,9 @@ ingress:
   token_file: "$FLEETLY_DATA_DIR/fleetly-ingress.token"
   cert_dir: "$FLEETLY_DATA_DIR/fleetly-certs"
 
-# git push(SSH) 触发入口：绑定 0.0.0.0 对外提供 git push——安装报告已明示
-# 该暴露面；不需要时改回 127.0.0.1:8424（config-example.yaml 注释口径）。
+# git webhook 触发入口：bare 仓库根（webhook 拉源的 fetch 落点）。git push
+# (SSH) 收包面已移除（ADR-0012），无监听端口。
 git:
-  addr: "0.0.0.0:8424"
   root: "$FLEETLY_DATA_DIR/git"
 
 logging:
@@ -785,7 +783,6 @@ printf '  %-22s %s\n' '8422/tcp ingress-cfg' 'bound 0.0.0.0 (default) -> token-p
 if [ -n "$BASE_DOMAIN" ]; then
     printf '  %-22s %s\n' '8423/tcp ingress-cfg-tls' 'bound 0.0.0.0 -> token+TLS platform cert (multi-node Traefik config endpoint; MANAGER only, not via Traefik)'
 fi
-printf '  %-22s %s\n' '8424/tcp git ssh' 'bound 0.0.0.0 -> PUBLIC (git push entry; set 127.0.0.1:8424 in config to close)'
 printf '  %-22s %s\n' '80,443/tcp ingress' 'traefik host ports -> PUBLIC (expected app entry)'
 printf '  %-22s %s\n' '2377,7946,4789 swarm' "advertised on $ADV ($ADV_CLASS)"
 if [ "$HARDEN_FIREWALL" -eq 1 ]; then

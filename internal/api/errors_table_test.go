@@ -85,8 +85,6 @@ var storeErrExpectations = []storeErrExpectation{
 	{sentinel: state.ErrUserNotFound, args: []any{"u1"}, message: "user not found: u1", grpc: codes.NotFound},
 	{sentinel: state.ErrTokenNotFound, args: []any{"tok"}, message: "token not found: tok", grpc: codes.NotFound},
 	{sentinel: state.ErrTokenLastAdmin, args: []any{"tok"}, message: "token tok is the last non-revoked admin token; revoking it would leave the platform unmanageable (a restart does not re-seed the bootstrap token)", grpc: codes.FailedPrecondition, code: "E_TOKEN_LAST_ADMIN", detailed: true},
-	{sentinel: state.ErrGitKeyExists, message: "git key already registered (same fingerprint)", grpc: codes.FailedPrecondition, detailed: true},
-	{sentinel: state.ErrGitKeyNotFound, args: []any{"k1"}, message: "git key not found: k1", grpc: codes.NotFound},
 
 	{sentinel: state.ErrAlertRuleNotFound, message: "alert rule not found", grpc: codes.NotFound, code: "E_ALERT_RULE_NOT_FOUND", detailed: true},
 	{sentinel: state.ErrAlertRuleNameConflict, message: "an alert rule with the same name already exists (rule names are unique platform-wide)", grpc: codes.FailedPrecondition, code: "E_ALERT_RULE_NAME_CONFLICT", detailed: true},

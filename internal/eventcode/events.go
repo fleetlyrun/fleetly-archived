@@ -34,7 +34,9 @@ package eventcode
 // 85 + IMPL-T15-1 增 3（project.network_changed 项目网参与面 +
 // network.orphaned / network.missing 对账兜底守卫，OT-1/DT-5）= 88 +
 // IMPL-T2-1 增 7（task.created / task.started / task.stopped / task.expired /
-// task.failed / task.deleted / task.orphaned，DT-5 动态工作负载面）= 95 个事件名。
+// task.failed / task.deleted / task.orphaned，DT-5 动态工作负载面）= 95；
+// 2026-09-29 git.push 面移除减 1（git.hostkey_changed 退役，见下方注记）
+// = 94 个事件名。
 var builtins = []Event{
 	// ── 发布（release-semantics §2.7）──
 	{Name: "deployment.queued",
@@ -515,15 +517,9 @@ var builtins = []Event{
 		Source:  "T-line DT-5/IMPL-T2-1 DT-5 recon guard (platform-managed task service with no non-terminal state row; disclosed and reclaimed — label attribution)",
 		Summary: "a platform-managed task service has no non-terminal state row (leftover or externally created): disclosed and reclaimed (the platform owns the object; label attribution)"},
 
-	// ── git SSH host key（v0.3 W3-S2，rbac-teams §6 裁决 D-W0-8 FZ-12；
-	//    注册表只增）：发出来源 = host key 启动装载与指纹台账的比对事务
-	//（internal/state/hostkeysettings.go，与台账更新同事务 = Outbox）。
-	//    payload 只带新旧 SHA256 指纹——公钥指纹是公开材料（known_hosts
-	//    核对值），私钥文件本体绝不出现（state-model §2.9 secret 纪律）。
-	//    首启建账静默（零事件），装载指纹与台账不同才发。
-	{Name: "git.hostkey_changed",
-		Source:  "v0.3 W3-S2 rbac-teams §6 D-W0-8 (host key startup load vs fingerprint ledger; state hostkeysettings.go, same transaction; public key material only)",
-		Summary: "the git SSH host key changed since the previous load (file rebuilt or key replaced; payload carries the old and new SHA256 fingerprints — public key material only, the private key never appears)"},
+	// git.hostkey_changed（v0.3 W3-S2 FZ-12）随 git push(SSH) 收包面
+	// 2026-09-29 移除（ADR-0012 裁决：砍 SSH 收包半）——事件码注册表只增
+	// 不复用，此处不再登记；历史事件流中的存量行不受影响。
 
 	// ── 自动扩缩（B 线 W5 设计 §1，D-V3W5-2，v0.3 W5-S1 接线；注册表只增。
 	//    发出来源 = engine 收敛拍尾部的扩缩 duty，internal/engine/

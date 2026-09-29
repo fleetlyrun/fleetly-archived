@@ -143,10 +143,6 @@ var ServiceRegistrations = []ServiceRegistration{
 		serverv1.RegisterPlacementServiceHandlerFromEndpoint),
 	mountedService("TokensService", serverv1.RegisterTokensServiceServer,
 		serverv1.RegisterTokensServiceHandlerFromEndpoint),
-	// M4-2：SSH 公钥管理面与 token 管理面同属 Console 消费的 admin 资源面
-	//（曾只在 gRPC 侧注册、REST 面 404——补齐对齐）。
-	mountedService("GitKeysService", serverv1.RegisterGitKeysServiceServer,
-		serverv1.RegisterGitKeysServiceHandlerFromEndpoint),
 	// E5 Cron：整体 gRPC-only（手动触发/运行台账走 CLI/gRPC；gateway 无
 	// handler 注册——REST 面 404 是契约）。
 	grpcOnlyService("CronService", serverv1.RegisterCronServiceServer),

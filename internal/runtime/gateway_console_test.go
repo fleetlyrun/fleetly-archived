@@ -63,7 +63,7 @@ func startConsoleHarness(t *testing.T, staticDir string) string {
 	g := gs.GetServer()
 	serverv1.RegisterSystemServiceServer(g, api.NewSystemService("dev", st,
 		func() []api.SystemComponent { return nil }, nil, nil))
-	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
+	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, nil))
 	if err := gs.Init(nil); err != nil {
 		t.Fatalf("grpc Init: %v", err)
 	}

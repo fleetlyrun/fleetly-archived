@@ -11,79 +11,8 @@ import (
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/compose"
-	"github.com/fleetlyrun/fleetly/internal/gitserver"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
-
-// DeployFromGit 分支过滤映射契约（H2 修复 / MG-C1）：端口返回
-// gitserver.ErrBranchNotTracked → 非 gRPC 错误的 skipped 回执
-// （deployment_id 留空——钩子脚本把响应 JSON 打到 pusher stderr）+
-// git.ignored_branch 处置审计；正常入队回执不受影响。分支比对的权威
-// 谓词在 gitserver 侧（deploy_test.go 锁定），此处只锁 API 面映射。
-
-// stubGitTriggers 是 GitDeployTriggers 的桩（固定返回哨兵或部署记录）。
-type stubGitTriggers struct {
-	rec state.DeployRecord
-	err error
-}
-
-func (g *stubGitTriggers) DeployFromGitPush(ctx context.Context, app, sha, ref, actorTokenID, pushUser string) (state.DeployRecord, []compose.Warning, error) {
-	return g.rec, nil, g.err
-}
-
-func TestDeployFromGitBranchNotTrackedSkips(t *testing.T) {
-	dir := t.TempDir()
-	st, err := state.Open(context.Background(), filepath.Join(dir, "test.db"))
-	if err != nil {
-		t.Fatalf("state.Open: %v", err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
-	ctx := context.Background()
-	const sha = "0123456789abcdef0123456789abcdef01234567"
-
-	// 哨兵 → skipped 回执（不是 gRPC 错误；App 回显、deployment_id 留空）。
-	svc := NewDeploymentsService(st, &stubGitTriggers{err: gitserver.ErrBranchNotTracked})
-	resp, err := svc.DeployFromGit(ctx, &serverv1.DeployFromGitRequest{
-		App: "my-api", Sha: sha, Ref: "refs/heads/dev",
-	})
-	if err != nil {
-		t.Fatalf("DeployFromGit returned error %v, want skipped receipt", err)
-	}
-	if resp.Status != "skipped" || resp.DeploymentId != "" || resp.App != "my-api" {
-		t.Fatalf("skipped receipt = %+v", resp)
-	}
-
-	// 处置审计：git.ignored_branch（机器动作 actor=system；app 行不存在 →
-	// target 退化为名形态；diff 携带被忽略的 ref）。
-	audits, err := st.RecentAudits(ctx, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, a := range audits {
-		if a.Action == "git.ignored_branch" && a.Result == "ok" && a.Actor == "system" &&
-			a.Target == "app:my-api" && strings.Contains(a.DiffSummary, "refs/heads/dev") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("git.ignored_branch audit missing")
-	}
-
-	// 对照：正常入队回执（queued + deployment id）不受过滤分支影响。
-	ok := NewDeploymentsService(st, &stubGitTriggers{rec: state.DeployRecord{
-		ID: "dep-1", AppName: "my-api", Status: state.DeployQueued,
-	}})
-	resp2, err := ok.DeployFromGit(ctx, &serverv1.DeployFromGitRequest{
-		App: "my-api", Sha: sha, Ref: "refs/heads/main",
-	})
-	if err != nil {
-		t.Fatalf("tracked DeployFromGit: %v", err)
-	}
-	if resp2.Status != string(state.DeployQueued) || resp2.DeploymentId != "dep-1" || resp2.App != "my-api" {
-		t.Fatalf("tracked receipt = %+v", resp2)
-	}
-}
 
 // ── 破坏性变更门控（MG-C3，架构 §2.4 plan/apply 语义）─────────────────────
 

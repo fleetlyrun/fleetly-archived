@@ -68,8 +68,7 @@ services:
     expose: ["80"]
 `
 
-// newTestSource 构造测试用 GitTriggers（真实 store + box；Root/HostKey 在临时
-// 目录；HookEndpoint 指向本地占位——钩子只在真实 SSH push 时执行）。
+// newTestSource 构造测试用 GitTriggers（真实 store + box；Root 在临时目录）。
 // replayTTL ≤ 0 时用配置默认（Normalize 回落 15 分钟）。
 func newTestSource(t *testing.T, replayTTL time.Duration) (*GitTriggers, *state.Store, *secrets.Box, string) {
 	t.Helper()
@@ -84,10 +83,8 @@ func newTestSource(t *testing.T, replayTTL time.Duration) (*GitTriggers, *state.
 		t.Fatalf("EnsureKey: %v", err)
 	}
 	cfg := Config{
-		Enabled:      true,
-		Root:         filepath.Join(dir, "git"),
-		HookEndpoint: "http://127.0.0.1:1",
-		ReplayTTL:    replayTTL,
+		Root:      filepath.Join(dir, "git"),
+		ReplayTTL: replayTTL,
 	}
 	src := NewGitTriggers(cfg, st, box, testLogger())
 	return src, st, box, dir

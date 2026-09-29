@@ -40,9 +40,6 @@ import type {
   GetTerminalStatusResponse,
   GetWebhookEndpointResponse,
   GrantPlatformAdminResponse,
-  AddGitKeyResponse,
-  ListGitKeysResponse,
-  RemoveGitKeyResponse,
   SetAppSourceRequest,
   SetAppSourceResponse,
   SetAppWebhookSecretResponse,
@@ -661,31 +658,6 @@ export function getAppRuntime(app: string) {
   return api<ShowAppRuntimeResponse>(
     `/apps/${encodeURIComponent(app)}/runtime`,
   );
-}
-
-// ── git keys（T2.19 git push(SSH) 认证面；proto fleetly/server/v1/gitkeys.proto）──
-// scope 登记 read（最小形状约束），真授权在 handler 内（internal/api/gitkeys.go
-// 用户化语义，rbac-teams §2.3）：Add = 登录用户自服务（公钥归属用户——机具
-// 令牌恒 403）；List = 自己的（平台管理员/机具令牌 = 全列含存量无主键的只读
-// 展示）；Remove = 自己的或平台管理员。Console 凭据（会话 cookie/用户 PAT）
-// 均为用户 principal——本组端点按自服务面消费，格式校验在服务端
-//（authorized_keys 单行解析；重复指纹 409）。
-
-/** 在册公钥列表（无敏感投影：指纹/类型/备注/属主注记——公钥为公开材料）。 */
-export function listGitKeys() {
-  return api<ListGitKeysResponse>("/git/keys");
-}
-
-/** 注册公钥：authorized_keys 单行 + 人读备注（缺省取 key comment）。 */
-export function addGitKey(input: { public_key: string; note?: string }) {
-  return api<AddGitKeyResponse>("/git/keys", { method: "POST", json: input });
-}
-
-/** 删除公钥（不存在 404 信封；删除即时生效——在推连接不受影响，新握手即拒）。 */
-export function removeGitKey(id: string) {
-  return api<RemoveGitKeyResponse>(`/git/keys/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
 }
 
 // ── apps webhook/git 触发面（T2.19；proto apps.proto）────────────────────

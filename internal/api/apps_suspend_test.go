@@ -33,7 +33,7 @@ func newSuspendEnv(t *testing.T) *suspendEnv {
 		t.Fatalf("EnsureKey: %v", err)
 	}
 	srv := newAuthServer(NewAuthenticator(st))
-	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, "127.0.0.1:8424", nil))
+	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, nil))
 	conn := serveBufconn(t, srv)
 	return &suspendEnv{st: st, apps: serverv1.NewAppsServiceClient(conn)}
 }

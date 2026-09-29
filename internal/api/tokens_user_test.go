@@ -43,7 +43,6 @@ func newTokEnv(t *testing.T) *tokEnv {
 	env := &tokEnv{st: st}
 	srv := newAuthServer(NewAuthenticator(st))
 	serverv1.RegisterTokensServiceServer(srv, NewTokensService(st))
-	serverv1.RegisterGitKeysServiceServer(srv, NewGitKeysService(st))
 	env.conn = serveBufconn(t, srv)
 	return env
 }

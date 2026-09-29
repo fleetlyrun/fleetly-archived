@@ -272,47 +272,6 @@ func TestMeProjectOverrideProjection(t *testing.T) {
 	}
 }
 
-// TestSystemStatusGitFingerprintProjection GetSystemStatus 指纹披露
-// （FZ-12）：端口注入 = 字段现读回显；未装配 = 字段留空。
-func TestSystemStatusGitFingerprintProjection(t *testing.T) {
-	ctx := context.Background()
-	st := newSettingsStoreForAPITest(t)
-
-	// 未装配形态（WithGitHostKey 未调用）：字段空。
-	srvBare := newAuthServer(NewAuthenticator(st))
-	serverv1.RegisterSystemServiceServer(srvBare,
-		NewSystemService("dev", st, func() []SystemComponent { return nil }, nil, nil))
-	connBare := serveBufconn(t, srvBare)
-	tokBare := seedTokenPlain(t, st, ScopeRead)
-	resp, err := serverv1.NewSystemServiceClient(connBare).GetSystemStatus(authCtx(ctx, tokBare), &serverv1.GetSystemStatusRequest{})
-	if err != nil {
-		t.Fatalf("GetSystemStatus (no source): %v", err)
-	}
-	if resp.GetGitSshFingerprint() != "" {
-		t.Fatalf("unwired fingerprint = %q, want empty", resp.GetGitSshFingerprint())
-	}
-
-	// 注入形态：字段现读回显端口值。
-	srv := newAuthServer(NewAuthenticator(st))
-	serverv1.RegisterSystemServiceServer(srv,
-		NewSystemService("dev", st, func() []SystemComponent { return nil }, nil, nil).
-			WithGitHostKey(fakeGitHostKey{"SHA256:FixturedFingerprintValue=="}))
-	conn := serveBufconn(t, srv)
-	tok := seedTokenPlain(t, st, ScopeRead)
-	resp, err = serverv1.NewSystemServiceClient(conn).GetSystemStatus(authCtx(ctx, tok), &serverv1.GetSystemStatusRequest{})
-	if err != nil {
-		t.Fatalf("GetSystemStatus (wired): %v", err)
-	}
-	if got := resp.GetGitSshFingerprint(); got != "SHA256:FixturedFingerprintValue==" {
-		t.Fatalf("wired fingerprint = %q, want fixture value", got)
-	}
-}
-
-// fakeGitHostKey 是 GitHostKeySource 端口的确定性测试替身。
-type fakeGitHostKey struct{ fp string }
-
-func (f fakeGitHostKey) Fingerprint() string { return f.fp }
-
 // newSettingsStoreForAPITest 起一个独立临时目录 store（api 侧纯投影测试）。
 func newSettingsStoreForAPITest(t *testing.T) *state.Store {
 	t.Helper()

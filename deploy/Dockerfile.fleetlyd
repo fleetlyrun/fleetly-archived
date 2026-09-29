@@ -19,7 +19,7 @@
 #   docker run -d --name fleetlyd \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
 #     -v fleetly-data:/var/lib/fleetly \
-#     -p 8420:8420 -p 8424:8424 \
+#     -p 8420:8420 \
 #     ghcr.io/fleetlyrun/fleetlyd:<tag>
 # （挂宿主 socket = 容器内进程获得宿主 dockerd 的 root 等价权限——v0.1
 # 众所周知的取舍，与主形态一致；socket 收紧属后续安全阶段。）
@@ -35,7 +35,7 @@
 #     -v /var/run/docker.sock:/var/run/docker.sock \
 #     -v fleetly-data:/var/lib/fleetly \
 #     -v /path/to/config.yaml:/etc/fleetly/config.yaml:ro \
-#     -p 8420:8420 -p 8424:8424 \
+#     -p 8420:8420 \
 #     ghcr.io/fleetlyrun/fleetlyd:<tag> -c /etc/fleetly/config.yaml
 
 # 基镜像钉 digest（T0-V2.3 供应链）：tag 保留作可读性，digest 为准；
@@ -80,7 +80,7 @@ COPY --from=console /src/console/dist /opt/fleetly/console
 RUN mkdir -p /var/lib/fleetly /etc/fleetly
 VOLUME ["/var/lib/fleetly"]
 WORKDIR /var/lib/fleetly
-EXPOSE 8420 8421 8422 8424
+EXPOSE 8420 8421 8422
 ENTRYPOINT ["/usr/local/bin/fleetlyd"]
 # F3（S20）：不带 CMD——此前 CMD 固定传 `-c /etc/fleetly/config.yaml`，而
 # 镜像内该路径不存在（配置从未打进镜像），显式 -c 缺文件是硬失败 → 开箱

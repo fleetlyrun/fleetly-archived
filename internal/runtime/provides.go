@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/wire"
@@ -101,7 +100,6 @@ var ProviderSet = wire.NewSet(
 	NewProjectsService,
 	NewTasksService,
 	NewGitTriggers,
-	NewGitKeysService,
 	NewGRPCServer,
 	NewControlPlaneTLS,
 	NewHTTPServer,
@@ -511,13 +509,13 @@ func (dbTemplatePort) ConnectionVars(templateID, instance, password string) (map
 
 // NewLogsManager 构建日志管线管理器（T2.20：采集/Follow/History/清理；
 // logs.* 配置节，缺省回落 internal/logs）。底座端口由 substrate.Client
-// 隐式实现 logs.Port（适配器方向：substrate → logs 核心接口）。B3：注入
-// git 触发面为补充脱敏值集供给（钩子 token 明文只在钩子文件）。W5-S1：
+// 隐式实现 logs.Port（适配器方向：substrate → logs 核心接口）。W5-S1：
 // 注入入湖传输面 = VL 回环消费端（E6 设计 §2.3——批量器在 logs.Manager
 // 内部，flush/溢出/streak 面承载于此；vl.backend 门每拍设置现读）。
-func NewLogsManager(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Client, sb *secrets.Box, src *gitserver.GitTriggers, vl *victorialogs.Backend) *logs.Manager {
+// （B3 的补充脱敏值集供给随 git push 面 2026-09-29 移除——钩子 token 是
+// 唯一供给源，WithSecretSource 无既有实现方，接口保留给后续扩面。）
+func NewLogsManager(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Client, sb *secrets.Box, vl *victorialogs.Backend) *logs.Manager {
 	return logs.NewManager(cfg.LogsSettings(), st, sc, sb, app.Logger()).
-		WithSecretSource(src).
 		WithIngestBackend(vl)
 }
 
@@ -620,10 +618,10 @@ func portOfAddr(addr, defaultAddr string) string {
 }
 
 // NewAppsService 构造应用资源面服务（T2.17；T2.19 增补 webhook/git 触发
-// 配置面——box 加密 webhook secret 与拉源认证材料，gitEndpoint 拼 remote
-// 提示；H9 增补路由撤销端口——app 删除管线经 ingress.Manager 撤销路由）。
+// 配置面——box 加密 webhook secret 与拉源认证材料；H9 增补路由撤销端口
+// ——app 删除管线经 ingress.Manager 撤销路由）。
 func NewAppsService(st *state.Store, sb *secrets.Box, cfg *AppConfig, m *ingress.Manager) *api.AppsService {
-	return api.NewAppsService(st, sb, gitEndpointForHint(cfg.Git.Addr, cfg.Git.PublicEndpoint, cfg.BaseDomain), m)
+	return api.NewAppsService(st, sb, m)
 }
 
 // NewCronService 构造定时任务面服务（E5 Cron：手动触发走调度器同链路 +
@@ -662,50 +660,16 @@ func NewTasksService(st *state.Store, sb *secrets.Box, eng *engine.Engine) *api.
 	return api.NewTasksService(st, sb, eng)
 }
 
-// gitEndpointForHint 把 SSH 监听地址归一为 remote 提示的 host:port。主机位
-// 解析链（2026-09-26 走查 W2-2：通配监听回落 127.0.0.1 使远程用户复制出
-// 不可用 remote——服务端无法自行得知公网主机名，按「显式告知 > 平台域名 >
-// 监听地址」推导）：git.public_endpoint 显式配置 > base_domain 域名（平台
-// 公网面，DNS/证书与 git SSH 同宿主）> 监听地址主机位（通配/空回落
-// 127.0.0.1——纯本机形态提示面永不输出空 host）。
-func gitEndpointForHint(addr, publicEndpoint, baseDomain string) string {
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil || port == "" {
-		port = "8424"
-	}
-	if publicEndpoint != "" {
-		if _, _, perr := net.SplitHostPort(publicEndpoint); perr != nil {
-			publicEndpoint = net.JoinHostPort(publicEndpoint, port)
-		}
-		return publicEndpoint
-	}
-	if baseDomain != "" {
-		return net.JoinHostPort(strings.TrimSuffix(baseDomain, "."), port)
-	}
-	host, _, _ := net.SplitHostPort(addr)
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	return net.JoinHostPort(host, port)
+// NewDeploymentsService 构造部署资源面服务（T2.17）。
+func NewDeploymentsService(st *state.Store) *api.DeploymentsService {
+	return api.NewDeploymentsService(st)
 }
 
-// NewDeploymentsService 构造部署资源面服务（T2.17；T2.19 增补 DeployFromGit
-// ——git 源端口由 internal/gitserver 实现，方向纪律：api 定义端口）。
-func NewDeploymentsService(st *state.Store, src *gitserver.GitTriggers) *api.DeploymentsService {
-	return api.NewDeploymentsService(st, src)
-}
-
-// NewGitTriggers 构建 git 触发入口核心（T2.19：bare 仓库管理 + post-receive
-// 钩子 + DeployFromCommit + webhook 验签/防重放/去重/拉源 + SSH 服务器）。
-// git.*/webhook.* 配置节经 AppConfig.GitSettings 翻译（缺省回落
-// internal/gitserver 单一事实源）。
+// NewGitTriggers 构建 git 触发入口核心（T2.19：bare 仓库管理 +
+// DeployFromCommit + webhook 验签/防重放/去重/拉源）。git.*/webhook.* 配置
+// 节经 AppConfig.GitSettings 翻译（缺省回落 internal/gitserver 单一事实源）。
 func NewGitTriggers(cfg *AppConfig, st *state.Store, sb *secrets.Box, app lynx.App) *gitserver.GitTriggers {
 	return gitserver.NewGitTriggers(cfg.GitSettings(), st, sb, app.Logger())
-}
-
-// NewGitKeysService 构造 git 公钥管理面服务（T2.19；admin scope）。
-func NewGitKeysService(st *state.Store) *api.GitKeysService {
-	return api.NewGitKeysService(st)
 }
 
 // NewRevisionsService 构造版本快照只读面服务。
@@ -747,10 +711,8 @@ func NewRuntimeService(st *state.Store, eng *engine.Engine) *api.RuntimeService 
 // 组件随 duty 管理器与日志管线接线（设计 §2.3：healthy = duty 部署符合
 // 预期且 ingest streak 无降级；降级时 Error 带丢弃计数——诚实红面）。E6
 // W5-S4：notifications 组件随投递器接线（设计 §5.2——启用端点连续终败即
-// 红，Error 带端点名与最近错误；无终败 = 无所欠恒绿）。W3-S2：git SSH
-// host key 指纹源随 GitTriggers 接线（FZ-12 披露面，D-W0-8——
-// GetSystemStatus 的 git_ssh_fingerprint 现读）。
-func NewSystemService(cfg *AppConfig, st *state.Store, id *state.NodeIdentity, ob *state.Observer, sb *secrets.Box, ing *ingress.Manager, bm *statebackup.Manager, rm *rustfs.Manager, sc *substrate.Client, lm *logs.Manager, vm *victorialogs.Manager, mm *metrics.Manager, nm *notify.Manager, erm *execrelay.Manager, gt *gitserver.GitTriggers, version Version) *api.SystemService {
+// 红，Error 带端点名与最近错误；无终败 = 无所欠恒绿）。
+func NewSystemService(cfg *AppConfig, st *state.Store, id *state.NodeIdentity, ob *state.Observer, sb *secrets.Box, ing *ingress.Manager, bm *statebackup.Manager, rm *rustfs.Manager, sc *substrate.Client, lm *logs.Manager, vm *victorialogs.Manager, mm *metrics.Manager, nm *notify.Manager, erm *execrelay.Manager, version Version) *api.SystemService {
 	components := func() []api.SystemComponent {
 		return []api.SystemComponent{
 			{Name: "state.store", Check: st.CheckHealth},
@@ -808,8 +770,7 @@ func NewSystemService(cfg *AppConfig, st *state.Store, id *state.NodeIdentity, o
 	}
 	return api.NewSystemService(string(version), st, components, ing, rm).WithBackupManager(bm).
 		WithJoinGuide(cfg.BaseDomain, sc).
-		WithSecretsBox(sb).
-		WithGitHostKey(gt)
+		WithSecretsBox(sb)
 }
 
 // ingestDegradedError 是日志入湖降级的组件健康错误（Error 文本带丢弃
@@ -1101,7 +1062,7 @@ func tuneHTTPServer(srv *http.Server) {
 // 但全部 Init 相互独立（store 迁移在 wire 装配期完成，非 Init 阶段）。
 //
 // 三段停止不变量（顺序不可倒置）：
-//  1. 入口面最先停（HTTP/gRPC/git SSH + webhook worker）——SIGTERM 后
+//  1. 入口面最先停（HTTP/gRPC/git webhook worker）——SIGTERM 后
 //     立即拒绝新工作（连接排水），消灭「Deploy/TriggerBuild 仍假成功入队
 //     但引擎/队列已死」的窗口。webhook worker 的排空也在本段：drain 中
 //     处理的 job 写部署行，此时引擎已停、行只会排队待重启恢复——可接受；
@@ -1147,7 +1108,7 @@ func NewServices(
 		// ── 第一段：入口面（最先注册 = 最先停：拒绝新工作）──
 		hs,
 		gs,
-		newGitService(src, app, cfg.GitSettings().Enabled, cfg.GitSettings().Addr),
+		newGitService(src),
 		// ── 第二段：写入者（入口关后排空在途）──
 		newBuilderService(q, b, app.Logger()),
 		newEngineService(eng),

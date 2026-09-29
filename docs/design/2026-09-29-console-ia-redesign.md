@@ -110,8 +110,9 @@ runtime 面)/ **Tasks**(running n)。Application 卡收编 ID/lifecycle/times;�
   只见 Compose pill + 卡内说明行(triggers-admin-note 语义内移);平台管理员整卡换
   platform-readonly-note(P0-3 双门不变)。
 - **pane 内容即原三卡内嵌**:Compose pane=粘贴/上传+Deploy+跟踪器(锚点
-  `deployment-tracker`/`deploy-project-context-hint` 不变);Git pane=push 远端+触发
-  分支+拉源表单;Webhook pane=接收端 URL+签名密钥+名字词形披露——全部触发面
+  `deployment-tracker`/`deploy-project-context-hint` 不变);Git pane=拉源表单
+  (push 远端行随 git push(SSH) 面移除——2026-09-29 裁决,ADR-0012;Git pill
+  语义收敛为「拉源配置」);Webhook pane=接收端 URL+签名密钥+名字词形披露——全部触发面
   testid 原样保留(内移进 pane),webhook 读面查询只在 admin+ 且非 compose 方式时
   发起(developer 挂载不发注定 403 的请求)。
 - **回滚收编为历史行内操作**:独立 Rollback 卡删除;带 revision 的行出 Rollback 钮

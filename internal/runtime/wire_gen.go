@@ -56,9 +56,8 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 		return nil, nil, err
 	}
 	daemonManager := NewDaemonManager(client)
-	gitTriggers := NewGitTriggers(appConfig, store, box, app)
 	backend := NewVictorialogsBackend()
-	logsManager := NewLogsManager(app, appConfig, store, client, box, gitTriggers, backend)
+	logsManager := NewLogsManager(app, appConfig, store, client, box, backend)
 	builder := NewBuilder(appConfig, store, client, daemonManager, app, logsManager)
 	queue := NewBuildQueue(app, appConfig, store, builder)
 	resolver := NewPlacementResolver(store, dockerClient)
@@ -73,6 +72,7 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	engine := NewEngine(app, appConfig, store, client, resolver, box, ingressManager, manager, logsManager, metricsBackend)
 	cronManager := NewCronManager(app, store, box, client, resolver)
 	notifyManager := NewNotifyManager(app, store, box)
+	gitTriggers := NewGitTriggers(appConfig, store, box, app)
 	rustfsManager, cleanup5, err := NewRustfsManager(app, store, box, client)
 	if err != nil {
 		cleanup4()
@@ -182,7 +182,7 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 		return nil, nil, err
 	}
 	appsService := NewAppsService(store, box, appConfig, ingressManager)
-	deploymentsService := NewDeploymentsService(store, gitTriggers)
+	deploymentsService := NewDeploymentsService(store)
 	revisionsService := NewRevisionsService(store)
 	buildsService := NewBuildsService(appConfig, store, queue)
 	driftService := NewDriftService(store, engine)
@@ -196,7 +196,6 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	eventsService := NewEventsService(store)
 	placementService := NewPlacementService(store, resolver)
 	tokensService := NewTokensService(store)
-	gitKeysService := NewGitKeysService(store)
 	cronService := NewCronService(store, cronManager)
 	apiDatabaseService := NewDatabaseService(store, box, databaseManager)
 	apiSecretsService := NewSecretsService(store, box)
@@ -208,8 +207,8 @@ func wireBootstrap(app lynx.App, slogger *slog.Logger, version Version) (*boot.B
 	teamsService := NewTeamsService(store)
 	projectsService := NewProjectsService(store, engine, databaseManager, ingressManager)
 	tasksService := NewTasksService(store, box, engine)
-	systemService := NewSystemService(appConfig, store, nodeIdentity, observer, box, ingressManager, manager, rustfsManager, client, logsManager, victorialogsManager, metricsManager, notifyManager, execrelayManager, gitTriggers, version)
-	grpcServer, err := NewGRPCServer(app, appConfig, controlPlaneTLS, authenticator, appsService, deploymentsService, revisionsService, buildsService, driftService, runtimeService, domainsService, envService, apiLogsService, apiMetricsService, alertingService, notificationsService, eventsService, placementService, tokensService, gitKeysService, cronService, apiDatabaseService, apiSecretsService, configsService, execService, authService, usersService, auditService, teamsService, projectsService, tasksService, systemService)
+	systemService := NewSystemService(appConfig, store, nodeIdentity, observer, box, ingressManager, manager, rustfsManager, client, logsManager, victorialogsManager, metricsManager, notifyManager, execrelayManager, version)
+	grpcServer, err := NewGRPCServer(app, appConfig, controlPlaneTLS, authenticator, appsService, deploymentsService, revisionsService, buildsService, driftService, runtimeService, domainsService, envService, apiLogsService, apiMetricsService, alertingService, notificationsService, eventsService, placementService, tokensService, cronService, apiDatabaseService, apiSecretsService, configsService, execService, authService, usersService, auditService, teamsService, projectsService, tasksService, systemService)
 	if err != nil {
 		cleanup10()
 		cleanup9()

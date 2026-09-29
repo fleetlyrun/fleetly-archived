@@ -58,8 +58,6 @@ function renderLayout() {
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<p>home-body</p>} />
-              {/* Git push keys 路由可达（P1-8 菜单入口接线；页面本体自测）。 */}
-              <Route path="/git-keys" element={<p>git-keys-body</p>} />
             </Route>
           </Routes>
         </QueryClientProvider>
@@ -93,24 +91,6 @@ describe("UserMenu Me projection", () => {
     expect(teams).toHaveTextContent("developer");
     // 纯会话 cookie（无 token）：Bearer 身份指示条不渲染。
     expect(screen.queryByTestId("user-menu-token-note")).not.toBeInTheDocument();
-  });
-});
-
-describe("UserMenu git push keys entry (review P1-8)", () => {
-  it("offers a Git push keys entry that navigates to /git-keys", async () => {
-    vi.stubGlobal("fetch", stubFetch());
-    renderLayout();
-    await waitFor(() => expect(screen.getByTestId("user-menu")).toBeInTheDocument());
-    const user = userEvent.setup();
-
-    await user.click(screen.getByTestId("user-menu"));
-    expect(screen.getByTestId("user-menu-git-keys")).toHaveTextContent("Git push keys");
-    await user.click(screen.getByTestId("user-menu-git-keys"));
-
-    // 路由可达：/git-keys 落到页面（测试桩替身）。
-    expect(screen.getByText("git-keys-body")).toBeInTheDocument();
-    // 菜单随导航收起。
-    expect(screen.queryByTestId("user-menu-panel")).not.toBeInTheDocument();
   });
 });
 

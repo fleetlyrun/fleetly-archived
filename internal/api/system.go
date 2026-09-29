@@ -55,9 +55,6 @@ type SystemService struct {
 	// box 是 envelope 加解密器（E3-2 S3 设置面：secret 密文落库/读面解密
 	// 出指纹/探针解密已存凭证；nil = 未装配——S3 三面如实报不可用）。
 	box *secrets.Box
-	// gitHostKey 是 git SSH host key 指纹消费端口（FZ-12 披露面，D-W0-8；
-	// nil = git 面未装配——指纹字段如实留空）。
-	gitHostKey GitHostKeySource
 	// rustfs 是托管 RustFS duty 管理器（E3-5：TestConnection 的 rustfs
 	// 分支经它解析派生端点与托管凭据；nil = 未装配——rustfs 探针如实报
 	// 不可用）。
@@ -90,16 +87,6 @@ type IngressStatusSource interface {
 	Config() ingress.Config
 }
 
-// GitHostKeySource 是 git SSH host key 指纹消费端口（FZ-12 披露面，
-// D-W0-8；*gitserver.GitTriggers 隐式实现——端口在 api 定义、适配在
-// gitserver，方向纪律同 JoinTokenPort）。Fingerprint 只读不生成：git 面
-// 未启用/首启前返回空串（投影面如实留空）。
-type GitHostKeySource interface {
-	// Fingerprint 返回当前 host key 的 SHA256 指纹（OpenSSH 形态
-	// SHA256:…；空 = 无 host key 可读）。
-	Fingerprint() string
-}
-
 // NewSystemService 构造 SystemService（version 由构建 -ldflags 注入；
 // components 为装配点命名的健康组件集；ing 可为 nil——入口面未装配形态；
 // rustfsMgr 可为 nil——托管 RustFS 面未装配形态）。
@@ -128,13 +115,6 @@ func (s *SystemService) WithBackupManager(m *statebackup.Manager) *SystemService
 // envelope 加密落库，读面只出指纹，探针解密已存凭证在服务端完成。
 func (s *SystemService) WithSecretsBox(box *secrets.Box) *SystemService {
 	s.box = box
-	return s
-}
-
-// WithGitHostKey 注入 git SSH host key 指纹源（FZ-12 披露面，D-W0-8；链式
-// 装配，nil 合法——git 面未装配形态的指纹字段留空）。
-func (s *SystemService) WithGitHostKey(src GitHostKeySource) *SystemService {
-	s.gitHostKey = src
 	return s
 }
 
@@ -183,11 +163,6 @@ func (s *SystemService) GetSystemStatus(ctx context.Context, req *serverv1.GetSy
 	}
 	if latest, err := s.st.LatestStateBackup(ctx); err == nil && latest != nil {
 		resp.Backup = backupHealth(latest)
-	}
-	// git SSH host key 指纹（FZ-12 披露面）：现读（gitserver 侧读文件计算
-	// ——非台账回放）；面未装配/首启前 = 空串（字段留空的诚实形态）。
-	if s.gitHostKey != nil {
-		resp.GitSshFingerprint = s.gitHostKey.Fingerprint()
 	}
 	return resp, nil
 }

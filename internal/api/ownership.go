@@ -21,7 +21,6 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -366,15 +365,6 @@ func resolveDatabaseRef(ctx context.Context, st *state.Store, ref string) (state
 	default:
 		return state.DatabaseInstance{}, ambiguousRefErr("database", "team/prj/db", ref, nil)
 	}
-}
-
-// isNotFoundErr 报告 err 是否为 404 退化信封（resolveApp 的「行不在册」
-// 形态——DeployFromGit 首发放行的判定输入；稳定码 apperr 不在此列）。
-func isNotFoundErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	return status.Code(err) == codes.NotFound
 }
 
 // principalUserIDOf 取 ctx principal 的 UserID（无 principal 返回空——调用

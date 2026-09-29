@@ -218,7 +218,7 @@ function HistoryWebhookRow({
             Deliveries to this URL re-deploy the app — point your git provider
             or CI at it (Gitea: same path with <code className="font-mono">/gitea</code>).
             The receiver answers 404 until a signing secret is configured;
-            trigger settings (git push remote, fetch source, secret) live in
+            trigger settings (fetch source, secret) live in
             the Deploy card on the Overview tab.
           </>
         }

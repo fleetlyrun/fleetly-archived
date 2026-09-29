@@ -273,9 +273,9 @@ func (r *webhookRunner) run(process func(webhookJob), job webhookJob) {
 	process(job)
 }
 
-// StartWebhookWorker 启动 webhook 后台 worker（D1）：随 git.ssh 服务壳的
-// lynx Start 启动（webhook 面是 gateway 原生端点、独立于 SSH enabled 开关，
-// 服务壳恒承担 worker 生命周期）；ctx 取消后 worker 排空队列退出（排空
+// StartWebhookWorker 启动 webhook 后台 worker（D1）：随 git 服务壳的
+// lynx Start 启动（webhook 面是 gateway 原生端点，服务壳恒承担 worker
+// 生命周期）；ctx 取消后 worker 排空队列退出（排空
 // 预算尽时剩余项转披露丢弃，X-6——见 webhookAuditInterrupted），
 // StopWebhookWorker 是排空完成等待点。
 func (s *GitTriggers) StartWebhookWorker(ctx context.Context) {
@@ -305,16 +305,7 @@ func (s *GitTriggers) runWebhookJob(job webhookJob) {
 		return
 	}
 
-	rec, _, err := s.DeployFromCommit(ctx, DeployInput{
-		App:         job.app,
-		SHA:         job.sha,
-		Ref:         job.ref,
-		AuditAction: "git.webhook_deploy",
-		// M3-4：webhook 入口的 sha 幂等去重在此闭合（入队事务内复查）——
-		// 受理侧 ServeHTTP 的 COUNT 预查只挡串行重投，并发双投的竞态由
-		// 事务原语兜住。
-		DedupeSHA: true,
-	})
+	rec, _, err := s.DeployFromCommit(ctx, job.app, job.sha, job.ref)
 	if err != nil {
 		// 判重命中（M3-4 竞态兜底）：终局与受理侧 duplicate 回执同语义
 		// ——落 duplicate 处置审计、保持已占坑（4xx 类确定性终局，非 5xx

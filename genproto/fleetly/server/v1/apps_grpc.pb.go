@@ -52,7 +52,7 @@ type AppsServiceClient interface {
 	// configured 位；admin scope——source URL 与分支拓扑属运维面）。
 	ShowAppWebhook(ctx context.Context, in *ShowAppWebhookRequest, opts ...grpc.CallOption) (*ShowAppWebhookResponse, error)
 	// SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；
-	// admin）。source_branch 同时是 git push 的触发分支（app 配置分支，
+	// admin）。source_branch 同时是 webhook 投递的触发分支（app 配置分支，
 	// 默认 main）。
 	// 认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。
 	SetAppSource(ctx context.Context, in *SetAppSourceRequest, opts ...grpc.CallOption) (*SetAppSourceResponse, error)
@@ -220,7 +220,7 @@ type AppsServiceServer interface {
 	// configured 位；admin scope——source URL 与分支拓扑属运维面）。
 	ShowAppWebhook(context.Context, *ShowAppWebhookRequest) (*ShowAppWebhookResponse, error)
 	// SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；
-	// admin）。source_branch 同时是 git push 的触发分支（app 配置分支，
+	// admin）。source_branch 同时是 webhook 投递的触发分支（app 配置分支，
 	// 默认 main）。
 	// 认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。
 	SetAppSource(context.Context, *SetAppSourceRequest) (*SetAppSourceResponse, error)

@@ -27,9 +27,6 @@ type AppsService struct {
 	// withdraw 是路由撤销端口（H9：app 删除管线接通——deleting 清理时
 	// 撤销该 app 全部路由）。nil = 不撤销（无 ingress 装配的测试面）。
 	withdraw RouteWithdrawer
-	// gitEndpoint 是 SSH git 面 host:port（git_remote_hint 的拼装原料；
-	// 空 = 未启用，hint 留空）。
-	gitEndpoint string
 }
 
 // RouteWithdrawer 是路由撤销端口（internal/ingress.Manager 隐式实现）：
@@ -41,9 +38,9 @@ type RouteWithdrawer interface {
 }
 
 // NewAppsService 构造 AppsService（box 为 webhook secret 加密器；
-// gitEndpoint 供 git remote 提示；withdraw 为路由撤销端口，可 nil）。
-func NewAppsService(st *state.Store, box *secrets.Box, gitEndpoint string, withdraw RouteWithdrawer) *AppsService {
-	return &AppsService{st: st, box: box, withdraw: withdraw, gitEndpoint: gitEndpoint}
+// withdraw 为路由撤销端口，可 nil）。
+func NewAppsService(st *state.Store, box *secrets.Box, withdraw RouteWithdrawer) *AppsService {
+	return &AppsService{st: st, box: box, withdraw: withdraw}
 }
 
 // defaultListAppsLimit 是 ListApps 的 limit 缺省（proto 注释口径「缺省 100」；
@@ -360,9 +357,6 @@ func (s *AppsService) ShowAppWebhook(ctx context.Context, req *serverv1.ShowAppW
 		SourceUrl:        cfg.SourceURL,
 		SourceBranch:     cfg.Branch,
 		SourceAuthKind:   string(cfg.AuthKind),
-	}
-	if s.gitEndpoint != "" {
-		resp.GitRemoteHint = "ssh://git@" + s.gitEndpoint + "/" + app.Name + ".git"
 	}
 	return resp, nil
 }

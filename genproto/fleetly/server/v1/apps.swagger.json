@@ -273,7 +273,7 @@
     },
     "/v1/apps/{name}/source": {
       "put": {
-        "summary": "SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；\nadmin）。source_branch 同时是 git push 的触发分支（app 配置分支，\n默认 main）。\n认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。",
+        "summary": "SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；\nadmin）。source_branch 同时是 webhook 投递的触发分支（app 配置分支，\n默认 main）。\n认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。",
         "operationId": "AppsService_SetAppSource",
         "responses": {
           "200": {
@@ -435,7 +435,7 @@
         },
         "source_branch": {
           "type": "string",
-          "title": "app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。"
+          "title": "app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。"
         },
         "source_auth_kind": {
           "type": "string",
@@ -605,7 +605,7 @@
         },
         "source_git_sha": {
           "type": "string",
-          "title": "git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit\n路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/\u003cbranch\u003e；\nAPI/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下\n显式输出空串，空串即「非 git 来源」）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
+          "title": "git 触发来源（T2.19）：仅经 git webhook 入队的部署非空——sha 为 40 位\ncommit、ref 为 refs/heads/\u003cbranch\u003e；API/CLI 直传 compose 的部署为空\n（gateway EmitUnpopulated=true 语义下显式输出空串，空串即「非 git 来\n源」）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
         },
         "source_git_ref": {
           "type": "string"
@@ -882,15 +882,11 @@
         },
         "source_branch": {
           "type": "string",
-          "title": "app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。"
+          "title": "app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。"
         },
         "source_auth_kind": {
           "type": "string",
           "title": "none | https_token | ssh_key。"
-        },
-        "git_remote_hint": {
-          "type": "string",
-          "title": "push/webhook 端点提示（SSH git URL，如 ssh://git@host:8424/\u003capp\u003e.git；\n主机位取 control-plane 可达地址的尽力形态）。"
         }
       }
     },

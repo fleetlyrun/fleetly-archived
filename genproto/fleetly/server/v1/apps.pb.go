@@ -728,15 +728,12 @@ type ShowAppWebhookResponse struct {
 	SecretConfigured bool `protobuf:"varint,2,opt,name=secret_configured,json=secretConfigured,proto3" json:"secret_configured,omitempty"`
 	// 拉源配置（未设置时 url/branch 为空串、auth_kind = none）。
 	SourceUrl string `protobuf:"bytes,3,opt,name=source_url,json=sourceUrl,proto3" json:"source_url,omitempty"`
-	// app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。
+	// app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。
 	SourceBranch string `protobuf:"bytes,4,opt,name=source_branch,json=sourceBranch,proto3" json:"source_branch,omitempty"`
 	// none | https_token | ssh_key。
 	SourceAuthKind string `protobuf:"bytes,5,opt,name=source_auth_kind,json=sourceAuthKind,proto3" json:"source_auth_kind,omitempty"`
-	// push/webhook 端点提示（SSH git URL，如 ssh://git@host:8424/<app>.git；
-	// 主机位取 control-plane 可达地址的尽力形态）。
-	GitRemoteHint string `protobuf:"bytes,7,opt,name=git_remote_hint,json=gitRemoteHint,proto3" json:"git_remote_hint,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ShowAppWebhookResponse) Reset() {
@@ -804,19 +801,12 @@ func (x *ShowAppWebhookResponse) GetSourceAuthKind() string {
 	return ""
 }
 
-func (x *ShowAppWebhookResponse) GetGitRemoteHint() string {
-	if x != nil {
-		return x.GitRemoteHint
-	}
-	return ""
-}
-
 type SetAppSourceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// 拉源 remote URL（file:// 与 https://、ssh:// 形态）。
 	SourceUrl string `protobuf:"bytes,2,opt,name=source_url,json=sourceUrl,proto3" json:"source_url,omitempty"`
-	// app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。
+	// app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。
 	SourceBranch string `protobuf:"bytes,3,opt,name=source_branch,json=sourceBranch,proto3" json:"source_branch,omitempty"`
 	// 认证形态：none | https_token | ssh_key。
 	SourceAuthKind string `protobuf:"bytes,4,opt,name=source_auth_kind,json=sourceAuthKind,proto3" json:"source_auth_kind,omitempty"`
@@ -1638,15 +1628,14 @@ const file_fleetly_server_v1_apps_proto_rawDesc = "" +
 	"configured\x18\x02 \x01(\bR\n" +
 	"configured\"4\n" +
 	"\x15ShowAppWebhookRequest\x12\x1b\n" +
-	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04name\"\xfd\x01\n" +
+	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04name\"\xec\x01\n" +
 	"\x16ShowAppWebhookResponse\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12+\n" +
 	"\x11secret_configured\x18\x02 \x01(\bR\x10secretConfigured\x12\x1d\n" +
 	"\n" +
 	"source_url\x18\x03 \x01(\tR\tsourceUrl\x12#\n" +
 	"\rsource_branch\x18\x04 \x01(\tR\fsourceBranch\x12(\n" +
-	"\x10source_auth_kind\x18\x05 \x01(\tR\x0esourceAuthKind\x12&\n" +
-	"\x0fgit_remote_hint\x18\a \x01(\tR\rgitRemoteHintJ\x04\b\x06\x10\aR\x06branch\"\x92\x02\n" +
+	"\x10source_auth_kind\x18\x05 \x01(\tR\x0esourceAuthKindJ\x04\b\x06\x10\aJ\x04\b\a\x10\bR\x06branchR\x0fgit_remote_hint\"\x92\x02\n" +
 	"\x13SetAppSourceRequest\x12\x1b\n" +
 	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x04name\x12'\n" +
 	"\n" +

@@ -28,7 +28,7 @@ v0.3 主线 C 票的专项设计（V3-1：先团队/RBAC 后生产深化）。�
 - **认证**：`Authorization: Bearer` → tokens 表哈希比对（常量时间二次校验）→ scope 判定（`read ⊂ deploy ⊂ admin ⊕ terminal`，admin 蕴含全部；`internal/api/auth.go`）。未登记方法 fail-closed 按 admin 拒（scope 登记 = proto scope option 注解，IMPL-ARCH-J 后；运行时 `internal/api/scope.go` 启动期从 descriptor 生成）。Principal = {TokenID, Scopes}，无用户概念。
 - **审计**：`audit_log` 表已在 v0.1 落地（actor / actor_token_id / action / target / result / error_code / request_id / diff_summary；事务内写、CHECK 约束 fail-closed、janitor 365d 常量留存、**读面缺失**）。actor 词表 human/ai_agent/system 已预留。
 - **网络隔离（关键发现）**：每 app 专属 overlay `fleetly-<app>-net`（`naming.NetworkName`），Traefik 按需逐网附着（`internal/ingress/traefik.go:11` 拓扑注释 + attachNetwork 幂等增挂），**app 间 L3 互不可见在 v0.2 底座已成立**。平台网（fleetly-system / rustfs / metrics / victorialogs 内部网）仅平台组件挂接。唯一跨 app 连通通道 = E4 库网络 `fleetly-db-<name>-net`（引用方 app 部署时平台附加挂载）——**项目隔离的准入守门点收敛为此一处**（§4.1）。
-- **git SSH host key**：服务端文件持久化（`git.host_key_file`，ensureHostKey 装载/生成）；客户端拉源 TOFU（accept-new）+ `git.hostkey_first_seen` 审计。指纹无披露面（FZ-12 现状，§13 Q4）。
+- **git SSH host key**：服务端文件持久化（`git.host_key_file`，ensureHostKey 装载/生成）；客户端拉源 TOFU（accept-new）+ `git.hostkey_first_seen` 审计。指纹无披露面（FZ-12 现状，§13 Q4）。〔2026-09-29 注记：服务端 SSH host key 面随 git push 收包移除（ADR-0012）——本条的服务端半句退役；拉源 TOFU（known_hosts + hostkey_first_seen 审计）保留。〕
 - **依赖**：`golang.org/x/crypto v0.56.0` 已在（argon2id 可用，零新依赖）；迁移下一号 00018。
 - **保留字**：app 名全局唯一 + 8 保留字（`internal/naming/naming.go`），服务/卷/secret/网络公式全部以 app 名为参数。
 
@@ -72,7 +72,7 @@ tokens 表加列：`user_id`（NULL = 平台机具令牌，**bootstrap token 及
 - CreateToken 校验声明 scopes ⊆ 用户可达集（防呆非防险——角色门仍是硬边界）。
 - **机具令牌（user NULL）**：v0.3 的**设计语义**（非兼容残留）——平台管理员显式创建的平台级凭据（CI/CD、基础设施自动化），全库 admin 等价，可带 team/project 绑定收缩。**bootstrap token 生命周期收敛**：零用户窗口的桥梁凭据（首启生成语义沿用），**首用户注册事务内自动吊销**——目的达成即死，不留常驻后门（fleetly-bootstrap-token 挂账项就此收口）。
 - **TokensService 语义迁移（W2）**：CreateToken/ListTokens/RevokeToken 从「admin 全局面」改为「用户自服务面」——登录用户管自己的 PAT；平台管理员可看全部、可建平台级机具令牌。scope 登记随迁（纪律：改登记 = 改测试；登记面现为 proto scope option 注解，IMPL-ARCH-J）。
-- **GitKeys 迁移用户化（W2）**：git 公钥表加 user_id；AddGitKey 自服务（登录用户加自己的 push key），SSH push 按署名用户入审计 actor。
+- **GitKeys 迁移用户化（W2）**：git 公钥表加 user_id；AddGitKey 自服务（登录用户加自己的 push key），SSH push 按署名用户入审计 actor。〔2026-09-29 注记：GitKeys 面随 git push 收包移除退役（ADR-0012，迁移 00029 drop 表）——本条为历史设计记录。〕
 
 ### 2.4 CLI 登录与上下文
 

@@ -8,34 +8,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"google.golang.org/grpc/codes"
-
 	"github.com/oklog/ulid/v2"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/compose"
 	"github.com/fleetlyrun/fleetly/internal/engine"
-	"github.com/fleetlyrun/fleetly/internal/gitserver"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
-
-// GitDeployTriggers 是 DeployFromGit RPC 的 git 触发端口（实现方在
-// internal/gitserver 的 GitTriggers——compose 真源在其 bare 仓库对象库；
-// 方向纪律：api 定义端口、不感知实现类型——唯一例外是跨端口的错误哨兵
-// 契约 gitserver.ErrBranchNotTracked（值依赖，非实现类型依赖）；命名口径
-// UBIQUITOUS_LANGUAGE §flagged-2：与实现类型同族词汇，弃旧名
-// GitDeploySource）。
-type GitDeployTriggers interface {
-	// DeployFromGitPush 以 git push 语义入队部署：每次调用建部署记录
-	// （显式用户动作，不去重——幂等口径绑定在票面）；返回记录与校验期
-	// 警告。actorTokenID 记录钩子回调 token（可空）；pushUser 是 SSH 公
-	// 钥认证回调解析的署名用户（空 = 存量无主 key——审计 actor 落原口
-	// 径）。ref 非该 app 配置分支（空回落 main）时返回
-	// gitserver.ErrBranchNotTracked——分支过滤的权威点在实现侧
-	//（daemon），本 handler 把哨兵映射为 skipped 回执而非 gRPC 错误。
-	DeployFromGitPush(ctx context.Context, app, sha, ref, actorTokenID, pushUser string) (state.DeployRecord, []compose.Warning, error)
-}
 
 // DeploymentsService 实现 server.v1.DeploymentsService（T2.17）。
 //
@@ -47,14 +27,12 @@ type GitDeployTriggers interface {
 // 形态丢失免疫），终态后由 janitor 按 30 天窗清理；temp 仅解析中转。
 type DeploymentsService struct {
 	serverv1.UnimplementedDeploymentsServiceServer
-	st  *state.Store
-	git GitDeployTriggers
+	st *state.Store
 }
 
-// NewDeploymentsService 构造 DeploymentsService（git 触发端口可 nil——
-// DeployFromGit 届时显式不可用，进程内夹具形态）。
-func NewDeploymentsService(st *state.Store, git GitDeployTriggers) *DeploymentsService {
-	return &DeploymentsService{st: st, git: git}
+// NewDeploymentsService 构造 DeploymentsService。
+func NewDeploymentsService(st *state.Store) *DeploymentsService {
+	return &DeploymentsService{st: st}
 }
 
 // ListDeployments 按应用列部署（created_at 倒序）。app 引用经可见域解析
@@ -254,87 +232,6 @@ func (s *DeploymentsService) guardDestructiveDeploy(ctx context.Context, app sta
 		"app %s: this deploy introduces destructive changes relative to the latest revision (service removal / volume unbinding); confirm_destructive was not set, rejecting enqueue", app.Name).
 		WithContext("app", app.Name).
 		WithContext("baseline_revision_id", revs[0].ID)
-}
-
-// DeployFromGit 是 git push(SSH) 触发入口的入队面（T2.19）：post-receive
-// 钩子经 loopback REST 携带 hook token（deploy scope）调用。compose 字节
-// 由服务端从 bare 仓库自取（真源在 git 对象库，不信任客户端传字节）；sha
-// 为 40 位 commit（protovalidate 形状 + 服务端十六进制复核）。审计在源端
-// 实现（git.push_deploy，actor=system + 钩子 token id）。
-func (s *DeploymentsService) DeployFromGit(ctx context.Context, req *serverv1.DeployFromGitRequest) (*serverv1.DeployFromGitResponse, error) {
-	if s.git == nil {
-		return nil, statusEnvelope(codes.Internal, "git deploy source not configured")
-	}
-	if !gitSHAValid(req.GetSha()) {
-		return nil, statusInvalidArgument("sha must be 40 hex chars")
-	}
-	// 角色门（W2-S4 第 2 门）：app 行在册时按行上归属门 deploy 层级（git
-	// push 钩子经 PAT 回调的用户面）；行不在册（首发）由 gitserver 的建行
-	// 路径承载归属解析（E_APP_PROJECT_REQUIRED 指引）——角色门在行落位后
-	// 的后续部署自然生效。
-	if app, aerr := resolveApp(ctx, s.st, req.GetApp()); aerr == nil {
-		if err := requireAppAccess(ctx, s.st, app); err != nil {
-			return nil, err
-		}
-	} else if !isNotFoundErr(aerr) {
-		return nil, aerr
-	}
-	rec, warnings, err := s.git.DeployFromGitPush(ctx, req.GetApp(), req.GetSha(), req.GetRef(), callerTokenID(ctx), req.GetPushUser())
-	if err != nil {
-		// 分支未跟踪（H2）：非错误终局——skipped 回执（deployment_id 留空；
-		// status 是自由字符串字段，钩子脚本把响应 JSON 打到 pusher stderr，
-		// 用户可读「推送被接受但不触发部署」），并写处置审计。
-		if errors.Is(err, gitserver.ErrBranchNotTracked) {
-			s.auditGitIgnoredBranch(ctx, req.GetApp(), req.GetRef())
-			return &serverv1.DeployFromGitResponse{App: req.GetApp(), Status: "skipped"}, nil
-		}
-		return nil, err // apperr（E_COMPOSE_*）原样透传；其余按信封退化
-	}
-	return &serverv1.DeployFromGitResponse{
-		DeploymentId: rec.ID,
-		App:          rec.AppName,
-		Status:       string(rec.Status),
-		Warnings:     composeWarnings(warnings),
-	}, nil
-}
-
-// auditGitIgnoredBranch 写 SSH push 分支未跟踪的处置审计（action 词根
-// git.ignored_branch——与 webhook 侧 ignored_branch outcome 同语义；机器
-// 动作 actor=system，ActorTokenID 记钩子回调 token）。target 优先 app 行
-// id；app 行不存在（首次 push 即非配置分支）退化为名形态。审计失败不阻断
-// skipped 回执——跳过决策已定，审计是观测面（webhook 侧审计失败同口径
-// 降级；本服务无 logger，静默吞掉）。
-func (s *DeploymentsService) auditGitIgnoredBranch(ctx context.Context, appName, ref string) {
-	target := "app:" + appName
-	if appRow, err := s.st.GetAppByName(ctx, appName); err == nil {
-		target = "app:" + appRow.ID
-	}
-	_ = s.st.InTx(ctx, func(tx *state.Tx) error {
-		return tx.WriteAudit(ctx, state.AuditEntry{
-			Actor:        "system",
-			ActorTokenID: callerTokenID(ctx),
-			Action:       "git.ignored_branch",
-			Target:       target,
-			Result:       "ok",
-			DiffSummary:  state.DiffSummary("app", appName, "ref", ref, "outcome", "ignored_branch"), // B4：构造器替换手拼 JSON
-		})
-	})
-}
-
-// gitSHAValid 复核 commit 形态（40 位小写十六进制；protovalidate 只约束
-// 长度）。
-func gitSHAValid(sha string) bool {
-	if len(sha) != 40 {
-		return false
-	}
-	for _, c := range sha {
-		isDigit := c >= '0' && c <= '9'
-		isLowerHex := c >= 'a' && c <= 'f'
-		if !isDigit && !isLowerHex {
-			return false
-		}
-	}
-	return true
 }
 
 // CancelDeployment 置位取消（受限语义：未切流可取消；曾健康/终态 409

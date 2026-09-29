@@ -6,26 +6,30 @@
 # {summary.md,journey.json}（宿主 docker exec cat 读回）。
 #
 # 场景（架构 §4.2 验收段：干净 VPS 一条命令安装 → 已解析域名 20 分钟内
-# git push 部署拿到 HTTPS（DNS 传播不计入）→ UI 可见日志与配置 → 一键回
-# 滚；dind 版 = hosts/pebble 代演 DNS 与 ACME，链路真实）：
+# 部署拿到 HTTPS（DNS 传播不计入）→ UI 可见日志与配置 → 一键回滚；dind 版
+# = hosts/pebble 代演 DNS 与 ACME，链路真实。部署双通道都演练：J3 API
+# 上传（compose CLI，应用随首部署创建）、J6 webhook 签名投递 + 拉源
+#（git push(SSH) 收包面 2026-09-29 移除，ADR-0012））：
 #   J1  干净安装（--bin-dir --no-systemd）+ 安装报告输出（计时 t_install）
-#   J2  旅程装配：自写配置（ACME=Pebble + ca_pool、git 0.0.0.0:8424、
-#       console.static_dir）+ Pebble 起 CA（ghcr.io/letsencrypt/pebble，
-#       根证书经 docker cp 容器→dind 方向取出——非禁用的宿主→dind 注入
-#       方向）+ daemon live + token + git key 注册 + hosts 注入（计时外，
-#       DNS/装配准备不计入 ≤20min 判定）
-#   J3  git push 部署：scratch 仓库（journeyapp：web=probeapp 服务 +
-#       fleetly.domains=app.journey.test + sidecar 日志源服务）→ push main
-#       → 部署 succeeded（t_deploy1）
+#   J2  旅程装配：自写配置（ACME=Pebble + ca_pool、console.static_dir）+
+#       Pebble 起 CA（ghcr.io/letsencrypt/pebble，根证书经 docker cp 容器
+#       →dind 方向取出——非禁用的宿主→dind 注入方向）+ daemon live + token
+#       + 首用户注册（REST——播种部署归属的个人队 default 项目）+ hosts
+#       注入（计时外，DNS/装配准备不计入 ≤20min 判定）
+#   J3  API 部署：scratch 仓库（journeyapp：web=probeapp 服务 +
+#       fleetly.domains=app.journey.test + sidecar 日志源服务）→ CLI deploy
+#       （--project default）→ 部署 succeeded（t_deploy1）→ 配置 webhook
+#       secret + 拉源（file:// 仓库）
 #   J4  HTTPS 200：curl --cacert <pebble root> https://app.journey.test/ →
 #       200 "ok"（HTTP-01 挑战经 Traefik 反代到控制面，T2-6 链路）；断言
 #       证书链 issuer = pebble minica 根 + 域名台账 cert_sha256 就绪；
 #       **CRITICAL = t_https - T0 ≤ 1200s 硬断言**（t_https = HTTPS 200 时刻）
 #   J5  UI 可见：/ui/ 200 + JS 资源 200 + REST /v1/apps（Bearer）带部署数据
 #       + logs history 有行（sidecar 心跳）+ env set 后 pending 可见
-#   J6  一键回滚：push v2 → succeeded → revisions 取 seq=1 → rollback --to
-#       → succeeded + kind=rollback 部署行 revision_id=旧版（快照重放断言）
-#       + derived_state=running
+#   J6  webhook v2 → 一键回滚：签名投递（HMAC-SHA256 + delivery ID +
+#       X-Fleetly-Timestamp）触发拉源部署 v2 → succeeded → revisions 取
+#       seq=1 → rollback --to → succeeded + kind=rollback 部署行
+#       revision_id=旧版（快照重放断言）+ derived_state=running
 #   J7  信任闭环引用：backups list 台账 verified（T2-9b 已落档，不重复演练）
 #   J8  计时汇总（各阶段秒表 + TOTAL ≤ 1200s 断言）
 #
@@ -44,8 +48,8 @@ HTTP="http://127.0.0.1:8420"
 
 DOMAIN='app.journey.test'
 APP='journeyapp'
-GIT_URL="ssh://git@127.0.0.1:8424/${APP}.git"
 SRC_DIR="/tmp/journey-src"
+WEBHOOK_SECRET='journey-webhook-secret-32ch'
 PEBBLE_NAME='pebble-journey'
 # 镜像钉 digest（T0-V2.3 供应链）：tag 保留作可读性，digest 为准；解析命令
 # docker buildx imagetools inspect（多架构 index）。
@@ -151,7 +155,8 @@ wait_app_running() { # <app> <budget-s>
     done
     return 1
 }
-# deploy_row_for_sha <app> <sha> — git 来源部署行的终态扫描（段落扫描）。
+# deploy_row_for_sha <app> <sha> — git 来源部署行的终态扫描（段落扫描；
+# webhook 拉源部署同样落 source_git_sha）。
 deploy_row_for_sha() {
     cli deployments list --limit 10 --json "$1" 2>/dev/null |
         awk -v sha="$2" 'BEGIN {RS = "}"} $0 ~ ("\"source_git_sha\": \"" sha "\"") && $0 ~ /"status": *"(succeeded|failed|cancelled)"/ {print; exit}'
@@ -167,6 +172,18 @@ wait_git_deploy() { # <app> <sha> <budget-s> → 0=成功 1=失败/超时
         sleep 3
     done
     return 1
+}
+# post_push_delivery <app> <sha> <secret> <delivery-id> — 签名 webhook 投递
+#（自定义投递方形态：X-Fleetly-Timestamp 参与签名材料；期望 202 accepted）。
+post_push_delivery() {
+    _body=$(printf '{"ref":"refs/heads/main","after":"%s"}' "$2")
+    _ts=$(date +%s)
+    _sig=$(printf '%s.%s' "$_ts" "$_body" | openssl dgst -sha256 -hmac "$3" -r | awk '{print $1}')
+    wget -q -T 30 -O - --header="X-GitHub-Delivery: $4" \
+        --header="X-Hub-Signature-256: sha256=$_sig" \
+        --header="X-Fleetly-Timestamp: $_ts" \
+        --header='Content-Type: application/json' \
+        --post-data="$_body" "http://127.0.0.1:8420/v1/apps/$1/webhooks/github"
 }
 revision_id_for_seq() { # <app> <seq> — revisions 台账 seq → id
     cli revisions list --json "$1" 2>/dev/null |
@@ -200,8 +217,6 @@ assert "J0-shn-install" $?
 mkdir -p "$OUT" /var/lib/fleetly /root/.ssh
 command -v git >/dev/null 2>&1
 assert "J0-git-present" $?
-command -v ssh-keygen >/dev/null 2>&1
-assert "J0-ssh-keygen-present" $?
 
 # ------------------------------------------------ J1 干净安装（一条命令形态）
 T_INSTALL0=$(date +%s)
@@ -296,8 +311,6 @@ engine:
 backup:
   keep: 7
 git:
-  enabled: true
-  addr: "0.0.0.0:8424"
   root: "/var/lib/fleetly/git"
 console:
   static_dir: "/var/lib/fleetly/console-dist"
@@ -336,16 +349,37 @@ assert "J2-bootstrap-token" $?
     fail "J2-aborted-suite" "no token"
     finish
 }
-cli apps list >"$JK_STAGE/cli.out" 2>&1
-assert "J2-cli-apps-list" $? "$(tail -n 2 "$JK_STAGE/cli.out")"
+# 首用户注册（REST 浏览器面；首启自动开窗——首用户 = 平台管理员 + 个人队
+# default 项目，bootstrap token 同时吊销）：部署归属（W2 归属管道）需要一
+# 个已存在的项目。注册响应只回 user——浏览器面凭据是会话 cookie，用户 PAT
+# 经 cookie 鉴权的 tokens REST 面签发（Console PatPage 同链路）。
+_REG_ERR="$JK_STAGE/register.err"
+_REG=$(wget -q -S -T 15 -O - --header='Content-Type: application/json' \
+    --post-data='{"email":"journey@fleetly.test","password":"journey-pw-2026-x"}' \
+    "$HTTP/v1/auth/register" 2>"$_REG_ERR")
+assert "J2-first-user-registered" $? "$(tail -n 2 "$_REG_ERR")"
+printf '%s' "$_REG" | grep -q '"email": *"journey@fleetly.test"'
+assert "J2-register-echoes-user" $?
+_COOKIE=$(grep -i '^ *Set-Cookie: *fleetly_session=' "$_REG_ERR" | head -n 1 |
+    sed 's/.*fleetly_session=//; s/;.*//')
+[ -n "$_COOKIE" ]
+assert "J2-register-session-cookie" $?
+_PAT_RESP=$(wget -q -T 15 -O - --header='Content-Type: application/json' \
+    --header="Cookie: fleetly_session=$_COOKIE" \
+    --post-data='{"scopes":["admin"],"note":"journey"}' \
+    "$HTTP/v1/tokens" 2>"$JK_STAGE/pat.err")
+assert "J2-user-pat-created" $? "$(tail -n 2 "$JK_STAGE/pat.err")"
+USER_TOKEN=$(printf '%s' "$_PAT_RESP" | grep -o '"token": *"[^"]*"' | head -n 1 | sed 's/.*: *"//; s/"$//')
+[ -n "$USER_TOKEN" ]
+assert "J2-user-pat-extracted" $?
 
-# git push 身份：SSH keypair → 平台注册公钥（git keys add）。
-ssh-keygen -t ed25519 -N '' -f /root/.ssh/journey_key -C journey-test >/dev/null 2>&1
-assert "J2-ssh-keygen" $?
-cli git keys add --note journey /root/.ssh/journey_key.pub >"$JK_STAGE/gitkey.log" 2>&1
-assert "J2-git-key-registered" $? "$(tail -n 2 "$JK_STAGE/gitkey.log")"
-grep -q 'fingerprint' "$JK_STAGE/gitkey.log"
-assert "J2-git-key-fingerprint-echoed" $?
+# CLI 换用用户 PAT（归属管道：deploy 项目缺省 = 个人队 default，不必显式
+# --project；webhook 管理面 set-secret/set-source 是 admin scope——首用户
+# 即平台管理员，PAT 携 admin 全通）。
+FLEETLY_TOKEN="$USER_TOKEN"
+export FLEETLY_TOKEN
+cli apps list >"$JK_STAGE/cli-user.out" 2>&1
+assert "J2-cli-with-user-pat" $? "$(tail -n 2 "$JK_STAGE/cli-user.out")"
 
 # Pebble CA 起服（--add-host 让 pebble VA 能把挑战打到 Traefik 80）。
 docker rm -f "$PEBBLE_NAME" >/dev/null 2>&1 || true
@@ -386,8 +420,8 @@ assert "J2-traefik-1-1" $?
 T_PREP=$(date +%s)
 nl "J2 prep wall (excluded from 20min judging): $((T_PREP - T_PREP0))s"
 
-# ------------------------------------------- J3 git push 部署（v1）→ succeeded
-T_PUSH0=$(date +%s)
+# ------------------------------------------- J3 API 部署（v1）→ succeeded
+T_DEPLOY0=$(date +%s)
 mkdir -p "$SRC_DIR"
 cat >"$SRC_DIR/compose.yaml" <<'EOF'
 name: journeyapp
@@ -405,6 +439,7 @@ services:
     image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
     command: ["/bin/sh", "-c", "i=0; while true; do i=$((i+1)); echo journey-sidecar-heartbeat-v1-$i; sleep 5; done"]
 EOF
+# 仓库化（J6 webhook 拉源的 fetch 源；v1 先落 commit）。
 (
     cd "$SRC_DIR" &&
         git init -b main >/dev/null 2>&1 &&
@@ -414,23 +449,28 @@ EOF
         git commit -m 'journey v1' >/dev/null
 )
 assert "J3-v1-committed" $?
-GIT_SSH_COMMAND='ssh -i /root/.ssh/journey_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' \
-    git -C "$SRC_DIR" push "$GIT_URL" main:main >"$JK_STAGE/push1.log" 2>&1
-assert "J3-git-push-rc0" $? "$(tail -n 3 "$JK_STAGE/push1.log")"
+# CLI deploy：入队并等待终态（应用随首部署创建——归属 = 个人队 default，
+# 用户 PAT 缺省项目，无需显式 --project）。
+cli deploy --timeout 300s "$SRC_DIR/compose.yaml" >"$JK_STAGE/deploy1.log" 2>&1
+assert "J3-deploy1-rc0" $? "$(tail -n 3 "$JK_STAGE/deploy1.log")"
 SHA1=$(git -C "$SRC_DIR" rev-parse HEAD)
 [ "${#SHA1}" -eq 40 ]
 assert "J3-sha1-40hex" $? "sha1=$SHA1"
 
-wait_git_deploy "$APP" "$SHA1" 300
-assert "J3-deploy1-succeeded" $? "sha=$SHA1 (deployments list)"
+# 部署行确认（API 行不带 source_git_*——那是 webhook 入队的来源字段）。
+cli deployments list --limit 1 --json "$APP" 2>/dev/null | grep -q '"status": "succeeded"'
+assert "J3-deploy1-succeeded" $? "(deployments list)"
 T_DEPLOY1=$(date +%s)
-nl "J3 push-to-deployed wall: $((T_DEPLOY1 - T_PUSH0))s"
+nl "J3 deploy wall: $((T_DEPLOY1 - T_DEPLOY0))s"
 wait_app_running "$APP" 120
 assert "J3-app-running" $? "state=$(derived_state "$APP")"
-# git 部署行回显 sha/ref（来源可追溯）。
-_DROW=$(deploy_row_for_sha "$APP" "$SHA1")
-printf '%s' "$_DROW" | grep -q "\"source_git_ref\": \"refs/heads/main\""
-assert "J3-deploy1-git-ref-echoed" $?
+
+# webhook 面（J6 用）：per-app 签名密钥 + 拉源配置（file:// 本地仓库——
+# 真实 git fetch 链路，零外网依赖）。
+cli apps webhook set-secret "$APP" "$WEBHOOK_SECRET" >"$JK_STAGE/secret.log" 2>&1
+assert "J3-webhook-secret-set" $? "$(tail -n 2 "$JK_STAGE/secret.log")"
+cli apps webhook set-source --branch main --auth-kind none "$APP" "file://$SRC_DIR" >"$JK_STAGE/source.log" 2>&1
+assert "J3-fetch-source-set" $? "$(tail -n 2 "$JK_STAGE/source.log")"
 
 # ----------------------------------------------------- J4 HTTPS 200（硬指标）
 T_HTTPS0=$(date +%s)
@@ -574,7 +614,7 @@ assert "J5-env-row-visible" $?
 printf '%s' "$ENV_BODY" | grep -q '"status": *"pending"'
 assert "J5-env-pending-visible" $? "env=$(printf '%s' "$ENV_BODY" | head -c 160)"
 
-# ------------------------------------------- J6 push v2 → 一键回滚（旧版重放）
+# ------------------------------------------- J6 webhook v2 → 一键回滚（旧版重放）
 T_PUSH2_0=$(date +%s)
 sed -i 's/journey-sidecar-heartbeat-v1-/journey-sidecar-heartbeat-v2-/' "$SRC_DIR/compose.yaml"
 grep -q 'heartbeat-v2-' "$SRC_DIR/compose.yaml"
@@ -585,14 +625,28 @@ assert "J6-v2-compose-differs" $?
         git commit -m 'journey v2' >/dev/null
 )
 assert "J6-v2-committed" $?
-GIT_SSH_COMMAND='ssh -i /root/.ssh/journey_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' \
-    git -C "$SRC_DIR" push "$GIT_URL" main:main >"$JK_STAGE/push2.log" 2>&1
-assert "J6-git-push2-rc0" $? "$(tail -n 3 "$JK_STAGE/push2.log")"
-SHA2=$(git -C "$SRC_DIR" rev-parse HEAD)
+# 签名 webhook 投递（自定义投递方形态：X-Fleetly-Timestamp 参与签名）→
+# 受理 202 → 异步拉源（file:// fetch）→ 部署入队。
+_SHA2_PRE=$(git -C "$SRC_DIR" rev-parse HEAD)
+_DELIVERY="journey-$_SHA2_PRE"
+_HOOK_OUT=$(post_push_delivery "$APP" "$_SHA2_PRE" "$WEBHOOK_SECRET" "$_DELIVERY")
+assert "J6-webhook-delivery-accepted" $? "out=$(printf '%s' "$_HOOK_OUT" | head -c 160)"
+printf '%s' "$_HOOK_OUT" | grep -q '"status": *"accepted"'
+assert "J6-webhook-receipt-accepted" $?
+SHA2=$_SHA2_PRE
 wait_git_deploy "$APP" "$SHA2" 300
 assert "J6-deploy2-succeeded" $? "sha=$SHA2"
 T_DEPLOY2=$(date +%s)
-nl "J6 push2-to-deployed wall: $((T_DEPLOY2 - T_PUSH2_0))s"
+nl "J6 webhook-to-deployed wall: $((T_DEPLOY2 - T_PUSH2_0))s"
+# git 来源部署行回显 sha/ref（来源可追溯——webhook 入队同样落 source_git_*）。
+_DROW=$(deploy_row_for_sha "$APP" "$SHA2")
+printf '%s' "$_DROW" | grep -q "\"source_git_ref\": \"refs/heads/main\""
+assert "J6-deploy2-git-ref-echoed" $?
+# 幂等去重：同 delivery ID 重投 → 409 replay（R2 占坑语义）。
+_REPLAY=$(post_push_delivery "$APP" "$SHA2" "$WEBHOOK_SECRET" "$_DELIVERY")
+_rc=$?
+[ "$_rc" -ne 0 ]
+assert "J6-webhook-replay-rejected" $? "replay-out=$(printf '%s' "$_REPLAY" | head -c 120)"
 
 REV1=$(revision_id_for_seq "$APP" 1)
 [ -n "$REV1" ]
@@ -672,20 +726,20 @@ assert "J8-total-within-20min" $? "total=${TOTAL}s (T0→收尾；CRITICAL=${CRI
 
 INSTALL_S=$((T_INSTALL - T_INSTALL0))
 PREP_S=$((T_PREP - T_PREP0))
-PUSH1_S=$((T_DEPLOY1 - T_PUSH0))
+DEPLOY1_S=$((T_DEPLOY1 - T_DEPLOY0))
 HTTPS_S=$((T_HTTPS - T_HTTPS0))
-PUSH2_S=$((T_DEPLOY2 - T_PUSH2_0))
+DEPLOY2_S=$((T_DEPLOY2 - T_PUSH2_0))
 ROLL_S=$((T_ROLLBACK - T_DEPLOY2))
 
 {
     printf '## fleetly T2.26 v0.1 端到端旅程（dind 全链）\n\n'
     printf '| 阶段 | 耗时(s) | 断言 |\n|---|---|---|\n'
     printf '| J1 安装（--bin-dir --no-systemd） | %s | rc0 + 报告 4 项 |\n' "$INSTALL_S"
-    printf '| J2 装配（config/pebble/keys/hosts，**不计入 ≤20min**） | %s | 14 项 |\n' "$PREP_S"
-    printf '| J3 git push → 部署 succeeded | %s | push rc0 + sha 行 succeeded |\n' "$PUSH1_S"
+    printf '| J2 装配（config/pebble/首用户/hosts，**不计入 ≤20min**） | %s | 16 项 |\n' "$PREP_S"
+    printf '| J3 API 部署（CLI deploy）→ succeeded + webhook 面配置 | %s | 6 项 |\n' "$DEPLOY1_S"
     printf '| J4 HTTPS 200（TLS 200 + 服务链≡签发链 + issuer=Pebble Intermediate） | %s | 5 项断言 |\n' "$HTTPS_S"
     printf '| J5 UI/数据（/ui/ + REST + logs + env pending） | — | 8 项 |\n'
-    printf '| J6 push v2 → rollback(seq=1) | %s + %s | 快照重放 revision 断言 |\n' "$PUSH2_S" "$ROLL_S"
+    printf '| J6 webhook v2（签名投递+拉源）→ rollback(seq=1) | %s + %s | 快照重放 revision 断言 |\n' "$DEPLOY2_S" "$ROLL_S"
     printf '| J7 备份台账 verified（T2-9b 引用） | — | 3 项 |\n'
     printf '\n| 计时 | 秒 |\n|---|---|\n'
     printf '| CRITICAL（安装开始→HTTPS 200；DNS/hosts 不计） | %s |\n' "$CRITICAL"
@@ -705,8 +759,8 @@ ROLL_S=$((T_ROLLBACK - T_DEPLOY2))
     printf '  "journeyed_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '  "dind_image": "%s",\n' "$DIND_TAG"
     printf '  "version": "%s",\n' "$VERSION"
-    printf '  "phase_seconds": {"install": %s, "prep": %s, "push_to_deploy": %s, "https_wait": %s, "push2_to_deploy": %s, "rollback": %s},\n' \
-        "$INSTALL_S" "$PREP_S" "$PUSH1_S" "$HTTPS_S" "$PUSH2_S" "$ROLL_S"
+    printf '  "phase_seconds": {"install": %s, "prep": %s, "deploy1": %s, "https_wait": %s, "webhook_to_deploy": %s, "rollback": %s},\n' \
+        "$INSTALL_S" "$PREP_S" "$DEPLOY1_S" "$HTTPS_S" "$DEPLOY2_S" "$ROLL_S"
     printf '  "critical_seconds": %s,\n' "$CRITICAL"
     printf '  "total_seconds": %s,\n' "$TOTAL"
     printf '  "sha1": "%s",\n' "$SHA1"

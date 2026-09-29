@@ -104,8 +104,8 @@ func newRBACEnv(t *testing.T) *rbacFixture {
 
 	auth := NewAuthenticator(st)
 	srv := newAuthServer(auth)
-	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, "127.0.0.1:8424", nil))
-	serverv1.RegisterDeploymentsServiceServer(srv, NewDeploymentsService(st, nil))
+	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, nil))
+	serverv1.RegisterDeploymentsServiceServer(srv, NewDeploymentsService(st))
 	serverv1.RegisterEnvServiceServer(srv, NewEnvService(st, box))
 	serverv1.RegisterLogsServiceServer(srv, NewLogsService(st, nil))
 	serverv1.RegisterEventsServiceServer(srv, func() *EventsService {

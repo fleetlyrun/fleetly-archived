@@ -51,7 +51,7 @@ func newAppsTestEnv(t *testing.T, withdraw RouteWithdrawer) (*AppsService, *stat
 	if err != nil {
 		t.Fatalf("EnsureKey: %v", err)
 	}
-	return NewAppsService(st, box, "127.0.0.1:8424", withdraw), st
+	return NewAppsService(st, box, withdraw), st
 }
 
 // seedAppWithDomains 落一个带域名台账行的 app（发布路径的等价预置）。

@@ -34,7 +34,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   configs: "Configs",
   domains: "Domains",
   terminal: "Terminal",
-  "git-keys": "Git push keys",
   // 一级页存量缺失段（2026-09-25 复核）：/pat（PAT 自服务页）、
   // /admin/users（Administration 组入口——/admin/audit 的 "audit" 段已被
   // 上面 audit 键覆盖，"admin" 前缀段保持原文渲染）。

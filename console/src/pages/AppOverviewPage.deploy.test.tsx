@@ -132,7 +132,6 @@ const WEBHOOK_CFG = {
   source_url: "https://git.example.com/acme/demo.git",
   source_branch: "release",
   source_auth_kind: "https_token",
-  git_remote_hint: "ssh://git@10.0.0.8:8424/demo.git",
 };
 
 /** 触发面全 stub：Me（角色开关）+ webhook 读面 + 写面回显 + Overview 其余
@@ -181,7 +180,7 @@ function renderTriggersPage() {
 }
 
 describe("AppOverviewPage deploy triggers (P1-8)", () => {
-  it("admin+ read state: remote hint with copy, trigger branch, secret configured badge, source", async () => {
+  it("admin+ read state: fetch source fields, trigger branch, webhook URL and secret badge", async () => {
     setToken("flt_test");
     const { fetchMock } = stubTriggers("owner", false, WEBHOOK_CFG);
     vi.stubGlobal("fetch", fetchMock);
@@ -194,13 +193,12 @@ describe("AppOverviewPage deploy triggers (P1-8)", () => {
     );
 
     // 切到 Git 方式：读态字段全部来自 ShowAppWebhook 响应（异步到达——以
-    // 远端提示为就绪信号）。
+    // 拉源状态行为就绪信号）。
     fireEvent.click(screen.getByRole("tab", { name: "Git" }));
     await waitFor(() =>
-      expect(screen.getByTestId("triggers-git-remote")).toHaveTextContent("ssh://git@10.0.0.8:8424/demo.git"),
+      expect(screen.getByTestId("triggers-source-state")).toHaveTextContent("https://git.example.com/acme/demo.git"),
     );
     expect(screen.getByTestId("triggers-branch")).toHaveTextContent("release");
-    expect(screen.getByTestId("triggers-source-state")).toHaveTextContent("https://git.example.com/acme/demo.git");
 
     // 切到 Webhook 方式：接收端 URL（gateway 既有路由拼装）——路径段用
     // 响应的业务名（name 字段）而非路由参数（平台 id）：id 形态永不匹配
@@ -212,14 +210,12 @@ describe("AppOverviewPage deploy triggers (P1-8)", () => {
     expect(screen.getByTestId("triggers-webhook-url").textContent).not.toContain(APP_REF);
     expect(screen.getByTestId("triggers-secret-configured")).toHaveTextContent("Configured (never displayed)");
 
-    // 切回 Git 验证复制钮（方式切换后 pane 内容随 pill 走）。
+    // 切回 Git 验证方式记忆（pane 内容随 pill 走；push remote 行已随
+    // git push 面移除——Git pane 即拉源配置）。
     fireEvent.click(screen.getByRole("tab", { name: "Git" }));
     await waitFor(() =>
-      expect(screen.getByTestId("triggers-git-remote")).toBeInTheDocument(),
+      expect(screen.getByTestId("triggers-source-state")).toBeInTheDocument(),
     );
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId("triggers-git-remote-copy"));
-    expect(screen.getByTestId("triggers-git-remote-copy")).toHaveTextContent("Copied");
   });
 
   it("remembers the chosen deploy method per app (localStorage)", async () => {

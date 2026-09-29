@@ -136,8 +136,8 @@ func TestNewServicesStopOrder(t *testing.T) {
 	// store 恒最后、backup 晚于 engine）。
 	want := []string{
 		// 第一段：入口面（最先停——SIGTERM 后立即拒绝新工作）。
-		// lynx 服务壳名：http/grpc（lynx 内建），git.ssh。
-		"http", "grpc", "git.ssh",
+		// lynx 服务壳名：http/grpc（lynx 内建），git.webhook。
+		"http", "grpc", "git.webhook",
 		// 第二段：写入者（入口关后排空在途）。
 		"build.queue", "engine.release", "ingress.traefik", "logs.collector", "notify.webhook",
 		// 第三段：资源层（最后停；backup 晚于 engine 等 post-deploy
@@ -152,34 +152,6 @@ func TestNewServicesStopOrder(t *testing.T) {
 	for i := range want {
 		if names[i] != want[i] {
 			t.Fatalf("service[%d] = %s, want %s（full order: %v）", i, names[i], want[i], names)
-		}
-	}
-}
-
-// TestGitEndpointForHint（W2-2，2026-09-26 走查）：git remote 提示的主机位
-// 解析链 = git.public_endpoint 显式配置 > base_domain 域名 > 监听地址主机位
-// （通配/空回落 127.0.0.1）——通配监听直接输出 127.0.0.1 会使远程用户复制
-// 出不可用 remote。端口位取自监听地址；显式配置缺端口位时补齐。
-func TestGitEndpointForHint(t *testing.T) {
-	cases := []struct {
-		name           string
-		addr           string
-		publicEndpoint string
-		baseDomain     string
-		want           string
-	}{
-		{"explicit wins", "0.0.0.0:8424", "git.example.com:8424", "example.com", "git.example.com:8424"},
-		{"explicit without port gets listen port", "0.0.0.0:9424", "git.example.com", "example.com", "git.example.com:9424"},
-		{"base domain next", "0.0.0.0:8424", "", "dev.fleetly.run", "dev.fleetly.run:8424"},
-		{"base domain trailing dot trimmed", ":8424", "", "dev.fleetly.run.", "dev.fleetly.run:8424"},
-		{"loopback fallback keeps host", "127.0.0.1:8424", "", "", "127.0.0.1:8424"},
-		{"wildcard falls back to loopback", "0.0.0.0:8424", "", "", "127.0.0.1:8424"},
-		{"unparseable addr falls to default port", "bogus", "", "", "127.0.0.1:8424"},
-		{"concrete host kept verbatim", "10.0.0.8:9424", "", "", "10.0.0.8:9424"},
-	}
-	for _, tc := range cases {
-		if got := gitEndpointForHint(tc.addr, tc.publicEndpoint, tc.baseDomain); got != tc.want {
-			t.Fatalf("%s: gitEndpointForHint(%q,%q,%q) = %q, want %q", tc.name, tc.addr, tc.publicEndpoint, tc.baseDomain, got, tc.want)
 		}
 	}
 }

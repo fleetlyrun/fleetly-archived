@@ -2,6 +2,5 @@
   "name": "my-api",
   "secret_configured": true,
   "source_branch": "main",
-  "source_auth_kind": "none",
-  "git_remote_hint": "ssh://git@127.0.0.1:8424/my-api.git"
+  "source_auth_kind": "none"
 }

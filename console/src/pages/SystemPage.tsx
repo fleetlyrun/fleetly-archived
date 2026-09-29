@@ -6,15 +6,11 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   Boxes,
-  Check,
-  Copy,
   DatabaseBackup,
-  Fingerprint,
   GaugeCircle,
   HardDrive,
   RefreshCw,
 } from "lucide-react";
-import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { getIngressStatus, getSystemStatus, listNodes } from "@/api/endpoints";
@@ -88,7 +84,6 @@ function HealthDot({ ok }: { ok: boolean }) {
 
 export function SystemPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [fpCopied, setFpCopied] = useState(false);
   const tab = TABS.some((t) => t.key === searchParams.get("tab"))
     ? (searchParams.get("tab") as string)
     : "components";
@@ -264,50 +259,6 @@ export function SystemPage() {
               </div>
             ) : null}
           </CardContent>
-          </Card>
-
-          {/* git SSH 指纹行（FZ-12 披露面，rbac-teams §7「system 页」）：复制
-              + known_hosts 一行指引（钉定为客户端文档指引，平台不代管下发）。
-              指纹是公开材料；git SSH 未启用时为空——诚实空态不渲染行。 */}
-          <Card data-testid="system-git-fingerprint-card">
-            <CardHeader className="flex-row items-center gap-2 space-y-0 border-b pb-3">
-              <Fingerprint aria-hidden className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-sm font-semibold">Git SSH fingerprint</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-3 pt-4">
-              {status.data?.git_ssh_fingerprint ? (
-                <>
-                  <code className="break-all font-mono text-xs" data-testid="system-git-fingerprint">
-                    {status.data.git_ssh_fingerprint}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-testid="system-git-fingerprint-copy"
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(status.data?.git_ssh_fingerprint ?? "");
-                      setFpCopied(true);
-                    }}
-                  >
-                    {fpCopied ? (
-                      <Check aria-hidden className="h-3.5 w-3.5" />
-                    ) : (
-                      <Copy aria-hidden className="h-3.5 w-3.5" />
-                    )}
-                    {fpCopied ? "Copied" : "Copy"}
-                  </Button>
-                  <div className="basis-full text-xs text-muted-foreground" data-testid="system-git-fingerprint-hint">
-                    Pin the server in your known_hosts: verify it prints exactly this value via
-                    <code className="mx-1 font-mono">ssh-keygen -lf</code>
-                    on the host — the platform never ships known_hosts entries.
-                  </div>
-                </>
-              ) : (
-                <span className="text-xs text-muted-foreground" data-testid="system-git-fingerprint-empty">
-                  Git SSH is not enabled (no host key fingerprint to disclose).
-                </span>
-              )}
-            </CardContent>
           </Card>
         </div>
       ) : null}

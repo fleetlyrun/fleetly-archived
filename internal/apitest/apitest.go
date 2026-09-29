@@ -191,13 +191,6 @@ func (fakeJoinPort) SwarmRotateJoinToken(_ context.Context, role string) (string
 	return "swmtkn-rotated-" + role, nil
 }
 
-// fakeGitHostKey 是 git SSH host key 指纹源的确定性测试替身（FZ-12 披露
-// 面——api.GitHostKeySource 结构同形实现；指纹词形真实，golden 面的
-// SHA256: 词头经 normalizeVolatile 归一）。
-type fakeGitHostKey struct{}
-
-func (fakeGitHostKey) Fingerprint() string { return "SHA256:FixturedGitHostKeyFingerprint==" }
-
 // start 是 Start/StartWithJoin/StartWithBuildQueue 的共用装配核。
 func start(t *testing.T, opts startOptions) *Env {
 	t.Helper()
@@ -234,7 +227,7 @@ func start(t *testing.T, opts startOptions) *Env {
 		grpc.ChainStreamInterceptor(auth.StreamAuthInterceptor()),
 	)
 	systemSvc := api.NewSystemService("dev", st,
-		func() []api.SystemComponent { return nil }, nil, nil).WithGitHostKey(fakeGitHostKey{}).
+		func() []api.SystemComponent { return nil }, nil, nil).
 		WithSecretsBox(box)
 	if opts.joinPort != nil {
 		systemSvc = systemSvc.WithJoinGuide(opts.joinBaseDomain, opts.joinPort)
@@ -260,8 +253,8 @@ func start(t *testing.T, opts startOptions) *Env {
 	// nil-safety 同语义），不是省略登记。
 	instances := map[string]any{
 		"SystemService":      systemSvc,
-		"AppsService":        api.NewAppsService(st, box, "127.0.0.1:8424", nil),
-		"DeploymentsService": api.NewDeploymentsService(st, nil),
+		"AppsService":        api.NewAppsService(st, box, nil),
+		"DeploymentsService": api.NewDeploymentsService(st),
 		"RevisionsService":   api.NewRevisionsService(st),
 		"BuildsService":      api.NewBuildsService(st, buildQueue, uploads),
 		"DriftService":       api.NewDriftService(st, eng),
@@ -291,7 +284,6 @@ func start(t *testing.T, opts startOptions) *Env {
 		// 如实报不可用——生产装配在 internal/runtime/provides.go）。
 		"PlacementService": api.NewPlacementService(st, nil),
 		"TokensService":    api.NewTokensService(st),
-		"GitKeysService":   api.NewGitKeysService(st),
 		// 定时任务面（E5 Cron）：triggers nil = 调度器未装配的进程内夹具形态
 		//（TriggerCronRun 显式不可用；runs 读面同路径消费）。
 		"CronService": api.NewCronService(st, nil),

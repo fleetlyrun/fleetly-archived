@@ -169,6 +169,7 @@ T2 v0.1（核心；分层依赖见 §5）
 - 验收：deploy/logs/env/domains/rollback/plan/apply/diff 全命令 `--json`；日志/事件长流经 gRPC streaming 输出；输出 schema 快照测试（防漂移）；三态退出码贯穿。
 
 **T2.19 git push(SSH) 与 webhook** ｜ Blocked by: T2.17 ｜ 3-4 人日
+〔2026-09-29 注记：SSH push 半随 ADR-0012 裁决移除；webhook+拉源保留为唯一 git 触发轨。本卡为 v0.1 历史票面。〕
 - 交付：两条触发入口（架构 §2.5 webhook 不变量、§4.2 第 1 项）。
 - 验收：SSH git push → post-receive 触发部署；webhook 强制验签（GitHub/Gitea）+ 时间窗防重放 + 按 revision 幂等去重（重复投递不重复部署，测试断言）。
 

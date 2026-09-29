@@ -98,6 +98,10 @@
 
 ## 7. S19 — 入口/gitserver 细节修正
 
+> 2026-09-29 注记：git push(SSH) 收包面移除（ADR-0012）——E6 整行与 E7③
+> 随 SSH 收包/钩子 token 面退役；E7①②④⑤（webhook 签名/方法门/拉源认证/
+> https 强制）属保留面，继续有效。
+
 | # | 问题 | 方案 | 验收 |
 |---|---|---|---|
 | E1 | acme.go `m.user` 无锁读写竞态 + 并发双重签发（LE 限额） | `m.user` 读写统一走 `m.mu`；`ensureCertificate` per-app 互斥（map[app]mutex 或单签发队列串行——v0.1 单签发队列即可） | -race 并发发布测试 |

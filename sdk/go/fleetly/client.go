@@ -1,7 +1,7 @@
 // Package fleetly 是 fleetly 平台的 Go SDK：对 fleetlyd gRPC 面的客户端
 // 封装（CLI/集成方共用，契约来自 proto 生成物 genproto——proto 唯一真源，
 // D21）。覆盖 v0.1 全部 13 个服务面（system/apps/deployments/revisions/
-// builds/drift/domains/env/logs/events/placement/tokens/gitkeys）；服务
+// builds/drift/domains/env/logs/events/placement/tokens）；服务
 // 方法随 proto 模块扩展同步添加，不在 SDK 层发明契约外语义。
 package fleetly
 
@@ -95,7 +95,6 @@ type Client struct {
 	events   serverv1.EventsServiceClient
 	place    serverv1.PlacementServiceClient
 	tokens   serverv1.TokensServiceClient
-	gitkey   serverv1.GitKeysServiceClient
 	auth     serverv1.AuthServiceClient
 	audit    serverv1.AuditServiceClient
 	cron     serverv1.CronServiceClient
@@ -146,7 +145,6 @@ func NewClient(opts ...Option) (*Client, error) {
 		events:   serverv1.NewEventsServiceClient(conn),
 		place:    serverv1.NewPlacementServiceClient(conn),
 		tokens:   serverv1.NewTokensServiceClient(conn),
-		gitkey:   serverv1.NewGitKeysServiceClient(conn),
 		auth:     serverv1.NewAuthServiceClient(conn),
 		audit:    serverv1.NewAuditServiceClient(conn),
 		cron:     serverv1.NewCronServiceClient(conn),
@@ -282,9 +280,6 @@ func (c *Client) Tokens() serverv1.TokensServiceClient { return c.tokens }
 // GetRegistrationState——CLI 的登录验证与身份投影经此消费；注册/登录下发
 // 的会话 cookie 是浏览器面凭据，CLI 不消费，见 AuthService 注释）。
 func (c *Client) Auth() serverv1.AuthServiceClient { return c.auth }
-
-// GitKeys 取 git 公钥管理面（admin scope，T2.19）。
-func (c *Client) GitKeys() serverv1.GitKeysServiceClient { return c.gitkey }
 
 // Audit 取审计读面（v0.3 W3-S1，rbac-teams §6 D-W0-6：过滤+分页的台账
 // 检索——平台管理员用户凭据或 admin 机具令牌）。

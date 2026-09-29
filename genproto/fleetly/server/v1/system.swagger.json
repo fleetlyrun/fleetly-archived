@@ -816,10 +816,6 @@
         "backup": {
           "$ref": "#/definitions/v1BackupHealth",
           "title": "状态备份健康视图（T2.22）：最近一次台账行的投影。从未备份 → 不输出\n（backup 组件的 ComponentHealth 行会以 ok=false 显式表达不健康）。"
-        },
-        "git_ssh_fingerprint": {
-          "type": "string",
-          "title": "git SSH host key 的 SHA256 指纹（FZ-12 披露面，D-W0-8；OpenSSH 形态\nSHA256:…——公钥指纹为公开材料）。git SSH 面未启用或 host key 未生成\n时为空。客户端钉定（known_hosts）为文档指引：以本字段核对\n`ssh-keygen -lf` 的服务端指纹，平台不代管下发 known_hosts。"
         }
       }
     },

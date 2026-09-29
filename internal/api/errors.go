@@ -210,10 +210,6 @@ var storeErrTable = []storeErrEntry{
 	{sentinel: state.ErrTokenLastAdmin, kind: storeErrRegistered, code: "E_TOKEN_LAST_ADMIN",
 		message:  "token %s is the last non-revoked admin token; revoking it would leave the platform unmanageable (a restart does not re-seed the bootstrap token)",
 		contexts: []storeErrContext{{key: "token", fromArg: true}, {key: "reason", value: "last_admin"}}},
-	{sentinel: state.ErrGitKeyExists, kind: storeErrConflict,
-		message: "git key already registered (same fingerprint)"},
-	{sentinel: state.ErrGitKeyNotFound, kind: storeErrNotFound,
-		message: "git key not found: %s"},
 
 	// ── 告警 / webhook（通知面注册码投影）─────────────────────────────────
 	{sentinel: state.ErrAlertRuleNotFound, kind: storeErrRegistered, code: "E_ALERT_RULE_NOT_FOUND",

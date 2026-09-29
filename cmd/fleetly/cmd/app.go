@@ -54,7 +54,6 @@ func NewApp(version string) *commands.App {
 		newAcmeCmd(),
 		newS3Cmd(),
 		newRegistryCmd(),
-		newGitCmd(),
 		newBackupsCmd(),
 		newCronCmd(),
 		newDatabasesCmd(),

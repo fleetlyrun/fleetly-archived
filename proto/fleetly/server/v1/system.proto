@@ -204,11 +204,10 @@ message GetSystemStatusResponse {
   // 状态备份健康视图（T2.22）：最近一次台账行的投影。从未备份 → 不输出
   //（backup 组件的 ComponentHealth 行会以 ok=false 显式表达不健康）。
   BackupHealth backup = 4;
-  // git SSH host key 的 SHA256 指纹（FZ-12 披露面，D-W0-8；OpenSSH 形态
-  // SHA256:…——公钥指纹为公开材料）。git SSH 面未启用或 host key 未生成
-  // 时为空。客户端钉定（known_hosts）为文档指引：以本字段核对
-  // `ssh-keygen -lf` 的服务端指纹，平台不代管下发 known_hosts。
-  string git_ssh_fingerprint = 5;
+  // 5 曾为 git_ssh_fingerprint（git SSH host key 指纹披露；git push 部署
+  // 面 2026-09-29 移除，ADR-0012 裁决砍 SSH 收包半）。
+  reserved 5;
+  reserved "git_ssh_fingerprint";
 }
 
 // BackupHealth 是系统状态里备份面的明细视图（组件布尔健康的展开：最近

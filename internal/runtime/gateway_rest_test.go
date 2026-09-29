@@ -83,8 +83,8 @@ func TestGatewayRESTDualFace(t *testing.T) {
 	g := gs.GetServer()
 	serverv1.RegisterSystemServiceServer(g, api.NewSystemService("dev", st,
 		func() []api.SystemComponent { return nil }, nil, nil))
-	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
-	serverv1.RegisterDeploymentsServiceServer(g, api.NewDeploymentsService(st, nil))
+	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, nil))
+	serverv1.RegisterDeploymentsServiceServer(g, api.NewDeploymentsService(st))
 	serverv1.RegisterRevisionsServiceServer(g, api.NewRevisionsService(st))
 	serverv1.RegisterBuildsServiceServer(g, api.NewBuildsService(st, nil, build.UploadConfig{}))
 	serverv1.RegisterDriftServiceServer(g, api.NewDriftService(st, nil))
@@ -297,7 +297,7 @@ func TestGatewayAuthFailureIPLimit(t *testing.T) {
 		lynxgrpc.WithInterceptors(auth.UnaryAuthInterceptor()),
 	)
 	g := gs.GetServer()
-	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
+	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, nil))
 	if err := gs.Init(nil); err != nil {
 		t.Fatalf("grpc Init: %v", err)
 	}

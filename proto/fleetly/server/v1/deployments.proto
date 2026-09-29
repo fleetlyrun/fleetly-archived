@@ -63,19 +63,6 @@ service DeploymentsService {
     };
     option (fleetly.annotations.v1.scope) = "deploy";
   }
-  // DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-
-  // receive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务
-  // 端从 bare 仓库 `git show <sha>:compose.{yaml,yml}` 自取（compose 真源
-  // 在 git 对象库，不信任客户端传字节）。幂等口径：git push 是显式用户
-  // 动作——每次调用都建部署记录（引擎同 spec 重放安全）；(app, sha) 去重
-  // 仅属 webhook 入口。scope = deploy（hook token 最小权限）。
-  rpc DeployFromGit(DeployFromGitRequest) returns (DeployFromGitResponse) {
-    option (google.api.http) = {
-      post: "/v1/apps/{app}/deployments/git"
-      body: "*"
-    };
-    option (fleetly.annotations.v1.scope) = "deploy";
-  }
 }
 
 // DeploymentView 是部署状态机行的只读投影（词表与 state 层一致：
@@ -99,10 +86,10 @@ message DeploymentView {
   int64 downtime_ms = 12;
   google.protobuf.Timestamp created_at = 13;
   google.protobuf.Timestamp updated_at = 14;
-  // git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit
-  // 路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/<branch>；
-  // API/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下
-  // 显式输出空串，空串即「非 git 来源」）。
+  // git 触发来源（T2.19）：仅经 git webhook 入队的部署非空——sha 为 40 位
+  // commit、ref 为 refs/heads/<branch>；API/CLI 直传 compose 的部署为空
+  // （gateway EmitUnpopulated=true 语义下显式输出空串，空串即「非 git 来
+  // 源」）。
   // webhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供
   // AI-Agent/运营核对「这次部署来自哪个 commit」。
   string source_git_sha = 15;
@@ -149,29 +136,6 @@ message DeployRequest {
   // 个人队 default 项目；机具令牌无缺省（必须显式，否则 400 带指引）。
   // 首次部署写入 apps.project_id/team_id；行上归属已定时必须一致（409）。
   string project = 4 [(buf.validate.field).string.max_len = 65];
-}
-
-// DeployFromGitRequest 携带 push 上下文（app 来自 REST 路径）。ref 形如
-// refs/heads/main；sha 为 40 位十六进制 commit（服务端严格校验）。
-message DeployFromGitRequest {
-  string app = 1 [(buf.validate.field).string.min_len = 1];
-  string sha = 2 [(buf.validate.field).string.len = 40];
-  string ref = 3 [(buf.validate.field).string.min_len = 1];
-  // push 署名用户（W2 §2.3 审计 actor 联动）：post-receive 钩子把 SSH
-  // 公钥认证回调解析出的 git_keys.user_id 经 FLEETLY_PUSH_USER 环境变量
-  // 原样透传；空 = 存量无主键/缺省（审计 actor 落 machine 原口径）。
-  // 信任边界：钩子文件 daemon 属主 0600，与 hook token 同级——字段是
-  // 审计归因面，不是授权面。
-  string push_user = 4 [(buf.validate.field).string.max_len = 64];
-}
-
-// DeployFromGitResponse 与 DeployResponse 同投影面（独立消息以满足 buf
-// lint 的 RPC 响应类型命名纪律；字段语义一致——入队即返回 queued）。
-message DeployFromGitResponse {
-  string deployment_id = 1;
-  string app = 2;
-  string status = 3;
-  repeated ComposeWarning warnings = 4;
 }
 
 message DeployResponse {

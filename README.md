@@ -34,7 +34,7 @@ The first start opens self-service registration until the first user signs up (t
 
 | Area | Behavior | Version |
 |---|---|---|
-| Deploy | git push / webhook / API → Railpack or Dockerfile build → zero-downtime release → observation window | v0.1 |
+| Deploy | webhook (GitHub/Gitea) / API → Railpack or Dockerfile build → zero-downtime release → observation window | v0.1 |
 | Release safety | Swarm `failure-action=pause` + platform revision replay (last 5 verified revisions); never Swarm-native rollback | v0.1 |
 | Routing / TLS | Per-node Traefik with routes and certs pushed by the control plane; central ACME (HTTP-01), multi-SAN domain lists | v0.1 |
 | State | SQLite control-plane state, three-layer model (authoritative / observed cache / live read) | v0.1 |
@@ -63,7 +63,7 @@ We say what we don't do: no cross-node shared storage (volumes are local; statef
 ## Architecture
 
 ```
-CLI (fleetly) / Console / gRPC / REST / git push (SSH) / Webhook
+CLI (fleetly) / Console / gRPC / REST / Webhook
                  │
    fleetlyd — single Go binary on the Swarm manager
      API: gRPC + grpc-gateway (proto = single contract source)
@@ -96,7 +96,7 @@ deploy/           installer & systemd units (lands with T2.1)
 The CLI talks to the daemon over gRPC only — no direct database or Docker access. Every verb that touches the platform takes `--addr` (default `127.0.0.1:8421`, env `FLEETLY_ADDR`), `--token` (env `FLEETLY_TOKEN`), and the team/project context flags `--team`/`--project` (env `FLEETLY_TEAM`/`FLEETLY_PROJECT`); for token and context the read order is flag > env > the local config `~/.fleetly/config.yaml`. `fleetly auth login` verifies a pasted PAT (via `Me`) and stores it there together with the current team/project context; `fleetly auth status` shows the identity and context, `fleetly auth logout` clears the local copy only (server-side revocation stays with `fleetly tokens revoke`). The bootstrap admin token is written **once** to `<data-root>/bootstrap-token` on first start (never logged; delete after first login), further tokens come from `fleetly tokens create`. Every verb supports `--json`; exit codes are `0` success/no changes, `1` error, `2` changes detected (`plan`/`diff` only), `64` usage error (unknown verb, bad flags/arguments — `EX_USAGE`). Flags must precede positional arguments (Go std `flag` semantics). Unary RPCs carry a default 30s deadline; Ctrl-C on streaming verbs (`logs follow`, `events watch`) and wait verbs (`deploy`, `build`, `rollback`) exits cleanly with code 0.
 
 ```bash
-fleetlyd &                                  # control plane (gRPC :8421, HTTP :8420, git SSH :8424)
+fleetlyd &                                  # control plane (gRPC :8421, HTTP :8420)
 export FLEETLY_ADDR=127.0.0.1:8421
 
 fleetly auth login                          # paste a PAT once; stored in ~/.fleetly/config.yaml
@@ -111,17 +111,6 @@ fleetly env set my-api KEY value            # pending until next deploy
 fleetly rollback my-api                     # revision replay (last 5 revisions)
 fleetly drift show my-api                   # desired vs. live
 fleetly tokens create --scopes deploy --note CI   # plaintext shown once
-```
-
-### Deploying via `git push` (SSH)
-
-The daemon runs an embedded SSH git endpoint (default `127.0.0.1:8424` — loopback by default; expose it on a VPS by setting `git.addr` and firewalling accordingly). Register your public key, then push to the app's bare repo; `compose.yaml`/`compose.yml` at the repo root is the deploy unit, and pushes to the app's configured branch (default `main`) trigger a deployment.
-
-```bash
-fleetly git keys add --note laptop ~/.ssh/id_ed25519.pub   # admin scope; fingerprints at rest
-git remote add fleetly ssh://git@127.0.0.1:8424/my-api.git
-git push fleetly main                                      # → build → zero-downtime release
-fleetly git keys list && fleetly git keys rm <id>
 ```
 
 ### Deploying via webhook (GitHub / Gitea)

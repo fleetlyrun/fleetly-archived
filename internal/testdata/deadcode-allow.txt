@@ -27,11 +27,10 @@ internal/engine/machine.go
 unreachable func: LegalDeploymentTransitions
 unreachable func: AllDeploymentStatuses
 
-# ── v0.2 平台密钥库命名预置（架构 §2.4 密钥行；命名契约由 naming/secrets
-#    测试钉死；S16-C1 显式拒绝 secrets 后暂无生产调用方）──
-unreachable func: SecretName
-unreachable func: Hash8
-unreachable func: validateHash8
+# secrets：SwarmSecretRef 构造器（secretref.go）——E4 库凭据注入消费的是
+# ResolveSwarmSecretRef 形态，构造器本体挂账（命名/哈希契约由 naming 测试
+# 钉死；首个构造方出现即转正。原「密钥库命名预置」整节的 SecretName/Hash8/
+# validateHash8 已随 E4 secretref 接线转正，2026-09-29 出清单）。
 unreachable func: SecretRef
 
 # ── 版本直读端口（state-model E_STATE_VERSION_CONFLICT 写前直读；

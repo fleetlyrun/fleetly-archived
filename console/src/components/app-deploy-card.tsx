@@ -6,7 +6,8 @@
 //
 // 方式与角色门（前端体验门，§3.2）：
 //   Compose  = deploy scope（developer+）——一次性手动部署；
-//   Git      = admin scope（admin+）——push 远端 + 拉源配置（整体替换）；
+//   Git      = admin scope（admin+）——拉源配置（整体替换；webhook 投递
+//              触发拉取，git push(SSH) 收包面已移除，ADR-0012）；
 //   Webhook  = admin scope（admin+）——接收端 URL + 签名密钥。
 // 平台管理员资源面恒只读（P0-3 双门）——能力门在 lib/context 统一关门，
 // methods 投影为空 → 整卡不渲染；只读说明由宿主页（Deploy settings 卡）承载。
@@ -17,12 +18,10 @@ import {
   CheckCircle2,
   Copy,
   FileUp,
-  GitBranch,
   Loader2,
   Rocket,
 } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 
 import { apiBase } from "@/api/client";
 import {
@@ -146,7 +145,7 @@ export function DeployCard({ app }: { app: string }) {
   const descriptions: Record<DeployMethod, ReactNode> = {
     compose:
       "Paste or upload a compose file and deploy it now — one-shot from the Console.",
-    git: "Push the configured branch to the remote; the app redeploys with zero downtime.",
+    git: "Configure where the code is fetched from; webhook deliveries deploy the configured branch with zero downtime.",
     webhook: "Trigger deploys from GitHub/Gitea webhooks or CI jobs.",
   };
 
@@ -194,7 +193,7 @@ export function DeployCard({ app }: { app: string }) {
           className="text-xs text-muted-foreground"
           data-testid="triggers-admin-note"
         >
-          Deploy trigger settings (git push, webhooks) are visible to team
+          Deploy trigger settings (fetch sources, webhooks) are visible to team
           admins only. Ask a team admin for access.
         </p>
       ) : null}
@@ -373,10 +372,11 @@ function ComposePane({
   );
 }
 
-// ── Git pane（push 远端 + 拉源配置）──────────────────────────────────────
-// 展示全部取自 ShowAppWebhook 响应字段：git_remote_hint（push 远端，git SSH
-// 面未启用时为空串）、source_url/branch/auth_kind。源配置是整体替换语义
-//（读态到达时一次性水合，避免空表单提交静默清掉既有 source）。
+// ── Git pane（拉源配置）──────────────────────────────────────────────────
+// 展示全部取自 ShowAppWebhook 响应字段：source_url/branch/auth_kind。（push
+// 远端行随 git push(SSH) 收包面移除——git_remote_hint 字段已 reserved。）
+// 源配置是整体替换语义（读态到达时一次性水合，避免空表单提交静默清掉既有
+// source）。
 
 /** 拉源认证形态词表（proto SetAppSourceRequest.source_auth_kind in 约束）。 */
 type SourceAuthKind = "none" | "https_token" | "ssh_key";
@@ -433,34 +433,15 @@ function GitPane({
 
   return (
     <div className="space-y-5" data-testid="deploy-git-pane">
-      {/* push 通道：远端 + 触发分支 + deploy key 入口。 */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <GitBranch aria-hidden className="h-3.5 w-3.5" />
-          Git push
-        </div>
-        <CopyValueRow
-          label="Push remote"
-          value={cfg?.git_remote_hint ?? ""}
-          testid="triggers-git-remote"
-          empty="Unavailable — the git SSH face is not enabled on this server."
-          hint="Pushing to this remote deploys the configured branch with zero downtime."
-        />
-        <div className="text-xs text-muted-foreground" data-testid="triggers-branch">
-          Trigger branch: <code className="font-mono">{cfg?.source_branch || "main"}</code>
-          {" · "}register a deploy key on the{" "}
-          <Link to="/git-keys" className="font-medium underline underline-offset-2">
-            Git push keys
-          </Link>{" "}
-          page.
-        </div>
-      </div>
-
       {/* 拉源配置（触发通道取代码的 remote；整体替换语义）。 */}
-      <div className="space-y-3 border-t pt-4">
+      <div className="space-y-3">
         <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <Rocket aria-hidden className="h-3.5 w-3.5" />
           Fetch source
+        </div>
+        <div className="text-xs text-muted-foreground" data-testid="triggers-branch">
+          Trigger branch: <code className="font-mono">{cfg?.source_branch || "main"}</code>
+          {" · "}webhook deliveries on this branch fetch and deploy.
         </div>
         <div className="text-xs text-muted-foreground" data-testid="triggers-source-state">
           {cfg === undefined ? null : cfg.source_url ? (
@@ -469,7 +450,7 @@ function GitPane({
               {cfg.source_auth_kind || "none"})
             </>
           ) : (
-            "No fetch source set — webhook deliveries deploy the pushed ref without a fetch."
+            "No fetch source set — webhook deliveries are rejected until a source is configured."
           )}
         </div>
         <form className="space-y-3" onSubmit={onSourceSubmit}>
@@ -632,16 +613,15 @@ function WebhookPane({
         }
       />
       {/* 服务端接收端只收 [a-z0-9-] 词形的应用名：出律名字（如下划线）
-          的应用收不到 push/webhook 触发——如实披露，不静默给死链。 */}
+          的应用收不到 webhook 触发——如实披露，不静默给死链。 */}
       {cfg?.name && !WEBHOOK_NAME_PATTERN.test(cfg.name) ? (
         <p
           className="text-xs text-amber-800 dark:text-amber-300"
           data-testid="triggers-webhook-name-note"
         >
-          This app&apos;s name contains characters outside [a-z0-9-]. The git push
-          and webhook receiver paths only accept lowercase letters, digits and
-          dashes, so push triggers are unavailable for this app (server-side
-          limitation).
+          This app&apos;s name contains characters outside [a-z0-9-]. The webhook
+          receiver path only accepts lowercase letters, digits and dashes, so
+          webhook triggers are unavailable for this app (server-side limitation).
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="triggers-secret-state">

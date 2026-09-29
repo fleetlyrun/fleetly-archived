@@ -91,45 +91,6 @@
         ]
       }
     },
-    "/v1/apps/{app}/deployments/git": {
-      "post": {
-        "summary": "DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-\nreceive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务\n端从 bare 仓库 `git show \u003csha\u003e:compose.{yaml,yml}` 自取（compose 真源\n在 git 对象库，不信任客户端传字节）。幂等口径：git push 是显式用户\n动作——每次调用都建部署记录（引擎同 spec 重放安全）；(app, sha) 去重\n仅属 webhook 入口。scope = deploy（hook token 最小权限）。",
-        "operationId": "DeploymentsService_DeployFromGit",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeployFromGitResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/v1ErrorResponse"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "app",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/DeploymentsServiceDeployFromGitBody"
-            }
-          }
-        ],
-        "tags": [
-          "DeploymentsService"
-        ]
-      }
-    },
     "/v1/apps/{app}/rollbacks": {
       "post": {
         "operationId": "DeploymentsService_RollbackDeployment",
@@ -259,22 +220,6 @@
         }
       }
     },
-    "DeploymentsServiceDeployFromGitBody": {
-      "type": "object",
-      "properties": {
-        "sha": {
-          "type": "string"
-        },
-        "ref": {
-          "type": "string"
-        },
-        "push_user": {
-          "type": "string",
-          "title": "push 署名用户（W2 §2.3 审计 actor 联动）：post-receive 钩子把 SSH\n公钥认证回调解析出的 git_keys.user_id 经 FLEETLY_PUSH_USER 环境变量\n原样透传；空 = 存量无主键/缺省（审计 actor 落 machine 原口径）。\n信任边界：钩子文件 daemon 属主 0600，与 hook token 同级——字段是\n审计归因面，不是授权面。"
-        }
-      },
-      "title": "DeployFromGitRequest 携带 push 上下文（app 来自 REST 路径）。ref 形如\nrefs/heads/main；sha 为 40 位十六进制 commit（服务端严格校验）。"
-    },
     "DeploymentsServiceRollbackDeploymentBody": {
       "type": "object",
       "properties": {
@@ -313,28 +258,6 @@
         }
       },
       "title": "ComposeWarning 是 compose 校验期非阻断标注的跨面投影（deploy/build 共\n用；code = 注册表 W_ 码，无注册码提示以 kind 承载稳定标识）。"
-    },
-    "v1DeployFromGitResponse": {
-      "type": "object",
-      "properties": {
-        "deployment_id": {
-          "type": "string"
-        },
-        "app": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "warnings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ComposeWarning"
-          }
-        }
-      },
-      "title": "DeployFromGitResponse 与 DeployResponse 同投影面（独立消息以满足 buf\nlint 的 RPC 响应类型命名纪律；字段语义一致——入队即返回 queued）。"
     },
     "v1DeployResponse": {
       "type": "object",
@@ -414,7 +337,7 @@
         },
         "source_git_sha": {
           "type": "string",
-          "title": "git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit\n路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/\u003cbranch\u003e；\nAPI/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下\n显式输出空串，空串即「非 git 来源」）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
+          "title": "git 触发来源（T2.19）：仅经 git webhook 入队的部署非空——sha 为 40 位\ncommit、ref 为 refs/heads/\u003cbranch\u003e；API/CLI 直传 compose 的部署为空\n（gateway EmitUnpopulated=true 语义下显式输出空串，空串即「非 git 来\n源」）。\nwebhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供\nAI-Agent/运营核对「这次部署来自哪个 commit」。"
         },
         "source_git_ref": {
           "type": "string"

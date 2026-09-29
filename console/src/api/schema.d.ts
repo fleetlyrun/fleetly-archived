@@ -592,7 +592,7 @@ export interface paths {
         get?: never;
         /**
          * SetAppSource 设置 webhook 拉源配置（remote url + 分支 + 认证形态；
-         *     admin）。source_branch 同时是 git push 的触发分支（app 配置分支，
+         *     admin）。source_branch 同时是 webhook 投递的触发分支（app 配置分支，
          *     默认 main）。
          *     认证材料（https_token/ssh_key）经平台 envelope 加密落库，引用不落明文。
          */
@@ -678,30 +678,6 @@ export interface paths {
         get: operations["DeploymentsService_ListDeployments"];
         put?: never;
         post: operations["DeploymentsService_Deploy"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/apps/{app}/deployments/git": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-
-         *     receive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务
-         *     端从 bare 仓库 `git show <sha>:compose.{yaml,yml}` 自取（compose 真源
-         *     在 git 对象库，不信任客户端传字节）。幂等口径：git push 是显式用户
-         *     动作——每次调用都建部署记录（引擎同 spec 重放安全）；(app, sha) 去重
-         *     仅属 webhook 入口。scope = deploy（hook token 最小权限）。
-         */
-        post: operations["DeploymentsService_DeployFromGit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -863,38 +839,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/git/keys": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GitKeysService_ListGitKeys"];
-        put?: never;
-        post: operations["GitKeysService_AddGitKey"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/git/keys/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["GitKeysService_RemoveGitKey"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2645,7 +2589,7 @@ export interface components {
         AppsServiceSetAppSourceBody: {
             /** 拉源 remote URL（file:// 与 https://、ssh:// 形态）。 */
             source_url?: string;
-            /** app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。 */
+            /** app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。 */
             source_branch?: string;
             /** 认证形态：none | https_token | ssh_key。 */
             source_auth_kind?: string;
@@ -2765,10 +2709,10 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
             /**
-             * git 触发来源（T2.19）：仅经 git push(SSH)/webhook 入队（DeployFromGit
-             *     路径）的部署非空——sha 为 40 位 commit、ref 为 refs/heads/<branch>；
-             *     API/CLI 直传 compose 的部署为空（gateway EmitUnpopulated=true 语义下
-             *     显式输出空串，空串即「非 git 来源」）。
+             * git 触发来源（T2.19）：仅经 git webhook 入队的部署非空——sha 为 40 位
+             *     commit、ref 为 refs/heads/<branch>；API/CLI 直传 compose 的部署为空
+             *     （gateway EmitUnpopulated=true 语义下显式输出空串，空串即「非 git 来
+             *     源」）。
              *     webhook 入口的 (app, sha) 幂等去重即以此字段为判据，读面回显供
              *     AI-Agent/运营核对「这次部署来自哪个 commit」。
              */
@@ -2891,15 +2835,10 @@ export interface components {
             secret_configured?: boolean;
             /** 拉源配置（未设置时 url/branch 为空串、auth_kind = none）。 */
             source_url?: string;
-            /** app 配置分支（默认 main）：push 触发与 webhook 拉取共用此分支。 */
+            /** app 配置分支（默认 main）：webhook 投递触发与拉取共用此分支。 */
             source_branch?: string;
             /** none | https_token | ssh_key。 */
             source_auth_kind?: string;
-            /**
-             * push/webhook 端点提示（SSH git URL，如 ssh://git@host:8424/<app>.git；
-             *     主机位取 control-plane 可达地址的尽力形态）。
-             */
-            git_remote_hint?: string;
         };
         v1SuspendAppResponse: {
             app?: components["schemas"]["v1AppView"];
@@ -2929,22 +2868,6 @@ export interface components {
              */
             project?: string;
         };
-        /**
-         * DeployFromGitRequest 携带 push 上下文（app 来自 REST 路径）。ref 形如
-         *     refs/heads/main；sha 为 40 位十六进制 commit（服务端严格校验）。
-         */
-        DeploymentsServiceDeployFromGitBody: {
-            sha?: string;
-            ref?: string;
-            /**
-             * push 署名用户（W2 §2.3 审计 actor 联动）：post-receive 钩子把 SSH
-             *     公钥认证回调解析出的 git_keys.user_id 经 FLEETLY_PUSH_USER 环境变量
-             *     原样透传；空 = 存量无主键/缺省（审计 actor 落 machine 原口径）。
-             *     信任边界：钩子文件 daemon 属主 0600，与 hook token 同级——字段是
-             *     审计归因面，不是授权面。
-             */
-            push_user?: string;
-        };
         DeploymentsServiceRollbackDeploymentBody: {
             /** 回滚目标版本快照 ID；空 = 最近一次成功部署的版本（回退一版）。 */
             target_revision_id?: string;
@@ -2966,16 +2889,6 @@ export interface components {
             code?: string;
             service?: string;
             message?: string;
-        };
-        /**
-         * DeployFromGitResponse 与 DeployResponse 同投影面（独立消息以满足 buf
-         *     lint 的 RPC 响应类型命名纪律；字段语义一致——入队即返回 queued）。
-         */
-        v1DeployFromGitResponse: {
-            deployment_id?: string;
-            app?: string;
-            status?: string;
-            warnings?: components["schemas"]["v1ComposeWarning"][];
         };
         v1DeployResponse: {
             deployment_id?: string;
@@ -3191,44 +3104,6 @@ export interface components {
             /** 期望态来源部署（空 = 无成功部署记录——服务集仅实况集）。 */
             desired_deployment?: string;
             services?: components["schemas"]["v1ServiceRuntimeView"][];
-        };
-        v1AddGitKeyRequest: {
-            /** OpenSSH authorized_keys 单行形态（ssh-ed25519/ssh-rsa/ecdsa-sha2-*）。 */
-            public_key?: string;
-            /** 人读备注（如 "operator laptop"）。 */
-            note?: string;
-        };
-        v1AddGitKeyResponse: {
-            id?: string;
-            /** SHA256 指纹（"SHA256:<base64>"，ssh-keygen -lf 同格式）。 */
-            fingerprint?: string;
-            key_type?: string;
-            note?: string;
-            /** Format: date-time */
-            created_at?: string;
-        };
-        /**
-         * GitKeyView 是 git 公钥行的无敏感投影（公钥本体为公开材料可回读；平台
-         *     从不接触私钥）。
-         */
-        v1GitKeyView: {
-            id?: string;
-            fingerprint?: string;
-            key_type?: string;
-            note?: string;
-            /** Format: date-time */
-            created_at?: string;
-            /**
-             * 属主用户（W2 §2.3 用户化注记）：非空 = 登录用户自服务注册的 key；
-             *     空 = 存量无主键（迁移口径：只读展示归平台管理员/机具令牌全列）。
-             */
-            user_id?: string;
-        };
-        v1ListGitKeysResponse: {
-            keys?: components["schemas"]["v1GitKeyView"][];
-        };
-        v1RemoveGitKeyResponse: {
-            id?: string;
         };
         v1GetRevisionSpecResponse: {
             revision_id?: string;
@@ -3838,13 +3713,6 @@ export interface components {
             version?: string;
             components?: components["schemas"]["v1ComponentHealth"][];
             backup?: components["schemas"]["v1BackupHealth"];
-            /**
-             * git SSH host key 的 SHA256 指纹（FZ-12 披露面，D-W0-8；OpenSSH 形态
-             *     SHA256:…——公钥指纹为公开材料）。git SSH 面未启用或 host key 未生成
-             *     时为空。客户端钉定（known_hosts）为文档指引：以本字段核对
-             *     `ssh-keygen -lf` 的服务端指纹，平台不代管下发 known_hosts。
-             */
-            git_ssh_fingerprint?: string;
         };
         /** JoinGuideView 是 join 向导输出（服务端生成，multi-node §2.3）。 */
         v1JoinGuideView: {
@@ -6409,41 +6277,6 @@ export interface operations {
             };
         };
     };
-    DeploymentsService_DeployFromGit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                app: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeploymentsServiceDeployFromGitBody"];
-            };
-        };
-        responses: {
-            /** @description A successful response. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1DeployFromGitResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1ErrorResponse"];
-                };
-            };
-        };
-    };
     DeploymentsService_RollbackDeployment: {
         parameters: {
             query?: never;
@@ -6762,99 +6595,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["v1ShowAppRuntimeResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1ErrorResponse"];
-                };
-            };
-        };
-    };
-    GitKeysService_ListGitKeys: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A successful response. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1ListGitKeysResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1ErrorResponse"];
-                };
-            };
-        };
-    };
-    GitKeysService_AddGitKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["v1AddGitKeyRequest"];
-            };
-        };
-        responses: {
-            /** @description A successful response. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1AddGitKeyResponse"];
-                };
-            };
-            /** @description An unexpected error response. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1ErrorResponse"];
-                };
-            };
-        };
-    };
-    GitKeysService_RemoveGitKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A successful response. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["v1RemoveGitKeyResponse"];
                 };
             };
             /** @description An unexpected error response. */

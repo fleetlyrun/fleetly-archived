@@ -72,7 +72,7 @@ func newProjectNetworkEnv(t *testing.T) *projectNetworkEnv {
 	auth := NewAuthenticator(st)
 	srv := newAuthServer(auth)
 	serverv1.RegisterProjectsServiceServer(srv, NewProjectsService(st).WithNetworkPort(port))
-	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, "127.0.0.1:8424", nil))
+	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, nil))
 	conn := serveBufconn(t, srv)
 	return &projectNetworkEnv{
 		st:   st,

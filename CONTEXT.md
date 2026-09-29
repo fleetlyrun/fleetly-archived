@@ -59,7 +59,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | `build` | buildkit 构建管线 | `Executor/RegistryClient/ImageSource` 端口 |
 | `naming` | 对象命名与最小 label 集唯一定义点（纯函数） | naming.go（ADR-0009） |
 | `errcode`/`eventcode`/`apperr` | 错误码/事件名注册表（只增）+错误信封 | codes.go / events.go（ADR-0011） |
-| `gitserver` | git push(SSH) + webhook 两条部署触发 daemon | config.go（ADR-0012） |
+| `gitserver` | webhook 部署触发 daemon（验签/防重放/去重/拉源；push 收包面已移除，ADR-0012） | config.go（ADR-0012） |
 | `logs`+`victorialogs` | 日志管线（ingest+脱敏）+VL 入湖 adapter | `Port/IngestBackend/SecretValuesSource` |
 | `execrelay`/`execrun` | Web 终端反向连接 hub/relay + 子进程生命周期 | `TaskSource`/`MessageConn` |
 | `secrets`/`envlayer`/`dbtemplate`/`imageregistry`/`objectstore`/`statebackup`/`notify`/`acmedns`/`cron`/`metrics`/`rustfs` | 平台支撑件（加密 box/变量三层合并/DB 模板/registry 客户端/S3 客户端/热备/通知/DNS-01 双 adapter/定时任务/指标/S3 存储） | 各自有自有端口 |

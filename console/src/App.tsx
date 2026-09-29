@@ -48,7 +48,6 @@ const AppTerminalPage = lazyPage(() => import("@/pages/AppTerminalPage"), "AppTe
 const DatabasesPage = lazyPage(() => import("@/pages/DatabasesPage"), "DatabasesPage");
 const DatabaseDetailPage = lazyPage(() => import("@/pages/DatabaseDetailPage"), "DatabaseDetailPage");
 const EventsPage = lazyPage(() => import("@/pages/EventsPage"), "EventsPage");
-const GitKeysPage = lazyPage(() => import("@/pages/GitKeysPage"), "GitKeysPage");
 const PatPage = lazyPage(() => import("@/pages/PatPage"), "PatPage");
 const ProjectsPage = lazyPage(() => import("@/pages/ProjectsPage"), "ProjectsPage");
 const ProjectDetailPage = lazyPage(() => import("@/pages/ProjectDetailPage"), "ProjectDetailPage");
@@ -133,7 +132,6 @@ function AuthedRoutes() {
           <Route path="/databases" element={<DatabasesPage />} />
           <Route path="/databases/:name" element={<DatabaseDetailPage />} />
           <Route path="/pat" element={<PatPage />} />
-          <Route path="/git-keys" element={<GitKeysPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/teams" element={<TeamsPage />} />

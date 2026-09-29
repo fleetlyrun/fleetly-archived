@@ -30,7 +30,7 @@
 
 | 词条 | 定义 | 语族 | 别名（避免） |
 | --- | --- | --- | --- |
-| **trigger** | 部署入口：git push(SSH) 或 webhook 两条 | 日（借拉丁 trigga） | — |
+| **trigger** | 部署入口：webhook（投递触发拉源；git push(SSH) 收包面 2026-09-29 移除，ADR-0012） | 日（借拉丁 trigga） | — |
 | **delivery** | 一次 webhook 投递（ID 是防重放键；代码用「投递」）；设计文档 delivery pipeline 是 CI/CD 交付流水线泛称（中文「交付」），非本词条 | 拉 | — |
 | **fetch** | 从远端仓库拉对象到平台 bare 仓库 | 日 | pull（pull 专属镜像拉取） |
 | **source**（git） | 应用的代码来源配置（URL/分支/认证） | 拉 | remote（指 git 语义的远端） |
@@ -54,7 +54,7 @@
 | **sweep** | 周期扫描轮（**仅** ingress 收敛/续期扫描语义） | 日 | 见 flagged ①：缓存过期删除不得称 sweep |
 | **backup** | 控制面状态快照（VACUUM INTO + 回读校验入台账） | 日 | dump |
 | **envelope** | age 信封加密形态 | 拉 | — |
-| **token** | Bearer 凭据（scope 三级）；基础设施同形名必须带限定词：hook token / bootstrap admin token / ingress config bearer / ACME challenge token（RFC 词） | 日 | key（裸词在 secrets 语境专指 age 主密钥；git/env/volume 键必须带限定词：git key / env key / volume key） |
+| **token** | Bearer 凭据（scope 三级）；基础设施同形名必须带限定词：bootstrap admin token / ingress config bearer / ACME challenge token（RFC 词）；hook token 随 git push 面 2026-09-29 退役（ADR-0012） | 日 | key（裸词在 secrets 语境专指 age 主密钥；env/volume 键必须带限定词：env key / volume key） |
 | **principal** | 通过鉴权的调用方身份 | 拉 | — |
 
 ## 入口与放置
@@ -124,7 +124,7 @@
 
 - **stage vs phase**：错误信封用 `stage`（管线阶段 resolve/build/deploy/serve）；部署子状态用 `phase`（blocked_waiting）——两词不得互换。
 - **CLI 单条读**：资源单条用 `get`（apps/env），复合视图用 `show`（placement/drift/webhook/ingress status）；列动词统一 `list`。
-- **CLI 增删动词**：资源内与 RPC 成对（tokens create/revoke、git keys add/rm、env set/rm、apps delete、builds trigger、backups create）；跨资源的 `add/create/set` 与 `rm/delete/revoke` 差异属语义选择，不算混族。
+- **CLI 增删动词**：资源内与 RPC 成对（tokens create/revoke、env set/rm、apps delete、builds trigger、backups create）；跨资源的 `add/create/set` 与 `rm/delete/revoke` 差异属语义选择，不算混族。（git keys add/rm 随 git push 面 2026-09-29 退役。）
 - **DB 受控别名**：`git_branch` 列名与 API `source_branch` 并存（迁移只加法纪律）——读代码时以此映射为准，不视为漂移。
 - **中文译名**：回滚/回退分域、切流/发布分层、锚定（锚写废止）、监听面（entrypoint）、凭据/令牌分指。
 - **已知文档-实现差异**（非命名问题，记为遗留）：release-semantics §2.4 写 revision `status ∈ {candidate|active|superseded}`，v0.1 实现只有 active/superseded。

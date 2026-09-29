@@ -140,15 +140,6 @@ export type BuildView = Schemas["v1BuildView"];
 export type GetBuildResponse = Schemas["v1GetBuildResponse"];
 export type ListBuildsResponse = Schemas["v1ListBuildsResponse"];
 
-// ── git keys（T2.19 git push(SSH) 认证面；proto fleetly/server/v1/gitkeys.proto）──
-// 无敏感投影：公钥本体为公开材料（指纹可复算），私钥永不经过平台。
-
-export type GitKeyView = Schemas["v1GitKeyView"];
-export type AddGitKeyRequest = Schemas["v1AddGitKeyRequest"];
-export type AddGitKeyResponse = Schemas["v1AddGitKeyResponse"];
-export type ListGitKeysResponse = Schemas["v1ListGitKeysResponse"];
-export type RemoveGitKeyResponse = Schemas["v1RemoveGitKeyResponse"];
-
 // ── apps webhook/git 触发面（T2.19；proto apps.proto，admin scope）────────
 // secret 与 source 认证材料均为只写（响应只回 configured 位/回显非敏感字段）。
 

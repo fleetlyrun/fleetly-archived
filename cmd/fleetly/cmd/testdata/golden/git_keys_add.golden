@@ -1,7 +1,0 @@
-{
-  "id": "<ulid>",
-  "fingerprint": "SHA256:<fingerprint>",
-  "key_type": "ssh-ed25519",
-  "note": "operator laptop",
-  "created_at": "<rfc3339>"
-}

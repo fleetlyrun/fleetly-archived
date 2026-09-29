@@ -91,12 +91,11 @@ func newTestEnv(t *testing.T) *testEnv {
 		grpc.ChainUnaryInterceptor(auth.UnaryAuthInterceptor()),
 		grpc.ChainStreamInterceptor(auth.StreamAuthInterceptor()),
 	)
-	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, "127.0.0.1:8424", nil))
-	serverv1.RegisterDeploymentsServiceServer(srv, NewDeploymentsService(st, nil))
+	serverv1.RegisterAppsServiceServer(srv, NewAppsService(st, box, nil))
+	serverv1.RegisterDeploymentsServiceServer(srv, NewDeploymentsService(st))
 	serverv1.RegisterBuildsServiceServer(srv, NewBuildsService(st, nil, build.UploadConfig{}))
 	serverv1.RegisterEnvServiceServer(srv, NewEnvService(st, box))
 	serverv1.RegisterTokensServiceServer(srv, NewTokensService(st))
-	serverv1.RegisterGitKeysServiceServer(srv, NewGitKeysService(st))
 
 	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = srv.Serve(lis) }()

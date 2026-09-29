@@ -16,7 +16,7 @@
 
 fleetly **不做 CI**：不跑用户测试、不校验用户产物。CI 由用户自带的 GitHub Actions / GitLab CI 承担。
 
-fleetly 做 CD：`git push` / Webhook / API / CLI 触发的构建 → 发布 → 路由 → 回滚 → 观察窗。演进方向：
+fleetly 做 CD：Webhook（签名投递+拉源）/ API / CLI 触发的构建 → 发布 → 路由 → 回滚 → 观察窗（git push(SSH) 收包面已移除，ADR-0012）。演进方向：
 
 - v0.2+：**CI 门禁**——webhook 只接受 CI 已通过的事件（避免「测试挂了还自动上线」）；
 - v0.3：预览环境消费 PR 事件（合并即销毁）。

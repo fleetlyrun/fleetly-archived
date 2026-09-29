@@ -242,24 +242,13 @@ metrics:
   # 对齐 -retentionPeriod；非正值回落缺省）。
   retention_days: 14
 
-# git push(SSH) 触发入口（T2.19）。宿主 git 为前置条件；bare 仓库按 app
-# 懒创建（<root>/<app>.git），post-receive 钩子回调控制面入队部署。
+# git webhook 触发入口（T2.19；git push(SSH) 收包面已随 2026-09-29 裁决
+# 移除，ADR-0012——bare 仓库保留为 webhook 拉源的 fetch 落点与 compose 读
+# 取源。存量配置文件里的 git.enabled/addr/public_endpoint/host_key_file 键
+# 会被解析层静默忽略，无需清理）。
 git:
-  # SSH git 面开关（缺省 true）。
-  enabled: true
-  # SSH 监听地址。安全默认基线：只绑回环（内部服务默认不暴露公网）——
-  # VPS 上对外提供 git push 时改为 0.0.0.0:8424（或宿主 IP）并配合防火墙。
-  addr: "127.0.0.1:8424"
-  # git remote 提示的对外 host:port（可空）。Console「Deploy triggers」卡
-  # 展示的 push 地址用它；解析链 = 本键显式配置 > base_domain 域名 > 监听
-  # 地址主机位（通配/回环形态）。域名化部署留空即可（自动用 base_domain）；
-  # git SSH 走独立主机名/端口时显式配置，如 "git.example.com:8424"。
-  public_endpoint: ""
   # bare 仓库根目录；留空 = <state 库同目录>/git。
   root: ""
-  # SSH host key 文件（ed25519 首启自动生成并持久化，指纹见启动日志；
-  # 私钥绝不打印）；留空 = <root>/host_ed25519。
-  host_key_file: ""
 
 # webhook 触发入口（T2.19）：POST /v1/apps/<app>/webhooks/github|gitea。
 # per-app secret 经 `fleetly apps webhook set-secret` 配置（未配置即未启用）；

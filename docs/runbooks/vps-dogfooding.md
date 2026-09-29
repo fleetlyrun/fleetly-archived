@@ -47,7 +47,7 @@ docker pull traefik/whoami:v1.10                    # demo 应用镜像
 | 公开 release 安装（下载+checksum+门禁+systemd） | ✅（签名轨见 F1） |
 | REST /v1（外网 Bearer）+ /ui/（console 托管） | ✅ http://146.190.58.0:8420 |
 | CLI deploy（hello-web，域名变更 ×4 次部署） | ✅ running/succeeded/revision 链 |
-| **git push 部署**（ssh://git@host:8424/<app>.git，TOFU+指纹审计+push 即 queue） | ✅ ×2（初推+空提交重触发） |
+| **git push 部署**（ssh://git@host:8424/<app>.git，TOFU+指纹审计+push 即 queue）〔2026-09-29 注记：该通道已随 ADR-0012 裁决移除——本行为历史实测记录，现役部署通道 = webhook 签名投递+拉源 / CLI compose 上传〕 | ✅ ×2（初推+空提交重触发） |
 | rollback（快照重放，--to 指定 revision） | ✅（服务端异步完成，见 F6） |
 | **LE 生产证书**（HTTP-01 经 Traefik 反代→集中签发→台账） | ✅ hello.dev + demo.dev 双证，issuer=Let's Encrypt CN=YE2，有效期至 2026-12-19 |
 | HTTPS 服务 | ✅ 双域名 200（whoami 实答） |

@@ -50,9 +50,6 @@ var (
 	// volatileHashPrefix 是 token 列表的哈希前缀（sha256 前 12 hex——
 	// 识别用非凭据，但逐 token 不同）。
 	volatileHashPre = regexp.MustCompile(`"hash_prefix": "[0-9a-f]{12}"`)
-	// volatileFingerprint 是 git key 的 SHA256 指纹（T2.19；识别用非凭据，
-	// 逐 key 不同）。
-	volatileFingerprint = regexp.MustCompile(`SHA256:[A-Za-z0-9+/]+={0,3}`)
 	// volatileQualifiedName 是三段限定形 app 值（v0.3 W2-S3 流标签口径：
 	// t<pkg>/p<pkg> 夹具 slug 段逐次不同——golden 只保留裸名段；紧凑与
 	// protojson 两种冒号形态都归一）。
@@ -71,7 +68,6 @@ func normalizeVolatile(s string) string {
 	s = volatileRFC3339.ReplaceAllString(s, "<rfc3339>")
 	s = volatileAppID8.ReplaceAllString(s, `-<appid8>"`)
 	s = volatileHashPre.ReplaceAllString(s, `"hash_prefix": "<hashprefix>"`)
-	s = volatileFingerprint.ReplaceAllString(s, "SHA256:<fingerprint>")
 	s = volatileQualifiedName.ReplaceAllString(s, `"app": "`)
 	s = volatileQualifiedNameCp.ReplaceAllString(s, `"app":"`)
 	s = volatileSlugPair.ReplaceAllString(s, `"${1}_slug": "<${1}-slug>"`)

@@ -32,7 +32,7 @@ sudo sh install.sh --bin-dir ./dist                              # 离线 / 开�
 
 | 领域 | 行为 | 版本 |
 |---|---|---|
-| 部署 | git push / webhook / API → Railpack 或 Dockerfile 构建 → 零停机切流 → 观察窗 | v0.1 |
+| 部署 | webhook（GitHub/Gitea）/ API → Railpack 或 Dockerfile 构建 → 零停机切流 → 观察窗 | v0.1 |
 | 发布安全 | Swarm `failure-action=pause` + 平台版本重放（保留最近 5 个已验证版本）；不用 Swarm 原生回滚 | v0.1 |
 | 路由 / TLS | 每节点 Traefik，路由与证书由控制面下发；集中 ACME（HTTP-01）、多 SAN 域名列表 | v0.1 |
 | 状态 | SQLite 控制面状态，三层模型（权威 / 观测缓存 / 实时直读） | v0.1 |
@@ -61,7 +61,7 @@ sudo sh install.sh --bin-dir ./dist                              # 离线 / 开�
 ## 架构
 
 ```
-CLI (fleetly) / Console / gRPC / REST / git push (SSH) / Webhook
+CLI (fleetly) / Console / gRPC / REST / Webhook
                  │
    fleetlyd —— 运行于 Swarm manager 的 Go 单二进制
      API：gRPC + grpc-gateway（proto = 唯一契约真源）
@@ -94,7 +94,7 @@ deploy/           安装器与 systemd unit（随 T2.1 落地）
 CLI 只经 gRPC（SDK）与守护进程通信——没有任何直开数据库或直连 Docker 的路径。所有触达平台的动词都带 `--addr`（默认 `127.0.0.1:8421`，env `FLEETLY_ADDR`）、`--token`（env `FLEETLY_TOKEN`）与 team/project 上下文 flag `--team`/`--project`（env `FLEETLY_TEAM`/`FLEETLY_PROJECT`）；token 与上下文的读取序为 flag > env > 本地配置 `~/.fleetly/config.yaml`。`fleetly auth login` 验证粘贴的 PAT（经 `Me`）后连同当前 team/project 上下文落盘该文件；`fleetly auth status` 展示身份与上下文，`fleetly auth logout` 只清本地副本（服务端吊销仍走 `fleetly tokens revoke`）。bootstrap admin token 在首启时**一次性写入** `<数据根>/bootstrap-token` 文件（不进日志；首登后删除），后续 token 由 `fleetly tokens create` 签发。全部动词支持 `--json`；退出码 `0` 成功/无变化、`1` 错误、`2` 有变化（仅 `plan`/`diff`）、`64` 用法错误（未知动词/flag 或参数违规，EX_USAGE 惯例）。flags 需置于位置参数之前（Go std `flag` 语义）。一元 RPC 带缺省 30s deadline；流式动词（`logs follow`、`events watch`）与等待动词（`deploy`、`build`、`rollback`）上 Ctrl-C 干净退出（退出码 0）。
 
 ```bash
-fleetlyd &                                  # 控制面（gRPC :8421，HTTP :8420，git SSH :8424）
+fleetlyd &                                  # 控制面（gRPC :8421，HTTP :8420）
 export FLEETLY_ADDR=127.0.0.1:8421
 
 fleetly auth login                          # 粘贴一次 PAT；落盘 ~/.fleetly/config.yaml
@@ -109,17 +109,6 @@ fleetly env set my-api KEY value            # 随下次部署生效
 fleetly rollback my-api                     # 版本重放（最近 5 版）
 fleetly drift show my-api                   # 期望态 vs 实况
 fleetly tokens create --scopes deploy --note CI   # 明文仅此一次显示
-```
-
-### 通过 `git push`（SSH）部署
-
-守护进程内嵌 SSH git 端点（默认 `127.0.0.1:8424`——安全默认只绑回环；VPS 上对外时改 `git.addr` 并配防火墙）。注册公钥后向应用 bare 仓库推送：仓库根的 `compose.yaml`/`compose.yml` 即部署单元，推送到应用配置分支（默认 `main`）触发部署。
-
-```bash
-fleetly git keys add --note laptop ~/.ssh/id_ed25519.pub   # admin scope；库内只落指纹
-git remote add fleetly ssh://git@127.0.0.1:8424/my-api.git
-git push fleetly main                                      # → 构建 → 零停机切流
-fleetly git keys list && fleetly git keys rm <id>
 ```
 
 ### 通过 Webhook（GitHub / Gitea）部署

@@ -24,7 +24,6 @@ const (
 	DeploymentsService_Deploy_FullMethodName             = "/fleetly.server.v1.DeploymentsService/Deploy"
 	DeploymentsService_CancelDeployment_FullMethodName   = "/fleetly.server.v1.DeploymentsService/CancelDeployment"
 	DeploymentsService_RollbackDeployment_FullMethodName = "/fleetly.server.v1.DeploymentsService/RollbackDeployment"
-	DeploymentsService_DeployFromGit_FullMethodName      = "/fleetly.server.v1.DeploymentsService/DeployFromGit"
 )
 
 // DeploymentsServiceClient is the client API for DeploymentsService service.
@@ -45,13 +44,6 @@ type DeploymentsServiceClient interface {
 	Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (*DeployResponse, error)
 	CancelDeployment(ctx context.Context, in *CancelDeploymentRequest, opts ...grpc.CallOption) (*CancelDeploymentResponse, error)
 	RollbackDeployment(ctx context.Context, in *RollbackDeploymentRequest, opts ...grpc.CallOption) (*RollbackDeploymentResponse, error)
-	// DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-
-	// receive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务
-	// 端从 bare 仓库 `git show <sha>:compose.{yaml,yml}` 自取（compose 真源
-	// 在 git 对象库，不信任客户端传字节）。幂等口径：git push 是显式用户
-	// 动作——每次调用都建部署记录（引擎同 spec 重放安全）；(app, sha) 去重
-	// 仅属 webhook 入口。scope = deploy（hook token 最小权限）。
-	DeployFromGit(ctx context.Context, in *DeployFromGitRequest, opts ...grpc.CallOption) (*DeployFromGitResponse, error)
 }
 
 type deploymentsServiceClient struct {
@@ -112,16 +104,6 @@ func (c *deploymentsServiceClient) RollbackDeployment(ctx context.Context, in *R
 	return out, nil
 }
 
-func (c *deploymentsServiceClient) DeployFromGit(ctx context.Context, in *DeployFromGitRequest, opts ...grpc.CallOption) (*DeployFromGitResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DeployFromGitResponse)
-	err := c.cc.Invoke(ctx, DeploymentsService_DeployFromGit_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // DeploymentsServiceServer is the server API for DeploymentsService service.
 // All implementations must embed UnimplementedDeploymentsServiceServer
 // for forward compatibility.
@@ -140,13 +122,6 @@ type DeploymentsServiceServer interface {
 	Deploy(context.Context, *DeployRequest) (*DeployResponse, error)
 	CancelDeployment(context.Context, *CancelDeploymentRequest) (*CancelDeploymentResponse, error)
 	RollbackDeployment(context.Context, *RollbackDeploymentRequest) (*RollbackDeploymentResponse, error)
-	// DeployFromGit 是 git push(SSH) 触发入口的服务端入队（T2.19）：post-
-	// receive 钩子经 loopback REST 携带 hook token 调用；compose 字节由服务
-	// 端从 bare 仓库 `git show <sha>:compose.{yaml,yml}` 自取（compose 真源
-	// 在 git 对象库，不信任客户端传字节）。幂等口径：git push 是显式用户
-	// 动作——每次调用都建部署记录（引擎同 spec 重放安全）；(app, sha) 去重
-	// 仅属 webhook 入口。scope = deploy（hook token 最小权限）。
-	DeployFromGit(context.Context, *DeployFromGitRequest) (*DeployFromGitResponse, error)
 	mustEmbedUnimplementedDeploymentsServiceServer()
 }
 
@@ -171,9 +146,6 @@ func (UnimplementedDeploymentsServiceServer) CancelDeployment(context.Context, *
 }
 func (UnimplementedDeploymentsServiceServer) RollbackDeployment(context.Context, *RollbackDeploymentRequest) (*RollbackDeploymentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackDeployment not implemented")
-}
-func (UnimplementedDeploymentsServiceServer) DeployFromGit(context.Context, *DeployFromGitRequest) (*DeployFromGitResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DeployFromGit not implemented")
 }
 func (UnimplementedDeploymentsServiceServer) mustEmbedUnimplementedDeploymentsServiceServer() {}
 func (UnimplementedDeploymentsServiceServer) testEmbeddedByValue()                            {}
@@ -286,24 +258,6 @@ func _DeploymentsService_RollbackDeployment_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DeploymentsService_DeployFromGit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeployFromGitRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DeploymentsServiceServer).DeployFromGit(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DeploymentsService_DeployFromGit_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DeploymentsServiceServer).DeployFromGit(ctx, req.(*DeployFromGitRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // DeploymentsService_ServiceDesc is the grpc.ServiceDesc for DeploymentsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -330,10 +284,6 @@ var DeploymentsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RollbackDeployment",
 			Handler:    _DeploymentsService_RollbackDeployment_Handler,
-		},
-		{
-			MethodName: "DeployFromGit",
-			Handler:    _DeploymentsService_DeployFromGit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

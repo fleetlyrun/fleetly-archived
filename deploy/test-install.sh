@@ -23,7 +23,7 @@
 #   A3  swarm init：dind 内无 swarm → 安装后 Swarm active，advertise-addr
 #       为私网 IP（dind 环境判定）
 #   A4  daemon 手动启动（--no-systemd 口径）→ /healthz/liveness 200；
-#       git SSH 8424 监听；gRPC 8421 只绑回环
+#       gRPC 8421 只绑回环（git SSH 8424 面已移除，ADR-0012）
 #   A5  CLI 可连：bootstrap token 从 <数据根>/bootstrap-token 文件读取
 #       （B5：token 不进日志）→ fleetly apps list
 #   A6  重装幂等：已有 swarm → 跳过 init 不报错；已有 config 保留
@@ -163,8 +163,9 @@ grep -q '127.0.0.1:8421' /opt/fleetly/etc/config.yaml
 assert "A2-config-grpc-loopback" $?
 grep -q '/var/lib/fleetly/fleetly.db' /opt/fleetly/etc/config.yaml
 assert "A2-config-db-under-data-root" $?
-grep -q '0.0.0.0:8424' /opt/fleetly/etc/config.yaml
-assert "A2-config-git-public-bound" $?
+# git push(SSH) 面已移除（ADR-0012）——生成配置不再含 8424 监听键。
+! grep -q '8424' /opt/fleetly/etc/config.yaml
+assert "A2-config-git-ssh-absent" $?
 
 # unit 参考副本与 deploy/fleetlyd.service 模板逐字一致（防两份漂移）。
 diff /opt/fleetly/etc/fleetlyd.service "$SERVICE_TPL" >/dev/null 2>&1
@@ -185,8 +186,8 @@ grep -q 'advertise-addr' "$INSTALL_LOG"
 assert "A2-report-advertise-addr" $?
 grep -q 'port exposure' "$INSTALL_LOG"
 assert "A2-report-port-exposure-section" $?
-grep -q '8424' "$INSTALL_LOG"
-assert "A2-report-git-port" $?
+! grep -q '8424' "$INSTALL_LOG"
+assert "A2-report-git-port-absent" $?
 grep -q '2377' "$INSTALL_LOG"
 assert "A2-report-swarm-ports" $?
 grep -q 'bootstrap token' "$INSTALL_LOG"
@@ -233,8 +234,9 @@ if [ "$_LIVE" -eq 0 ]; then
     tail -n 40 "$DLOG" || true
 fi
 
-netstat -tln 2>/dev/null | grep -q ':8424 '
-assert "A4-git-ssh-listening" $?
+# git SSH 8424 面已移除（ADR-0012）——端口不应监听。
+! netstat -tln 2>/dev/null | grep -q ':8424 '
+assert "A4-git-ssh-not-listening" $?
 netstat -tln 2>/dev/null | grep -q '127.0.0.1:8421 '
 assert "A4-grpc-loopback-listening" $?
 # HTTP 面按配置绑 0.0.0.0:8420，Go 通配监听可能落 [::]:8420（双栈）——
@@ -309,10 +311,9 @@ ingress:
   token_file: "/var/lib/fleetly/fleetly-ingress.token"
   cert_dir: "/var/lib/fleetly/fleetly-certs"
 
-# git push(SSH) 触发入口：绑定 0.0.0.0 对外提供 git push——安装报告已明示
-# 该暴露面；不需要时改回 127.0.0.1:8424（config-example.yaml 注释口径）。
+# git webhook 触发入口：bare 仓库根（webhook 拉源的 fetch 落点）。git push
+# (SSH) 收包面已移除（ADR-0012），无监听端口。
 git:
-  addr: "0.0.0.0:8424"
   root: "/var/lib/fleetly/git"
 
 logging:

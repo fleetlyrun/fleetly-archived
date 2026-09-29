@@ -1,9 +1,10 @@
 #!/bin/sh
 # deploy/run-journey-test.sh — T2.26 v0.1 端到端验收旅程的宿主编排（架构
-# §4.2 验收段的 dind 全链版：一条命令安装 → git push(SSH) 部署 → HTTPS 200
-# （Pebble 链路，T2-6 实证模式的回归化）→ UI 数据可见 → 一键回滚 → 全程
-# 计时 ≤20min 硬断言。真 VPS dogfooding 属 M2 后置项（delivery-pipeline
-# §2.6，口径见 docs/reports/2026-09-19-v0.1-acceptance.md）。模式照抄
+# §4.2 验收段的 dind 全链版：一条命令安装 → API/webhook 部署拿到 HTTPS 200
+# （Pebble 链路，T2-6 实证模式的回归化；git push(SSH) 收包面 2026-09-29
+# 移除，ADR-0012——J3 CLI deploy + J6 签名 webhook 投递+拉源双通道）→ UI
+# 数据可见 → 一键回滚 → 全程计时 ≤20min 硬断言。真 VPS dogfooding 属 M2
+# 后置项（delivery-pipeline §2.6，口径见 docs/reports/2026-09-19-v0.1-acceptance.md）。模式照抄
 # run-upgrade-test.sh：交叉编译 fleetlyd+fleetly+探针 → 宿主构建 probeapp:1
 # 镜像（docker save|gzip）→ 起 docker:29.8.1-dind 特权容器 → exec+stdin
 # 注入（禁用 docker cp——Engine 29.x 宿主→特权 dind 会 exit 0 但文件不落

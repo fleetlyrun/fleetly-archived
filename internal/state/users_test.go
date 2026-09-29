@@ -377,7 +377,7 @@ func TestMigration00018RBACSchema(t *testing.T) {
 
 	// 加列清单（列名 → 携表）+ 00019 收紧后的 NOT NULL 终态：
 	//   apps/db_instances 归属列 = NOT NULL（notnull = 1）；
-	//   tokens/git_keys 用户化列保持可空（语义 NULL：机具令牌/不绑定/存量）。
+	//   tokens 用户化列保持可空（语义 NULL：机具令牌/不绑定/存量）。
 	for _, tc := range []struct {
 		table, col  string
 		wantNotNull int
@@ -385,7 +385,6 @@ func TestMigration00018RBACSchema(t *testing.T) {
 		{"apps", "project_id", 1}, {"apps", "team_id", 1},
 		{"db_instances", "project_id", 1}, {"db_instances", "team_id", 1},
 		{"tokens", "user_id", 0}, {"tokens", "project_id", 0},
-		{"git_keys", "user_id", 0},
 	} {
 		rows, err := st.db.QueryContext(ctx, `PRAGMA table_info(`+tc.table+`)`)
 		if err != nil {

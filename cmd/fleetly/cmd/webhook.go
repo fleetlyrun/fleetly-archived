@@ -131,8 +131,7 @@ func (c *webhookShowCmd) Run(ctx context.Context, env *commands.Environment, arg
 		var b strings.Builder
 		fmt.Fprintf(&b, "app: %s\n", resp.GetName())
 		fmt.Fprintf(&b, "  webhook secret: %s\n", configuredWord(resp.GetSecretConfigured()))
-		fmt.Fprintf(&b, "  branch: %s (push/fetch)\n", resp.GetSourceBranch())
-		fmt.Fprintf(&b, "  git remote: %s\n", resp.GetGitRemoteHint())
+		fmt.Fprintf(&b, "  branch: %s (webhook trigger/fetch)\n", resp.GetSourceBranch())
 		fmt.Fprintf(&b, "  source url: %s\n", orDash(resp.GetSourceUrl()))
 		fmt.Fprintf(&b, "  source auth: %s\n", resp.GetSourceAuthKind())
 		_, err = fmt.Fprint(env.Stdout, b.String())

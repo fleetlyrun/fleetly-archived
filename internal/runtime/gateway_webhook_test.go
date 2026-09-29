@@ -57,10 +57,8 @@ func TestGatewayWebhookNativeEndpoints(t *testing.T) {
 	}
 
 	src := gitserver.NewGitTriggers(gitserver.Config{
-		Enabled:      true,
-		Root:         filepath.Join(dir, "git"),
-		HookEndpoint: "http://127.0.0.1:1",
-		ReplayTTL:    time.Minute,
+		Root:      filepath.Join(dir, "git"),
+		ReplayTTL: time.Minute,
 	}, st, box, discardLogger())
 
 	// --- gRPC 面：与 NewGRPCServer 同构（完整拦截链 + 服务注册）。---
@@ -82,8 +80,8 @@ func TestGatewayWebhookNativeEndpoints(t *testing.T) {
 	g := gs.GetServer()
 	serverv1.RegisterSystemServiceServer(g, api.NewSystemService("dev", st,
 		func() []api.SystemComponent { return nil }, nil, nil))
-	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, "127.0.0.1:8424", nil))
-	serverv1.RegisterDeploymentsServiceServer(g, api.NewDeploymentsService(st, nil))
+	serverv1.RegisterAppsServiceServer(g, api.NewAppsService(st, box, nil))
+	serverv1.RegisterDeploymentsServiceServer(g, api.NewDeploymentsService(st))
 	serverv1.RegisterTokensServiceServer(g, api.NewTokensService(st))
 	if err := gs.Init(nil); err != nil {
 		t.Fatalf("grpc Init: %v", err)

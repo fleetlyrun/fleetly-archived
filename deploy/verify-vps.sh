@@ -89,8 +89,8 @@ else
   fail "iptables: not found"
 fi
 
-# ── 端口占用（平台面：80/443 入口；8420 网关；8424 git；8423 预留）──
-for p in 80 443 8420 8423 8424; do
+# ── 端口占用（平台面：80/443 入口；8420 网关；8423 预留；8424 git SSH 已移除，ADR-0012）──
+for p in 80 443 8420 8423; do
   if ss -ltn 2>/dev/null | grep -q ":$p "; then
     fail "port $p: already listening（ss -ltn | grep :$p 定位占用者）"
   else

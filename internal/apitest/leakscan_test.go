@@ -86,7 +86,7 @@ func TestLeakScanStateErrorThroughHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureKey: %v", err)
 	}
-	svc := api.NewAppsService(st, box, "127.0.0.1:8424", nil)
+	svc := api.NewAppsService(st, box, nil)
 	if err := st.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -127,9 +127,7 @@ func TestLeakScanWebhookFetchFailure(t *testing.T) {
 		t.Fatalf("EnsureKey: %v", err)
 	}
 	src := gitserver.NewGitTriggers(gitserver.Config{
-		Enabled:      true,
-		Root:         filepath.Join(dir, "git"),
-		HookEndpoint: "http://127.0.0.1:1",
+		Root: filepath.Join(dir, "git"),
 	}, st, box, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	// D1：worker 随用例启停。StopWebhookWorker 等待的是「ctx 取消触发的
 	// 排水 + drain」完成（生产面由 lynx Start ctx 取消驱动），用例需可
