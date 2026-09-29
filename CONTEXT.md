@@ -76,7 +76,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 4. **注册表只增不复用**：errcode/eventcode 构造期 panic + golden + usage 扫描三链咬合（ADR-0011）。
 5. **Compose 白名单只增不减**；受管字段拒绝不静默覆盖（ADR-0015）。
 
-**守卫测试清单**（动这些面时白名单要保鲜）：`TestNoConvergenceOutsidePrimitive`、`TestNoHandWrittenAppLabelFilters`、`TestNoBareTaskStatusWrites`、`TestOwnershipAnchorConstantsCoveredByPredicate`、`TestMethodScopeRegistryCoversDescriptor`、`TestActiveImplDocsReferenceExistingTests`（impldocscan）、`TestGoldenSnapshot`（errcode/eventcode）、usage 反向扫描；CI 级另有 deadcode 门禁（豁免需持理由入 `internal/testdata/deadcode-allow.txt`）、antipattern-grep、buf breaking、wire generate-sync、console schema.d.ts 漂移门。
+**守卫测试清单**（动这些面时白名单要保鲜）：`TestNoConvergenceOutsidePrimitive`、`TestNoHandWrittenAppLabelFilters`、`TestNoBareTaskStatusWrites`、`TestOwnershipAnchorConstantsCoveredByPredicate`、`TestMethodScopeRegistryCoversDescriptor`、`TestActiveImplDocsReferenceExistingTests`（impldocscan）、`TestGoldenSnapshot`（errcode/eventcode）、usage 反向扫描、投影契约腿（`testsupport.ServiceProjectionPairs` 契约表——engine fake 投影面与 substrate 纯翻译层咬同一张表，spec/state 加字段不入表即红）；CI 级另有 deadcode 门禁（豁免需持理由入 `internal/testdata/deadcode-allow.txt`）、antipattern-grep、buf breaking、wire generate-sync、console schema.d.ts 漂移门。
 
 ## 6. 架构评审须知
 

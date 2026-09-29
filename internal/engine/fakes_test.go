@@ -179,8 +179,15 @@ func (f *fakeSubstrate) stateOf(svc *fakeService) ServiceState {
 		Replicas:      globalReplicasOf(svc.spec),
 		UpdateState:   svc.update,
 		UpdateMessage: svc.message,
-		// spec 侧深投影（真实适配器同构：漂移反解的实况侧输入）。
+		// spec 侧深投影（真实适配器同构：漂移反解的实况侧输入。C3 契约腿
+		// 钉住字段集——Args/User/ReadOnlyRootfs/CapDrop/PidsLimit 曾在 fake
+		// 侧漏投影〔真适配器 serviceToState 全读回〕，2026-09-29 补齐）。
 		Command:         append([]string{}, svc.spec.Command...),
+		Args:            append([]string{}, svc.spec.Args...),
+		User:            svc.spec.User,
+		ReadOnlyRootfs:  svc.spec.ReadOnlyRootfs,
+		CapDrop:         append([]string{}, svc.spec.CapDrop...),
+		PidsLimit:       svc.spec.PidsLimit,
 		Env:             append([]string{}, svc.spec.Env...),
 		ContainerLabels: svc.spec.ContainerLabels,
 		Global:          svc.spec.Global,

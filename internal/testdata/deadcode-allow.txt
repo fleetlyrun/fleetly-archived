@@ -103,6 +103,11 @@ unreachable func: AllTaskStatuses
 # 消费；deadcode 无 -test 面的原生盲区，整文件豁免）。
 internal/testsupport/fixture.go
 
+# testsupport：投影字段往返契约检查器（2026-09-29 C3）——消费面 =
+# engine/substrate 两侧 *_test 的契约腿（fakeSubstrate 投影面与 substrate
+# 纯翻译层咬同一张表；同 fixture.go 的 -test 盲区待遇）。
+internal/testsupport/projection_contract.go
+
 # sdk/go：WithTLSInsecure 是 SDK 对外选项面（外部消费仓经 SDK DialGRPC
 # TLS 接入——IMPL-T1-6 割接形态；主模块 RTA 天然不可达外部使用方）。
 unreachable func: WithTLSInsecure
