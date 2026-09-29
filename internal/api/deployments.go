@@ -158,6 +158,14 @@ func (s *DeploymentsService) Deploy(ctx context.Context, req *serverv1.DeployReq
 	if err != nil {
 		return nil, err
 	}
+	// 挂起门（app Stop/Start，00028 位）：挂起期副本 0 是期望形态（引擎
+	// 排水腿每拍保持），新部署入队会与排水互搏——显式拒绝（幂等面：resume
+	// 清位并自带 active revision 重部署）。
+	if app.Suspended {
+		return nil, apperr.New("E_APP_SUSPENDED",
+			"app %s is suspended — resume it before deploying (Console: Start; resume redeploys the active revision)", app.Name).
+			WithContext("app", app.Name)
+	}
 	// 破坏性变更门控（MG-C3，架构 §2.4 plan/apply 语义）：destructive 且
 	// 未携带 confirm_destructive → E_DEPLOY_CONFIRM_REQUIRED、不入队。
 	// 边界（v0.1）：DeployFromGit（git push 路径）不加此闸——admin scope +

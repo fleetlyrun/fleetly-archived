@@ -45,6 +45,9 @@ var (
 	// ErrInvalidLifecycleTransition 表示生命周期状态位迁移非法
 	// （状态机：active → deleting → deleted，不可跳越、不可回退）。
 	ErrInvalidLifecycleTransition = errors.New("invalid app lifecycle transition")
+	// ErrAppSuspendedConflict 表示挂起位 CAS 落败（并发翻转已发生——重复
+	// suspend/resume 幂等面由调用方以重读投影消化，本哨兵不按错误文案呈现）。
+	ErrAppSuspendedConflict = errors.New("app suspend state changed concurrently")
 )
 
 // App 是应用权威态行（v0.1 最小面：期望态根 + tombstone 状态位；v0.3 W2-S3
@@ -70,6 +73,11 @@ type App struct {
 	// true = 成员服务在 app 私网之外双挂当前项目的项目网；唯一改变路径 =
 	// ProjectsService attach/detach RPC。缺省 false = 不参加（既有行为零变化）。
 	ProjectNetworkAttached bool
+	// Suspended 是挂起位（app Stop/Start，00028 加法列）：true = 用户请求
+	// 停止——引擎周期对账把受管长驻服务排水到副本 0（服务对象保留，DB
+	// paused 同款「状态驱动渲染」形态）；部署入队/drift/autoscaler 按位
+	// 豁免。唯一改变路径 = AppsService suspend/resume RPC。
+	Suspended bool
 }
 
 // QualifiedName 返回三段限定形 `team/prj/app`（D-W0-9 引用口径；naming.
@@ -83,7 +91,7 @@ func (a App) QualifiedName() string {
 // appScanCols 是应用行查询列清单（归属 slug 经 projects/teams join 反解；
 // 新增列只加在此与 scanApp）。
 const appScanCols = `a.id, a.name, a.lifecycle, a.created_at, a.updated_at, a.deleting_at, a.deleted_at,
-	a.project_id, a.team_id, t.slug, p.slug, a.project_network_attached`
+	a.project_id, a.team_id, t.slug, p.slug, a.project_network_attached, a.suspended`
 
 // appScanFrom 是应用行查询的 FROM 子句（slug join 单点）。
 const appScanFrom = `FROM apps a
@@ -213,15 +221,16 @@ func scanApp(row interface{ Scan(dest ...any) error }) (App, error) {
 	var lifecycle string
 	var created, updated int64
 	var deleting, deleted sql.NullInt64
-	var attached int
+	var attached, suspended int
 	if err := row.Scan(&a.ID, &a.Name, &lifecycle, &created, &updated, &deleting, &deleted,
-		&a.ProjectID, &a.TeamID, &a.TeamSlug, &a.ProjectSlug, &attached); err != nil {
+		&a.ProjectID, &a.TeamID, &a.TeamSlug, &a.ProjectSlug, &attached, &suspended); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return App{}, ErrAppNotFound
 		}
 		return App{}, fmt.Errorf("state: scan app: %w", err)
 	}
 	a.ProjectNetworkAttached = attached != 0
+	a.Suspended = suspended != 0
 	return finishScanApp(a, lifecycle, created, updated, deleting, deleted), nil
 }
 
@@ -317,6 +326,71 @@ func (t *Tx) MarkAppDeleted(ctx context.Context, appID string) error {
 		return ErrInvalidLifecycleTransition
 	}
 	return nil
+}
+
+// SetAppSuspended 翻转应用挂起位（app Stop/Start，00028 加法列；语义见
+// App.Suspended 与 DB paused 的「状态驱动渲染」对照——本写点只动权威位，
+// 副本排水由引擎周期对账按位执行）。CAS + tombstone 守卫 + 事件同事务
+// （Outbox，形态同 EnterDbPhase——事件由调用方构造传入，位写与披露原子：
+// CAS 落败事务回滚、不产生事件）。行不存在 = ErrAppNotFound；
+// deleting/deleted = ErrAppTombstoned（墓碑不接受业务写）；现值 ≠ 期望 =
+// ErrAppSuspendedConflict（并发翻转已发生，调用方重读投影即可）。
+func (s *Store) SetAppSuspended(ctx context.Context, appID string, suspended bool, events ...Event) (App, error) {
+	var out App
+	err := s.InTx(ctx, func(tx *Tx) error {
+		app, err := tx.SetAppSuspended(ctx, appID, suspended, events...)
+		if err != nil {
+			return err
+		}
+		out = app
+		return nil
+	})
+	if err != nil {
+		return App{}, err
+	}
+	return out, nil
+}
+
+// SetAppSuspended 是事务内挂起位翻转写点（语义见 Store.SetAppSuspended）。
+func (t *Tx) SetAppSuspended(ctx context.Context, appID string, suspended bool, events ...Event) (App, error) {
+	want := 0
+	if suspended {
+		want = 1
+	}
+	res, err := t.ExecContext(ctx,
+		`UPDATE apps SET suspended = ?, updated_at = ?
+		WHERE id = ? AND lifecycle = ? AND suspended != ?`,
+		want, nowNano(), appID, string(LifecycleActive), want)
+	if err != nil {
+		return App{}, fmt.Errorf("state: update app suspended: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return App{}, fmt.Errorf("state: read suspended update count: %w", err)
+	}
+	if n == 0 {
+		// 归类零命中：不存在 / 墓碑 / 并发翻转——三态显式区分（调用面映射
+		// 409 族；不静默幂等成功，前端投影以重读为准）。
+		app, rowErr := t.GetAppByID(ctx, appID)
+		if errors.Is(rowErr, ErrAppNotFound) {
+			return App{}, ErrAppNotFound
+		}
+		if rowErr != nil {
+			return App{}, rowErr
+		}
+		if app.Lifecycle != LifecycleActive {
+			return App{}, fmt.Errorf("%w: app %s is %s", ErrAppTombstoned, appID, app.Lifecycle)
+		}
+		return App{}, fmt.Errorf("%w: app %s suspended already %t", ErrAppSuspendedConflict, appID, app.Suspended)
+	}
+	for _, ev := range events {
+		if _, err := t.AppendEvent(ctx, ev); err != nil {
+			return App{}, err
+		}
+	}
+	// 写后回读（slug join 反解）——返回行与读面同构。
+	return scanApp(t.QueryRowContext(ctx,
+		`SELECT `+appScanCols+` `+appScanFrom+` WHERE a.id = ?`, appID))
 }
 
 // MoveApp 资源改派（rbac-teams §3.4/§5，W2-S3）：写归属（project_id +

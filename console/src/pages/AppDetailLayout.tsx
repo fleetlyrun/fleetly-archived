@@ -1,8 +1,8 @@
-// 应用详情壳：标题行（名称 + 派生状态 + 生命周期）+ 分段式子导航
-// （概览/部署/日志/env/域名）+ 详情数据加载。深链形如
-// /ui/apps/<ref>/deployments——<ref> 支持平台 id（列表行导航口径，同名
-// app 裸名必歧义，2026-09-25 走查裁决）与裸名（唯一名直连）；daemon 的
-// SPA 回退直接可达。
+// 应用详情壳：标题行（名称 + 派生状态 + 生命周期 + 标题栏动作行〔§5 app
+// Stop/Start/Redeploy，databases 标题栏同款〕）+ 分段式子导航（概览/部署/
+// 日志/env/域名）+ 详情数据加载。深链形如 /ui/apps/<ref>/deployments——
+// <ref> 支持平台 id（列表行导航口径，同名 app 裸名必歧义，2026-09-25 走查
+// 裁决）与裸名（唯一名直连）；daemon 的 SPA 回退直接可达。
 
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, Loader2 } from "lucide-react";
@@ -11,6 +11,7 @@ import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { getApp } from "@/api/endpoints";
 import { errorEnvelopeFrom } from "@/api/errors";
+import { AppHeaderActions } from "@/components/app-header-actions";
 import { EnvelopeAlert } from "@/components/envelope-alert";
 import { PillTabs } from "@/components/pill-tabs";
 import { StateBadge } from "@/components/state-badge";
@@ -86,6 +87,9 @@ export function AppDetailLayout() {
             </p>
           ) : null}
         </div>
+        {/* 标题栏动作行（§5，databases 标题栏同款）：Redeploy/Stop/Start——
+            能力门外按角色投影；app 未达时不渲染（避免 Me 前的假按钮闪帧）。 */}
+        {app ? <AppHeaderActions app={app} /> : null}
       </div>
 
       <PillTabs

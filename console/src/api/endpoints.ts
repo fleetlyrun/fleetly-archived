@@ -123,6 +123,8 @@ import type {
   SetSecretResponse,
   SetTeamMemberRoleResponse,
   ShowDriftResponse,
+  ResumeAppResponse,
+  SuspendAppResponse,
   SuspendDatabaseResponse,
   TeamView,
   TestWebhookResponse,
@@ -575,6 +577,26 @@ export function rollbackDeployment(app: string, targetRevisionId?: string) {
       method: "POST",
       json: targetRevisionId ? { target_revision_id: targetRevisionId } : {},
     },
+  );
+}
+
+/** SuspendApp 挂起应用（app Stop；admin）：API 只翻权威位——副本排水到 0 由
+ * 引擎周期对账执行与保持（DB paused 同型「状态驱动渲染」）；挂起期部署入队/
+ * drift/autoscaler/cron 按位豁免。重复挂起 409 E_APP_SUSPEND_CONFLICT。 */
+export function suspendApp(name: string) {
+  return api<SuspendAppResponse>(
+    `/apps/${encodeURIComponent(name)}/suspend`,
+    { method: "POST", json: {} },
+  );
+}
+
+/** ResumeApp 恢复应用（app Start；admin）：清挂起位并入队 active revision
+ * 的重部署（正常发布管线恢复副本）。应用从无成功部署时无物可恢复——
+ * deployment_id 为空且清位照常生效。 */
+export function resumeApp(name: string) {
+  return api<ResumeAppResponse>(
+    `/apps/${encodeURIComponent(name)}/resume`,
+    { method: "POST", json: {} },
   );
 }
 

@@ -96,6 +96,29 @@ service AppsService {
     option (google.api.http) = { delete: "/v1/apps/{name}/scaling/{service}" };
     option (fleetly.annotations.v1.scope) = "deploy";
   }
+  // SuspendApp 挂起应用（app Stop；admin 门，与 SuspendDatabase 同级——
+  // 整应用停摆是大爆炸半径动作）。权威位翻转（apps.suspended，API 只转
+  // 位）——引擎周期对账随后把受管长驻服务排水到副本 0（服务对象保留，
+  // 引用方连不上是诚实暴露）；cron 调度/手动触发、部署入队、drift、
+  // autoscaler 挂起期按位豁免。重复挂起 409（幂等面由读面投影消化）。
+  rpc SuspendApp(SuspendAppRequest) returns (SuspendAppResponse) {
+    option (google.api.http) = {
+      post: "/v1/apps/{name}/suspend"
+      body: "*"
+    };
+    option (fleetly.annotations.v1.scope) = "admin";
+  }
+  // ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
+  // revision 的重部署（重放快照走正常发布管线恢复副本——响应带
+  // deployment_id 供跟踪；应用从无成功部署时无物可恢复，deployment_id
+  // 为空且清位照常生效）。
+  rpc ResumeApp(ResumeAppRequest) returns (ResumeAppResponse) {
+    option (google.api.http) = {
+      post: "/v1/apps/{name}/resume"
+      body: "*"
+    };
+    option (fleetly.annotations.v1.scope) = "admin";
+  }
 }
 
 message ListAppsRequest {
@@ -112,7 +135,8 @@ message AppView {
   string name = 2;
   // 生命周期状态位：active / deleting / deleted。
   string lifecycle = 3;
-  // 派生状态：running / degraded / blocked / down（读面即时推导）。
+  // 派生状态：running / degraded / blocked / down / suspended（读面即时
+  // 推导；suspended = 用户挂起位的直投影，不是对底座的观察结论）。
   string derived_state = 4;
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
@@ -129,6 +153,10 @@ message AppView {
   // 缺省 false = 不参加（既有 app 私网隔离现状）。
   bool project_network_attached = 10;
   string project_network = 11;
+  // 挂起位（app Stop/Start）：true = 用户请求停止——受管长驻服务副本被
+  // 引擎排水到 0（服务对象保留），部署入队/drift/autoscaler/cron 挂起期
+  // 按位豁免。恢复 = resume（清位 + active revision 重部署）。
+  bool suspended = 12;
 }
 
 message ListAppsResponse {
@@ -155,6 +183,8 @@ message GetAppResponse {
   string project_id = 11;
   bool project_network_attached = 12;
   string project_network = 13;
+  // 挂起位投影（AppView.suspended 同款字段；详情头 Stop/Start 按钮的数据源）。
+  bool suspended = 14;
   // 放置绑定（未绑定时不输出——EmitUnpopulated=false 语义下 message 零值
   // 字段不渲染，读面缺省即「无绑定」）。
   PlacementView placement = 7;
@@ -284,4 +314,27 @@ message RemoveScalingPolicyResponse {
   string service = 2;
   // 恒 true（删除成功即无策略）。
   bool removed = 3;
+}
+
+message SuspendAppRequest {
+  // 应用名（裸名/限定形，resolveApp 单点解析）。
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message SuspendAppResponse {
+  // 挂起后的应用视图（suspended=true）。
+  AppView app = 1;
+}
+
+message ResumeAppRequest {
+  // 应用名（裸名/限定形，resolveApp 单点解析）。
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message ResumeAppResponse {
+  // 恢复后的应用视图（suspended=false）。
+  AppView app = 1;
+  // 恢复重部署的部署行 ID（active revision 重放入队时非空；应用从无成功
+  // 部署时为空——无物可恢复，清位照常生效）。
+  string deployment_id = 2;
 }

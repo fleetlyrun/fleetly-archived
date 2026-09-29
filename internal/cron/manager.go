@@ -273,6 +273,12 @@ func (m *Manager) assembleSchedules(ctx context.Context, onlyAppID *string) []sc
 		if onlyAppID == nil && inFlight[app.ID] {
 			continue // 发布过程本身就是期望态迁移：以在途期望触发会竞态
 		}
+		// 挂起豁免（app Stop/Start，00028 位）：挂起 = 用户请求停止——周期
+		// 触发不入队（手动触发的 API 面同门显式 409；此处双保险覆盖调度拍
+		// 与直连入口）。恢复后随下一拍自然回集。
+		if app.Suspended {
+			continue
+		}
 		if onlyAppID != nil && app.ID != *onlyAppID {
 			continue
 		}

@@ -162,6 +162,47 @@ deployments/删单行(部署行兼审计与回滚基线,revisions 保留窗 5 �
 Fresh Volumes/Watch Paths/Submodules(dokploy 构建域概念,fleetly 拉源模型
 无对应物)。
 
+### 4.8 四轮:app Stop/Start/Redeploy + Applications/Databases 统一(2026-09-29)
+
+用户裁决「增加 Stop/Start/Redeploy application 操作,UI/UX 参考 databases 的
+标题栏按钮的方式,同时支持新建 application;统一 Applications 和 Databases 的
+UI/UX」。此前 §4.7 挂账的「应用级 Stop/Start」本轮落地:
+
+- **后端(app Stop/Start 原语,照抄 DB paused 的「权威态列 + 状态机单写点 +
+  收敛按态渲染」形态)**:apps 行加法列 `suspended`(00028;ifecycle 词表
+  三态不动);state 写点 `SetAppSuspended`(CAS + tombstone 守卫 +
+  app.suspended/app.resumed 事件同事务 Outbox;并发翻转哨兵
+  ErrAppSuspendedConflict → 注册码 E_APP_SUSPEND_CONFLICT 409);引擎排水
+  保持器 `drainSuspendedApp`(suspend.go,convergescan 白名单行——scaleToZero
+  同族的无条件副本清零,非收敛对账):周期对账把受管长驻 replicated 服务
+  副本压 0(服务对象保留,缺失不补建、多余不回收、global 无副本标量如实
+  不达),拍尾刷新派生基线;派生词表增 `suspended`(第一判短路,用户权威位
+  直投影,压倒观察态——DB paused 同型);drift 扫描/autoscaler/cron 调度
+  挂起期按位豁免(0 副本不是漂移,opt-in 也不得把副本收敛回快照——否则
+  挂起被静默撤销);**部署入队门 E_APP_SUSPENDED**(EnqueueRollback/api
+  Deploy/gitserver push/webhook 单点各一道——挂起期排水会立即拉回 0,新
+  部署不入队;resume 在清位后走入队不被拦);cron 手动触发同门 409。
+- **ResumeApp = 清位 + active revision 重部署**(EnqueueRollback 空目标 =
+  保留窗最新成功版本,正常发布管线恢复副本——与应用内 Redeploy/行内回滚
+  同管线;无成功部署 = 无物可恢复,deployment_id 留空且清位照常生效)。
+  RPC:SuspendApp/ResumeApp(POST /apps/{name}/suspend|resume,admin scope
+  ——与 SuspendDatabase 同级,整应用停摆是大爆炸半径动作)。
+- **前端:详情标题栏动作行**(AppHeaderActions,databases 标题栏同款——
+  右对齐 outline 小按钮排 + 状态相宜启停 + title 提示 + 即发即走):
+  Redeploy(deploy 面)/Stop|Start(admin 面,挂起位翻转 Stop↔Start,
+  挂起期 Redeploy 禁用)/动作错误信封原位;角色门外按钮不投影(平台管理
+  员 P0-3 全隐,说明态在 Deploy settings 卡);§4.7 的 Deploy settings 卡
+  收敛为次级入口(Open terminal + 挂起说明 + P0-3 说明,Redeploy 移交标题
+  栏);StateBadge 增 suspended 琥珀档。
+- **列表页统一**:两页共享同一骨架(PageHeader〔title+desc+Refresh+Create〕
+  → 统计卡行 → 工具栏 → 表格卡)。Applications 页补齐:统计卡(总数/运行/
+  挂起/需注意)+ Create application 钮(deploy 面;CreateAppDialog 复用,
+  目标项目 = 顶栏选中项目限定形)+ P0-3 说明卡(与 Databases 页同款)。
+  Databases 页补齐:搜索/状态筛选/排序工具栏(客户端投影,Apps 页同款)。
+
+**§4.7 挂账项更新**:应用级 Stop/Start 本轮落地(上列);其余挂账
+(Autodeploy 开关/commit message/单条部署日志/Clear deployments)不变。
+
 ## 5. 后端新读面:RuntimeService
 
 引擎端口 `Substrate.TaskList/ServiceList` 已存在(`internal/engine/ports.go:298-317`),

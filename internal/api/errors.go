@@ -98,8 +98,8 @@ type storeErrContext struct {
 type storeErrEntry struct {
 	sentinel error
 	kind     storeErrKind
-	code     string // registered 行的注册表码
-	message  string // 现行文案（format；调用方经 mapStoreErr 的 args 供值）
+	code     string            // registered 行的注册表码
+	message  string            // 现行文案（format；调用方经 mapStoreErr 的 args 供值）
 	grpcCode codes.Code        // plainStatus 行的 grpc code
 	contexts []storeErrContext // registered 行附带 context
 }
@@ -114,6 +114,9 @@ var storeErrTable = []storeErrEntry{
 		message: "app is tombstoned (deleting/deleted): %s"},
 	{sentinel: state.ErrInvalidLifecycleTransition, kind: storeErrConflict,
 		message: "app not deletable from current lifecycle: %s"},
+	{sentinel: state.ErrAppSuspendedConflict, kind: storeErrRegistered, code: "E_APP_SUSPEND_CONFLICT",
+		message:  "app suspend state changed concurrently: %s (re-read the app — the current projection is the truth)",
+		contexts: []storeErrContext{{key: "conflict", fromErr: true}}},
 	{sentinel: state.ErrAppExists, kind: storeErrConflict,
 		message: "app %q already exists in the target project (names are unique per project); choose another target or rename first"},
 	{sentinel: state.ErrScalingPolicyNotFound, kind: storeErrNotFound,
@@ -148,10 +151,10 @@ var storeErrTable = []storeErrEntry{
 		message:  "database instance not found (terminal state)",
 		contexts: []storeErrContext{{key: "name"}, {key: "detail", value: "terminal state"}}},
 	{sentinel: state.ErrDatabaseStateConflict, kind: storeErrRegistered, code: "E_STATE_VERSION_CONFLICT",
-		message: "database changed concurrently (CAS mismatch) — re-read the current state and retry with a legal prestate",
+		message:  "database changed concurrently (CAS mismatch) — re-read the current state and retry with a legal prestate",
 		contexts: []storeErrContext{{key: "conflict", fromErr: true}}},
 	{sentinel: state.ErrDatabaseIllegalTransition, kind: storeErrRegistered, code: "E_STATE_VERSION_CONFLICT",
-		message: "database changed concurrently (CAS mismatch) — re-read the current state and retry with a legal prestate",
+		message:  "database changed concurrently (CAS mismatch) — re-read the current state and retry with a legal prestate",
 		contexts: []storeErrContext{{key: "conflict", fromErr: true}}},
 	{sentinel: state.ErrDatabaseExists, kind: storeErrConflict,
 		message: "database instance name %q is already registered (names stay reserved across the lifecycle)"},
@@ -205,7 +208,7 @@ var storeErrTable = []storeErrEntry{
 	{sentinel: state.ErrTokenNotFound, kind: storeErrNotFound,
 		message: "token not found: %s"},
 	{sentinel: state.ErrTokenLastAdmin, kind: storeErrRegistered, code: "E_TOKEN_LAST_ADMIN",
-		message: "token %s is the last non-revoked admin token; revoking it would leave the platform unmanageable (a restart does not re-seed the bootstrap token)",
+		message:  "token %s is the last non-revoked admin token; revoking it would leave the platform unmanageable (a restart does not re-seed the bootstrap token)",
 		contexts: []storeErrContext{{key: "token", fromArg: true}, {key: "reason", value: "last_admin"}}},
 	{sentinel: state.ErrGitKeyExists, kind: storeErrConflict,
 		message: "git key already registered (same fingerprint)"},

@@ -527,6 +527,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/apps/{name}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
+         *     revision 的重部署（重放快照走正常发布管线恢复副本——响应带
+         *     deployment_id 供跟踪；应用从无成功部署时无物可恢复，deployment_id
+         *     为空且清位照常生效）。
+         */
+        post: operations["AppsService_ResumeApp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/apps/{name}/scaling/{service}": {
         parameters: {
             query?: never;
@@ -575,6 +597,29 @@ export interface paths {
          */
         put: operations["AppsService_SetAppSource"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/apps/{name}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * SuspendApp 挂起应用（app Stop；admin 门，与 SuspendDatabase 同级——
+         *     整应用停摆是大爆炸半径动作）。权威位翻转（apps.suspended，API 只转
+         *     位）——引擎周期对账随后把受管长驻服务排水到副本 0（服务对象保留，
+         *     引用方连不上是诚实暴露）；cron 调度/手动触发、部署入队、drift、
+         *     autoscaler 挂起期按位豁免。重复挂起 409（幂等面由读面投影消化）。
+         */
+        post: operations["AppsService_SuspendApp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2595,6 +2640,7 @@ export interface components {
              */
             total?: number;
         };
+        AppsServiceResumeAppBody: Record<string, never>;
         AppsServiceSetAppSourceBody: {
             /** 拉源 remote URL（file:// 与 https://、ssh:// 形态）。 */
             source_url?: string;
@@ -2644,12 +2690,16 @@ export interface components {
              */
             cooldown_seconds?: number;
         };
+        AppsServiceSuspendAppBody: Record<string, never>;
         v1AppView: {
             id?: string;
             name?: string;
             /** 生命周期状态位：active / deleting / deleted。 */
             lifecycle?: string;
-            /** 派生状态：running / degraded / blocked / down（读面即时推导）。 */
+            /**
+             * 派生状态：running / degraded / blocked / down / suspended（读面即时
+             *     推导；suspended = 用户挂起位的直投影，不是对底座的观察结论）。
+             */
             derived_state?: string;
             /** Format: date-time */
             created_at?: string;
@@ -2674,6 +2724,12 @@ export interface components {
              */
             project_network_attached?: boolean;
             project_network?: string;
+            /**
+             * 挂起位（app Stop/Start）：true = 用户请求停止——受管长驻服务副本被
+             *     引擎排水到 0（服务对象保留），部署入队/drift/autoscaler/cron 挂起期
+             *     按位豁免。恢复 = resume（清位 + active revision 重部署）。
+             */
+            suspended?: boolean;
         };
         v1DeleteAppResponse: {
             name?: string;
@@ -2736,6 +2792,8 @@ export interface components {
             project_id?: string;
             project_network_attached?: boolean;
             project_network?: string;
+            /** 挂起位投影（AppView.suspended 同款字段；详情头 Stop/Start 按钮的数据源）。 */
+            suspended?: boolean;
             placement?: components["schemas"]["v1PlacementView"];
             /** 最近部署（created_at 倒序，至多 5 条；派生状态的正交细节）。 */
             recent_deployments?: components["schemas"]["v1DeploymentView"][];
@@ -2803,6 +2861,14 @@ export interface components {
             /** 恒 true（删除成功即无策略）。 */
             removed?: boolean;
         };
+        v1ResumeAppResponse: {
+            app?: components["schemas"]["v1AppView"];
+            /**
+             * 恢复重部署的部署行 ID（active revision 重放入队时非空；应用从无成功
+             *     部署时为空——无物可恢复，清位照常生效）。
+             */
+            deployment_id?: string;
+        };
         v1SetAppSourceResponse: {
             name?: string;
             source_url?: string;
@@ -2832,6 +2898,9 @@ export interface components {
              *     主机位取 control-plane 可达地址的尽力形态）。
              */
             git_remote_hint?: string;
+        };
+        v1SuspendAppResponse: {
+            app?: components["schemas"]["v1AppView"];
         };
         DeploymentsServiceCancelDeploymentBody: Record<string, never>;
         DeploymentsServiceDeployBody: {
@@ -5986,6 +6055,42 @@ export interface operations {
             };
         };
     };
+    AppsService_ResumeApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 应用名（裸名/限定形，resolveApp 单点解析）。 */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppsServiceResumeAppBody"];
+            };
+        };
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ResumeAppResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
     AppsService_GetScalingPolicy: {
         parameters: {
             query?: never;
@@ -6110,6 +6215,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["v1SetAppSourceResponse"];
+                };
+            };
+            /** @description An unexpected error response. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1ErrorResponse"];
+                };
+            };
+        };
+    };
+    AppsService_SuspendApp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 应用名（裸名/限定形，resolveApp 单点解析）。 */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppsServiceSuspendAppBody"];
+            };
+        };
+        responses: {
+            /** @description A successful response. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["v1SuspendAppResponse"];
                 };
             };
             /** @description An unexpected error response. */

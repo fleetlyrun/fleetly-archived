@@ -25,6 +25,10 @@ const (
 	AppStateBlocked = "blocked"
 	// AppStateDown 无有效版本或首发失败 scale=0（没有任何期望实例）。
 	AppStateDown = "down"
+	// AppStateSuspended 用户挂起（app Stop，00028 位；权威位直投影——DB
+	// paused 同型：不是对底座的观察结论，是用户请求的投影，优先级最高）。
+	// 恢复 = resume 清位 → 重部署管线收敛回既有词表值。
+	AppStateSuspended = "suspended"
 )
 
 // GetAppDerivedState 读派生状态缓存（空串 = 尚未推导，读面按派生规则即时

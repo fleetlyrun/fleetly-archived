@@ -464,6 +464,13 @@ func (e *Engine) driftScan(ctx context.Context) {
 		if inFlight[app.ID] {
 			continue
 		}
+		// 挂起应用豁免（app Stop/Start，00028 位）：副本 0 vs 快照 N 是
+		// 期望形态（用户请求的排水），不是漂移——不报 diff、不收敛（opt-in
+		// 开启也不得把副本恢复回 N，否则挂起被撤销）。恢复后重新入选。
+		if app.Suspended {
+			e.driftSeen.clear(app.ID)
+			continue
+		}
 		report, err := e.computeAppDrift(ctx, app)
 		if err != nil {
 			e.log.Warn("engine: drift scan app", "app", app.Name, "error", err)

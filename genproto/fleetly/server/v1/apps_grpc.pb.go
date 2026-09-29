@@ -28,6 +28,8 @@ const (
 	AppsService_GetScalingPolicy_FullMethodName    = "/fleetly.server.v1.AppsService/GetScalingPolicy"
 	AppsService_SetScalingPolicy_FullMethodName    = "/fleetly.server.v1.AppsService/SetScalingPolicy"
 	AppsService_RemoveScalingPolicy_FullMethodName = "/fleetly.server.v1.AppsService/RemoveScalingPolicy"
+	AppsService_SuspendApp_FullMethodName          = "/fleetly.server.v1.AppsService/SuspendApp"
+	AppsService_ResumeApp_FullMethodName           = "/fleetly.server.v1.AppsService/ResumeApp"
 )
 
 // AppsServiceClient is the client API for AppsService service.
@@ -67,6 +69,17 @@ type AppsServiceClient interface {
 	// RemoveScalingPolicy 删除服务的自动扩缩策略（deploy 门）。同键运行期
 	// 副本覆盖一并清除——期望副本回落 compose 快照（外部改动照常走漂移判据）。
 	RemoveScalingPolicy(ctx context.Context, in *RemoveScalingPolicyRequest, opts ...grpc.CallOption) (*RemoveScalingPolicyResponse, error)
+	// SuspendApp 挂起应用（app Stop；admin 门，与 SuspendDatabase 同级——
+	// 整应用停摆是大爆炸半径动作）。权威位翻转（apps.suspended，API 只转
+	// 位）——引擎周期对账随后把受管长驻服务排水到副本 0（服务对象保留，
+	// 引用方连不上是诚实暴露）；cron 调度/手动触发、部署入队、drift、
+	// autoscaler 挂起期按位豁免。重复挂起 409（幂等面由读面投影消化）。
+	SuspendApp(ctx context.Context, in *SuspendAppRequest, opts ...grpc.CallOption) (*SuspendAppResponse, error)
+	// ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
+	// revision 的重部署（重放快照走正常发布管线恢复副本——响应带
+	// deployment_id 供跟踪；应用从无成功部署时无物可恢复，deployment_id
+	// 为空且清位照常生效）。
+	ResumeApp(ctx context.Context, in *ResumeAppRequest, opts ...grpc.CallOption) (*ResumeAppResponse, error)
 }
 
 type appsServiceClient struct {
@@ -167,6 +180,26 @@ func (c *appsServiceClient) RemoveScalingPolicy(ctx context.Context, in *RemoveS
 	return out, nil
 }
 
+func (c *appsServiceClient) SuspendApp(ctx context.Context, in *SuspendAppRequest, opts ...grpc.CallOption) (*SuspendAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SuspendAppResponse)
+	err := c.cc.Invoke(ctx, AppsService_SuspendApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appsServiceClient) ResumeApp(ctx context.Context, in *ResumeAppRequest, opts ...grpc.CallOption) (*ResumeAppResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeAppResponse)
+	err := c.cc.Invoke(ctx, AppsService_ResumeApp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AppsServiceServer is the server API for AppsService service.
 // All implementations must embed UnimplementedAppsServiceServer
 // for forward compatibility.
@@ -204,6 +237,17 @@ type AppsServiceServer interface {
 	// RemoveScalingPolicy 删除服务的自动扩缩策略（deploy 门）。同键运行期
 	// 副本覆盖一并清除——期望副本回落 compose 快照（外部改动照常走漂移判据）。
 	RemoveScalingPolicy(context.Context, *RemoveScalingPolicyRequest) (*RemoveScalingPolicyResponse, error)
+	// SuspendApp 挂起应用（app Stop；admin 门，与 SuspendDatabase 同级——
+	// 整应用停摆是大爆炸半径动作）。权威位翻转（apps.suspended，API 只转
+	// 位）——引擎周期对账随后把受管长驻服务排水到副本 0（服务对象保留，
+	// 引用方连不上是诚实暴露）；cron 调度/手动触发、部署入队、drift、
+	// autoscaler 挂起期按位豁免。重复挂起 409（幂等面由读面投影消化）。
+	SuspendApp(context.Context, *SuspendAppRequest) (*SuspendAppResponse, error)
+	// ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
+	// revision 的重部署（重放快照走正常发布管线恢复副本——响应带
+	// deployment_id 供跟踪；应用从无成功部署时无物可恢复，deployment_id
+	// 为空且清位照常生效）。
+	ResumeApp(context.Context, *ResumeAppRequest) (*ResumeAppResponse, error)
 	mustEmbedUnimplementedAppsServiceServer()
 }
 
@@ -240,6 +284,12 @@ func (UnimplementedAppsServiceServer) SetScalingPolicy(context.Context, *SetScal
 }
 func (UnimplementedAppsServiceServer) RemoveScalingPolicy(context.Context, *RemoveScalingPolicyRequest) (*RemoveScalingPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveScalingPolicy not implemented")
+}
+func (UnimplementedAppsServiceServer) SuspendApp(context.Context, *SuspendAppRequest) (*SuspendAppResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SuspendApp not implemented")
+}
+func (UnimplementedAppsServiceServer) ResumeApp(context.Context, *ResumeAppRequest) (*ResumeAppResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeApp not implemented")
 }
 func (UnimplementedAppsServiceServer) mustEmbedUnimplementedAppsServiceServer() {}
 func (UnimplementedAppsServiceServer) testEmbeddedByValue()                     {}
@@ -424,6 +474,42 @@ func _AppsService_RemoveScalingPolicy_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AppsService_SuspendApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SuspendAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppsServiceServer).SuspendApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppsService_SuspendApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppsServiceServer).SuspendApp(ctx, req.(*SuspendAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppsService_ResumeApp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeAppRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppsServiceServer).ResumeApp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppsService_ResumeApp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppsServiceServer).ResumeApp(ctx, req.(*ResumeAppRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AppsService_ServiceDesc is the grpc.ServiceDesc for AppsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -466,6 +552,14 @@ var AppsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveScalingPolicy",
 			Handler:    _AppsService_RemoveScalingPolicy_Handler,
+		},
+		{
+			MethodName: "SuspendApp",
+			Handler:    _AppsService_SuspendApp_Handler,
+		},
+		{
+			MethodName: "ResumeApp",
+			Handler:    _AppsService_ResumeApp_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

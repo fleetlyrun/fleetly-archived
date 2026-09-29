@@ -1,21 +1,26 @@
-// 应用列表（dokploy Services 表式）：卡片内表格 + 搜索/状态/生命周期筛选
-// + 排序 + 行点击进详情。derived_state 徽章一等展示（degraded/blocked 语义
-// 色与 StateBadge 同源）。筛选与排序均为客户端投影——列表读面无服务端
-// 分页参数，全量数据量级（单操作员平台）客户端处理即可。
+// 应用列表（dokploy Services 表式；2026-09-29 §5 与 Databases 页统一骨架
+// ——PageHeader〔title+desc+Refresh+Create〕→ 统计卡行 → 工具栏 → 表格卡）：
+// 卡片内表格 + 搜索/状态/生命周期筛选 + 排序 + 行点击进详情。derived_state
+// 徽章一等展示（degraded/blocked/suspended 语义色与 StateBadge 同源）。
+// 筛选与排序均为客户端投影——列表读面无服务端分页参数，全量数据量级（单
+// 操作员平台）客户端处理即可。创建 = 带归属声明的首次 deploy 入队（deploy
+// 面，developer+；平台管理员 P0-3 说明卡原位——与 Databases 页同款）。
 
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, ChevronRight, Search } from "lucide-react";
+import { Boxes, ChevronRight, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { listApps } from "@/api/endpoints";
 import { errorEnvelopeFrom } from "@/api/errors";
 import type { AppView } from "@/api/types";
+import { CreateAppDialog } from "@/components/create-app-dialog";
 import { DegradedExplanationCard } from "@/components/degraded-explanation-card";
 import { EnvelopeAlert } from "@/components/envelope-alert";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { StateBadge } from "@/components/state-badge";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,19 +43,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { useProjectContext } from "@/lib/context";
+import { useIsPlatformAdmin, useProjectContext, useTeamCapabilities } from "@/lib/context";
 import { timeAgo } from "@/lib/utils";
 
-type StateFilter = "all" | "healthy" | "degraded" | "unavailable";
+type StateFilter = "all" | "healthy" | "degraded" | "suspended" | "unavailable";
 type LifecycleFilter = "all" | "active" | "deleting";
 type SortKey = "updated" | "created" | "name";
-
-const STATE_FILTERS: { key: StateFilter; label: string }[] = [
-  { key: "all", label: "All states" },
-  { key: "healthy", label: "Running" },
-  { key: "degraded", label: "Degraded" },
-  { key: "unavailable", label: "Unavailable" },
-];
 
 function matchStateFilter(state: string | undefined, filter: StateFilter): boolean {
   switch (filter) {
@@ -58,12 +56,22 @@ function matchStateFilter(state: string | undefined, filter: StateFilter): boole
       return state === "running";
     case "degraded":
       return state === "degraded";
+    case "suspended":
+      return state === "suspended";
     case "unavailable":
       return ["blocked", "down", "failed"].includes(state ?? "");
     default:
       return true;
   }
 }
+
+const STATE_FILTERS: { key: StateFilter; label: string }[] = [
+  { key: "all", label: "All states" },
+  { key: "healthy", label: "Running" },
+  { key: "degraded", label: "Degraded" },
+  { key: "suspended", label: "Suspended" },
+  { key: "unavailable", label: "Unavailable" },
+];
 
 function AppRow({ app }: { app: AppView }) {
   const navigate = useNavigate();
@@ -140,11 +148,17 @@ export function AppsPage() {
   // （team_slug）客户端收窄（2026-09-25 走查实爆：选团队后列表仍全量）。
   // queryKey 随 ref 变化——切换即重查。
   const { selectedTeamSlug, selectedProjectSlug, projectRef } = useProjectContext();
+  // 创建钮角色门（§5 与 Databases 页统一；创建 = 首署 deploy，developer+
+  // 体验门）。平台管理员资源面恒只读（P0-3 双门）——创建钮消失时以说明卡
+  // 明示原因，不做静默消失。
+  const { canDeploy } = useTeamCapabilities();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const query = useQuery({
     queryKey: ["apps", projectRef],
     queryFn: () => listApps(projectRef ? { project: projectRef } : {}),
     refetchInterval: 5000,
   });
+  const [createOpen, setCreateOpen] = useState(false);
 
   // 创建应用对话框的落地说明（P0-1）：DeployResponse 不带应用平台 id，
   // 对话框入队成功后导航到本页并携带 location.state——在此渲染一次性
@@ -190,10 +204,64 @@ export function AppsPage() {
     });
   }, [apps, search, stateFilter, lifecycleFilter, sortKey, selectedTeamSlug, selectedProjectSlug]);
 
+  const filtered = visible.length !== apps.length;
+
+  // 统计卡行（与 Databases 页同骨架）：总数/运行/挂起/需注意——派生态计数
+  // 客户端投影（挂起是权威位直投影态，一等计数）。
+  const counts = useMemo(() => {
+    const by: Record<string, number> = {};
+    for (const a of apps) {
+      by[a.derived_state ?? ""] = (by[a.derived_state ?? ""] ?? 0) + 1;
+    }
+    return by;
+  }, [apps]);
+
+  // P0-3 只读说明：Create application 按钮因平台管理员身份隐藏时，落一张
+  // 说明卡（与 Databases 页同款；三个返回形态共享——pending/error/ready
+  // 的页头都在）。
+  const platformReadonlyNote = !canDeploy && isPlatformAdmin ? (
+    <Card className="border-dashed">
+      <CardContent
+        className="p-4 text-sm text-muted-foreground"
+        data-testid="platform-readonly-note"
+      >
+        Platform administrators have read-only access to resources (separation
+        of duties). Create and deploy applications from the CLI with a machine
+        token, or ask a team owner for a member role.
+      </CardContent>
+    </Card>
+  ) : null;
+
+  const header = (
+    <PageHeader
+      title="Applications"
+      description="Compose-deployed applications and their derived health."
+      actions={
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void query.refetch()}
+            aria-label="Refresh apps"
+          >
+            Refresh
+          </Button>
+          {canDeploy ? (
+            <Button size="sm" data-testid="app-create-button" onClick={() => setCreateOpen(true)}>
+              <Plus aria-hidden className="h-3.5 w-3.5" />
+              Create application
+            </Button>
+          ) : null}
+        </>
+      }
+    />
+  );
+
   if (query.isPending) {
     return (
-      <div className="space-y-4">
-        <PageHeader title="Applications" />
+      <div className="space-y-4" data-testid="apps-page">
+        {header}
+        {platformReadonlyNote}
         <p className="text-sm text-muted-foreground">Loading apps…</p>
       </div>
     );
@@ -201,8 +269,9 @@ export function AppsPage() {
   if (query.isError) {
     const envelope = errorEnvelopeFrom(query.error);
     return (
-      <div className="space-y-4">
-        <PageHeader title="Applications" />
+      <div className="space-y-4" data-testid="apps-page">
+        {header}
+        {platformReadonlyNote}
         <EnvelopeAlert
           code={envelope.code}
           message={envelope.message}
@@ -213,24 +282,20 @@ export function AppsPage() {
     );
   }
 
-  const filtered = visible.length !== apps.length;
-
   return (
-    <div className="space-y-4">
-      <PageHeader
-        title="Applications"
-        description="Compose-deployed applications and their derived health."
-        actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void query.refetch()}
-            aria-label="Refresh apps"
-          >
-            Refresh
-          </Button>
-        }
-      />
+    <div className="space-y-4" data-testid="apps-page">
+      {header}
+      {platformReadonlyNote}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard label="Applications" value={apps.length} />
+        <StatCard label="Running" value={counts.running ?? 0} />
+        <StatCard label="Suspended" value={counts.suspended ?? 0} sub="stopped by request" />
+        <StatCard
+          label="Attention"
+          value={(counts.degraded ?? 0) + (counts.blocked ?? 0) + (counts.down ?? 0)}
+          sub="degraded + blocked + down"
+        />
+      </div>
 
       {queuedNotice ? (
         <div
@@ -305,7 +370,7 @@ export function AppsPage() {
             <EmptyState
               icon={Search}
               title="No applications yet."
-              hint="Deploy a compose file to create the first app."
+              hint="Create one with the button above (a compose deploy with an explicit project target), or 'fleetly deploy compose.yaml' from the CLI."
             />
           ) : visible.length === 0 ? (
             <EmptyState
@@ -342,6 +407,9 @@ export function AppsPage() {
           <span className="hidden sm:inline">click a row to open</span>
         </CardFooter>
       </Card>
+      {/* 创建应用对话框（与 Databases 页同款复用形态；目标项目 = 顶栏选中
+          项目限定形，对话框内明示）。 */}
+      <CreateAppDialog open={createOpen} onOpenChange={setCreateOpen} projectRef={projectRef} />
     </div>
   );
 }

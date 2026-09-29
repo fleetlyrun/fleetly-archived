@@ -569,11 +569,12 @@ describe("AppOverviewPage DeployCard project context", () => {
 // ── Deploy settings 卡（§4.7 新面：dokploy Deploy Settings 同构）──────────
 
 /** Deploy settings stub：Me（角色）+ active revision + spec（无 cron）+
- * rollback POST 捕获 + Overview 其余查询兜底。 */
+ * rollback POST 捕获 + Overview 其余查询兜底（GetApp 兜底形态可注入
+ * suspended 位）。 */
 function stubDeploySettings(
   role: string,
   isPlatformAdmin: boolean,
-  opts: { revisions?: unknown; rollbackStatus?: number } = {},
+  opts: { revisions?: unknown; rollbackStatus?: number; appSuspended?: boolean } = {},
 ) {
   const calls: Array<{ url: string; method?: string; body?: unknown }> = [];
   const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string; body?: string }) => {
@@ -613,73 +614,45 @@ function stubDeploySettings(
       }
       return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve({ deployment_id: "dep_re", desired_hash: "h" }) });
     }
-    return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve({}) });
+    // GET /apps/demo（GetAppResponse）与其余查询兜底——挂起位可注入。
+    return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve(opts.appSuspended ? { suspended: true } : {}) });
   });
   return { fetchMock, calls };
 }
 
-describe("AppOverviewPage deploy settings card (§4.7)", () => {
-  it("owner: Redeploy replays the active revision (POST /rollbacks with target_revision_id) and links to the terminal tab", async () => {
+describe("AppOverviewPage deploy settings card (§4.7/§5)", () => {
+  it("owner: Open terminal links to the terminal tab; the suspended note surfaces in-card", async () => {
     setToken("flt_test");
-    const { fetchMock, calls } = stubDeploySettings("owner", false);
+    const { fetchMock } = stubDeploySettings("owner", false);
     vi.stubGlobal("fetch", fetchMock);
     renderOverviewPage("/apps/demo", true);
 
-    const button = screen.getByTestId("redeploy-button");
-    // active revision 异步到达后才翻转可用（挂载即断言会踩到禁用窗口）。
-    await waitFor(() => expect(button).toBeEnabled());
-    // Open terminal 直达 Terminal 页签。
+    // Open terminal 直达 Terminal 页签（Redeploy/Stop/Start 动作自 §5 起在
+    // 详情标题栏 AppHeaderActions——其行为测试在 components/
+    // app-header-actions.test.tsx）。
+    await waitFor(() =>
+      expect(screen.getByTestId("deploy-settings")).toBeInTheDocument(),
+    );
     expect(screen.getByTestId("open-terminal-link")).toHaveAttribute(
       "href",
       "/apps/demo/terminal",
     );
-
-    const user = userEvent.setup();
-    await user.click(button);
-    await waitFor(() => {
-      const post = calls.find((c) => c.method === "POST" && c.url.endsWith("/rollbacks"));
-      expect(post?.url.endsWith("/v1/apps/demo/rollbacks")).toBe(true);
-      // 重部署 = 重放当前 active revision（与行内回滚同管线）。
-      expect(post?.body).toEqual({ target_revision_id: "rev_act" });
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("redeploy-status")).toHaveTextContent("dep_re"),
-    );
-    // 状态行内含跳转 Deployments 页签的链接。
-    const statusLink = screen.getByTestId("redeploy-status").querySelector("a");
-    expect(statusLink).toHaveAttribute("href", "/apps/demo/deployments");
+    // 非挂起态无挂起说明。
+    expect(screen.queryByTestId("app-suspended-note")).not.toBeInTheDocument();
   });
 
-  it("no active revision: Redeploy disabled with a pointer to the Deploy card (no request)", async () => {
+  it("suspended app: in-card note explains the drain and points at the header Start action", async () => {
     setToken("flt_test");
-    const { fetchMock, calls } = stubDeploySettings("owner", false, { revisions: { revisions: [] } });
+    const { fetchMock } = stubDeploySettings("owner", false, { appSuspended: true });
     vi.stubGlobal("fetch", fetchMock);
     renderOverviewPage("/apps/demo", true);
 
     await waitFor(() =>
-      expect(screen.getByTestId("redeploy-no-revision")).toHaveTextContent(
-        "No deployment yet",
+      expect(screen.getByTestId("app-suspended-note")).toHaveTextContent(
+        "suspended",
       ),
     );
-    expect(screen.getByTestId("redeploy-button")).toBeDisabled();
-    expect(
-      calls.some((c) => c.method === "POST" && c.url.endsWith("/rollbacks")),
-    ).toBe(false);
-  });
-
-  it("redeploy failure renders the error envelope (no silent swallow)", async () => {
-    setToken("flt_test");
-    const { fetchMock } = stubDeploySettings("owner", false, { rollbackStatus: 409 });
-    vi.stubGlobal("fetch", fetchMock);
-    renderOverviewPage("/apps/demo", true);
-
-    const user = userEvent.setup();
-    await user.click(await screen.findByTestId("redeploy-button"));
-    await waitFor(() => {
-      const envelope = screen.getByTestId("error-envelope");
-      expect(envelope).toHaveTextContent("E_ROLLBACK_CONFLICT");
-      expect(envelope).toHaveTextContent("a deployment is already in flight");
-    });
+    expect(screen.getByTestId("app-suspended-note").textContent).toContain("Start");
   });
 
   it("platform admin: readonly note replaces the actions (P0-3), Deploy card absent", async () => {
@@ -694,7 +667,6 @@ describe("AppOverviewPage deploy settings card (§4.7)", () => {
       const notes = screen.getAllByTestId("platform-readonly-note");
       expect(notes.some((n) => n.textContent?.includes("Platform administrators have read-only access"))).toBe(true);
     });
-    expect(screen.queryByTestId("redeploy-button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("deploy-card")).not.toBeInTheDocument();
   });
 

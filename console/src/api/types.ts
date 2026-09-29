@@ -123,6 +123,9 @@ export type DeployResponse = Schemas["v1DeployResponse"];
 export type ListDeploymentsResponse = Schemas["v1ListDeploymentsResponse"];
 export type CancelDeploymentResponse = Schemas["v1CancelDeploymentResponse"];
 export type RollbackDeploymentResponse = Schemas["v1RollbackDeploymentResponse"];
+// 应用挂起/恢复（app Stop/Start，2026-09-29 三轮；admin scope）。
+export type SuspendAppResponse = Schemas["v1SuspendAppResponse"];
+export type ResumeAppResponse = Schemas["v1ResumeAppResponse"];
 
 // ── builds（构建台账面，T2.18；proto fleetly/server/v1/builds.proto）──────
 // BuildView 词表：status ∈ queued/building/succeeded/failed；driver ∈

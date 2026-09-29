@@ -41,6 +41,7 @@ var storeErrExpectations = []storeErrExpectation{
 	{sentinel: state.ErrAppNotFound, args: []any{"demo"}, message: "app not found: demo", grpc: codes.NotFound},
 	{sentinel: state.ErrAppTombstoned, args: []any{"demo"}, message: "app is tombstoned (deleting/deleted): demo", grpc: codes.FailedPrecondition, detailed: true},
 	{sentinel: state.ErrInvalidLifecycleTransition, args: []any{"demo"}, message: "app not deletable from current lifecycle: demo", grpc: codes.FailedPrecondition, detailed: true},
+	{sentinel: state.ErrAppSuspendedConflict, args: []any{"demo"}, message: "app suspend state changed concurrently: demo (re-read the app — the current projection is the truth)", grpc: codes.FailedPrecondition, code: "E_APP_SUSPEND_CONFLICT", detailed: true},
 	{sentinel: state.ErrAppExists, args: []any{"demo"}, message: `app "demo" already exists in the target project (names are unique per project); choose another target or rename first`, grpc: codes.FailedPrecondition, detailed: true},
 	{sentinel: state.ErrScalingPolicyNotFound, args: []any{"web", "demo"}, message: `no scaling policy for service "web" of app "demo"`, grpc: codes.NotFound},
 
@@ -99,6 +100,7 @@ var registeredHTTP = map[string]int{
 	"E_DOMAIN_CONFLICT":          409,
 	"E_DB_NOT_FOUND":             404,
 	"E_STATE_VERSION_CONFLICT":   409,
+	"E_APP_SUSPEND_CONFLICT":     409,
 	"E_TEAM_LAST_OWNER":          409,
 	"E_INVITE_INVALID":           409,
 	"E_REGISTRATION_CLOSED":      403,

@@ -329,17 +329,25 @@ type AppFacts struct {
 	Latest state.DeployRecord
 	// LatestSucceeded 是最近一条 succeeded 部署（零值 = 无有效版本）。
 	LatestSucceeded state.DeployRecord
+	// Suspended 是用户挂起位（app Stop/Start，apps.suspended 00028 列）的
+	// 直投影输入——true 时派生裁决短路为 suspended（权威位直投影，DB paused
+	// 同型：不是对底座的观察结论，优先级压倒一切观察态）。
+	Suspended bool
 }
 
-// 派生状态词表（state 词表对齐：running/degraded/blocked/down）。
+// 派生状态词表（state 词表对齐：running/degraded/blocked/down/suspended）。
 const (
-	DerivedRunning  = "running"
-	DerivedDegraded = "degraded"
-	DerivedBlocked  = "blocked"
-	DerivedDown     = "down"
+	DerivedRunning   = "running"
+	DerivedDegraded  = "degraded"
+	DerivedBlocked   = "blocked"
+	DerivedDown      = "down"
+	DerivedSuspended = "suspended"
 )
 
-// DeriveAppState 是纯函数裁决：down > blocked > degraded > running。
+// DeriveAppState 是纯函数裁决：suspended > down > blocked > degraded >
+// running。
+//   - suspended：用户挂起位（apps.suspended）置位——用户请求的投影，不是
+//     观察结论（DB paused 同型）；恢复走 resume 清位 + 重部署管线；
 //   - down：首发失败 scale=0（substrate_halted），或无有效版本且最近一次
 //     失败未切流（没有任何期望实例——归位为零动作/scale 0）；
 //   - blocked：placement.state ∈ {blocked, unresolved}（绑定不可用/已移除）；
@@ -347,6 +355,11 @@ const (
 //     新版本仍在服务）/ 窗后不稳定 / 警告通过（W_DEPLOY_INSTABILITY）；
 //   - running：以上皆否。
 func DeriveAppState(f AppFacts) string {
+	// suspended 第一判（用户权威位压倒观察态——挂起期排水到 0 是期望形态，
+	// 不是故障；同拍观察输入一律不参与裁决）。
+	if f.Suspended {
+		return DerivedSuspended
+	}
 	latestFailed := f.Latest.ID != "" && f.Latest.Status == state.DeployFailed
 	// down（最高优先级）。
 	if latestFailed && f.Latest.SubstrateHalted {
@@ -380,6 +393,12 @@ func DeriveAppState(f AppFacts) string {
 // appFactsOf 读取派生输入事实。
 func (e *Engine) appFactsOf(ctx context.Context, appID string) (AppFacts, error) {
 	f := AppFacts{}
+	// 挂起位（app Stop/Start）：派生裁决的第一输入——行不在即无事实可读。
+	if app, err := e.store.GetAppByID(ctx, appID); err == nil {
+		f.Suspended = app.Suspended
+	} else if !errors.Is(err, state.ErrAppNotFound) {
+		return f, err
+	}
 	if p, err := e.store.GetPlacement(ctx, appID); err == nil {
 		f.PlacementState = string(p.State)
 	} else if !errors.Is(err, state.ErrPlacementNotFound) {

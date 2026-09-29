@@ -1,12 +1,13 @@
 // 库实例列表（E4 managed-databases §4 验收步 9：Console 库实例为一等页面
-// ——独立资源面 /ui/databases，与 apps 分立）。统计卡（生命周期态计数）+
-// 表格（模板/状态/放置/卷/最近备份/可升级）+ 创建对话框（抽出的可复用组件
-// components/create-database-dialog.tsx——项目详情页 Databases 卡同享；
-// 目标项目 = 顶栏选中项目限定形，对话框内明示）。备份列逐行轻查询（limit=1，
-// 无轮询——单操作员平台量级可控）。
+// ——独立资源面 /ui/databases，与 apps 分立；2026-09-29 §5 与 Applications
+// 页统一骨架——PageHeader〔title+desc+Refresh+Create〕→ 统计卡行 → 工具栏
+//〔搜索/状态筛选/排序，客户端投影〕→ 表格卡）。创建对话框（抽出的可复用
+// 组件 components/create-database-dialog.tsx——项目详情页 Databases 卡同
+// 享；目标项目 = 顶栏选中项目限定形，对话框内明示）。备份列逐行轻查询
+//（limit=1，无轮询——单操作员平台量级可控）。
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Database, Plus } from "lucide-react";
+import { ChevronRight, Database, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -24,6 +25,14 @@ import { StateBadge } from "@/components/state-badge";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -35,6 +44,29 @@ import {
 import { formatBytes, timeAgo } from "@/lib/utils";
 import { useIsPlatformAdmin, useProjectContext, useTeamCapabilities } from "@/lib/context";
 import { useSubjectResolver } from "@/hooks/use-subject-resolver";
+
+type DbStateFilter = "all" | "ready" | "paused" | "attention";
+type DbSortKey = "updated" | "name";
+
+const DB_STATE_FILTERS: { key: DbStateFilter; label: string }[] = [
+  { key: "all", label: "All states" },
+  { key: "ready", label: "Ready" },
+  { key: "paused", label: "Paused" },
+  { key: "attention", label: "Attention" },
+];
+
+function matchDbStateFilter(status: string | undefined, filter: DbStateFilter): boolean {
+  switch (filter) {
+    case "ready":
+      return status === "ready";
+    case "paused":
+      return status === "paused";
+    case "attention":
+      return ["provisioning", "degraded", "failed"].includes(status ?? "");
+    default:
+      return true;
+  }
+}
 
 /** 行内最近备份（limit=1 只取最新一行；无轮询——创建/触发后随缓存失效刷新）。 */
 function LastBackupCell({ name }: { name: string }) {
@@ -139,6 +171,23 @@ export function DatabasesPage() {
     return by;
   }, [databases]);
 
+  // 工具栏（§5 与 Applications 页同款：搜索/状态筛选/排序——客户端投影）。
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DbStateFilter>("all");
+  const [sortKey, setSortKey] = useState<DbSortKey>("updated");
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const filteredRows = databases.filter((d) => {
+      if (needle && !(d.name ?? "").toLowerCase().includes(needle)) return false;
+      if (!matchDbStateFilter(d.status, statusFilter)) return false;
+      return true;
+    });
+    return filteredRows.sort((a, b) => {
+      if (sortKey === "name") return (a.name ?? "").localeCompare(b.name ?? "");
+      return (b.updated_at ?? "").localeCompare(a.updated_at ?? "");
+    });
+  }, [databases, search, statusFilter, sortKey]);
+
   // P0-3 只读说明：Create database 按钮因平台管理员身份隐藏时，落一张
   // 说明卡（三个返回形态共享——pending/error/ready 的页头都在）。
   const platformReadonlyNote = !canAdminResources && isPlatformAdmin ? (
@@ -215,12 +264,54 @@ export function DatabasesPage() {
         <StatCard label="Attention" value={(counts.failed ?? 0) + (counts.degraded ?? 0)} sub="failed + degraded" />
       </div>
       <Card>
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              aria-label="Filter databases"
+              placeholder="Filter databases…"
+              className="w-56 pl-8"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DbStateFilter)}>
+            <SelectTrigger className="w-36" aria-label="Filter by state">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DB_STATE_FILTERS.map((f) => (
+                <SelectItem key={f.key} value={f.key}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortKey} onValueChange={(v) => setSortKey(v as DbSortKey)}>
+            <SelectTrigger className="ml-auto w-44" aria-label="Sort databases">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Recently updated</SelectItem>
+              <SelectItem value="name">Name</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <CardContent className="p-0">
           {databases.length === 0 ? (
             <EmptyState
               icon={Database}
               title="No database instances yet."
               hint="Create one with the button above — or 'fleetly databases create <name> --template postgres-16'. Referencing apps declare the instance with the fleetly.databases compose label."
+            />
+          ) : visible.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="No database instances match the current filters."
+              hint="Adjust the search or filter selections to widen the view."
             />
           ) : (
             <Table>
@@ -237,7 +328,7 @@ export function DatabasesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {databases.map((db) => (
+                {visible.map((db) => (
                   <DatabaseRow key={db.id} db={db} resolveSubject={resolveSubject} />
                 ))}
               </TableBody>

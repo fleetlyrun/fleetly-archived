@@ -100,6 +100,15 @@ var builtins = []Event{
 	{Name: "app.recovered",
 		Source:  "release-semantics §2.7",
 		Summary: "app left degraded, back to running"},
+	// 2026-09-29 Console dokploy 对齐三轮：app Stop/Start——挂起/恢复是
+	// 用户动作的转移事件（位翻转与事件同事务 Outbox；排水/恢复执行腿由
+	// 引擎周期对账承担，本事件只承载「请求已被受理」）。
+	{Name: "app.suspended",
+		Source:  "2026-09-29-console-ia-redesign.md §4.8 (transition event; active -> suspended) added during implementation",
+		Summary: "app suspended by request (managed long-running services drain to replica 0; service objects retained, referencing clients fail honestly)"},
+	{Name: "app.resumed",
+		Source:  "2026-09-29-console-ia-redesign.md §4.8 (transition event; suspended -> active) added during implementation",
+		Summary: "app resume accepted (suspend bit cleared; active revision redeploy re-converges replicas)"},
 	// S17-D1 实现期新增（评审类 D；webhook 受理转异步后拉源失败只能走
 	// 事件流披露——官方不重投 202，redeliver 靠人工）。
 	{Name: "app.webhook_fetch_failed",

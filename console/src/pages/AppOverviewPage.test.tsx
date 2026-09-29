@@ -255,10 +255,10 @@ describe("AppOverviewPage platform-admin read-only (P0-3 residual)", () => {
       "Platform administrator required",
     );
     expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
-    // 部署入口区装配守卫（§4.7）：owner 见 Deploy settings（Redeploy 可用
-    // ——active revision 在）+ 单方式 Deploy 卡。
+    // 部署入口区装配守卫（§4.7/§5）：owner 见 Deploy settings（Open terminal
+    // 入口在卡上；Redeploy/Stop/Start 在详情标题栏 AppHeaderActions——组件
+    // 测试在 app-header-actions.test.tsx）+ 单方式 Deploy 卡。
     expect(screen.getByTestId("deploy-settings")).toBeInTheDocument();
-    expect(screen.getByTestId("redeploy-button")).toBeEnabled();
     expect(screen.getByTestId("deploy-card")).toBeInTheDocument();
   });
 });

@@ -64,6 +64,15 @@ func EnqueueRollback(ctx context.Context, st *state.Store, in RollbackInput) (st
 		}
 		return state.DeployRecord{}, errorf("E_RUNTIME_UNAVAILABLE", "failed to read app: %v", err)
 	}
+	// 挂起门（app Stop/Start，00028 位）：挂起期副本 0 是期望形态（排水腿
+	// 每拍保持）——回滚/重部署入队会立即被排水拉回 0 并污染部署史，显式
+	// 拒绝。恢复先行：resume 清位并自带 active revision 重部署（ResumeApp
+	// 在清位之后才走本入队，不被本门拦截）。
+	if app.Suspended {
+		return state.DeployRecord{}, errorf("E_APP_SUSPENDED",
+			"app %s is suspended — resume it before deploying (Console: Start; resume redeploys the active revision)", app.Name).
+			WithContext("app", app.Name)
+	}
 
 	rev, err := resolveRollbackTarget(ctx, st, app.ID, in.TargetRevisionID)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
+	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/cron"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -48,6 +49,13 @@ func (s *CronService) TriggerCronRun(ctx context.Context, req *serverv1.TriggerC
 	// 角色门（W2-S4 第 2 门）：触发=deploy、台账=read（scope 登记映射）。
 	if err := requireAppAccess(ctx, s.st, app); err != nil {
 		return nil, err
+	}
+	// 挂起门（app Stop/Start，00028 位）：挂起 = 用户请求停止——手动触发
+	// 的一次性 job 与停止语义互斥，显式拒绝（调度器的周期触发同门豁免）。
+	if app.Suspended {
+		return nil, apperr.New("E_APP_SUSPENDED",
+			"app %s is suspended — resume it before triggering cron runs (Console: Start)", app.Name).
+			WithContext("app", app.Name)
 	}
 	run, err := s.triggers.TriggerRun(ctx, app.ID, app.Name, req.GetService(), callerTokenID(ctx))
 	if err != nil {

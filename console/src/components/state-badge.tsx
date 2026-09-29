@@ -34,6 +34,11 @@ export function stateTone(state: string): StateTone {
       return "green";
     case "degraded":
       return "amber";
+    // suspended = 用户挂起（app Stop，权威位直投影）：琥珀——非失败、可行动
+    //（Start 在标题栏）。DB paused 走灰（无动作语义），app 挂起有直接恢复
+    // 动作，色阶上与 degraded 同档「需注意但非故障」。
+    case "suspended":
+      return "amber";
     case "blocked":
     case "failed":
     case "down":

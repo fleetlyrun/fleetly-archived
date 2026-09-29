@@ -82,6 +82,15 @@ func (e *Engine) substrateRecon(ctx context.Context, force bool) {
 		if inFlight[app.ID] {
 			continue // 发布过程本身就是期望态迁移：服务可能尚未创建，不判缺失
 		}
+		// 挂起应用（app Stop/Start，00028 位）走专用排水腿：受管长驻服务
+		// 副本压到 0（状态驱动渲染——期望形态，不是故障披露），缺失不补建、
+		// 多余不回收；派生基线随排水刷新（suspended 直投影）。写通道在
+		// suspend.go（convergescan 白名单行：无条件副本清零保持器，非收敛
+		// 对账——scaleToZero 同族）。
+		if app.Suspended {
+			e.drainSuspendedApp(ctx, app.ID, app.Name)
+			continue
+		}
 		derived, err := e.store.GetAppDerivedState(ctx, app.ID)
 		if err != nil {
 			if errors.Is(err, state.ErrAppNotFound) {

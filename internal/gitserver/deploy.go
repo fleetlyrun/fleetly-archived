@@ -114,6 +114,14 @@ func (s *GitTriggers) DeployFromCommit(ctx context.Context, in DeployInput) (sta
 	if err != nil {
 		return state.DeployRecord{}, nil, err
 	}
+	// 挂起门（app Stop/Start，00028 位）：挂起期排水到 0 是期望形态——
+	// push/webhook 触发的部署不入队（排水分支会立即拉回 0）。恢复先行
+	//（resume 清位 + 自带重部署）；拒绝随 push 报错如实上抛给推送方。
+	if app.Suspended {
+		return state.DeployRecord{}, nil, apperr.New("E_APP_SUSPENDED",
+			"app %s is suspended — resume it before deploying (Console: Start; resume redeploys the active revision)", app.Name).
+			WithContext("app", app.Name)
+	}
 	// A7（S18）：compose 字节持久化 <数据根>/deployments/<id>/compose.yaml
 	//（先写文件后建行；临时文件自此仅解析中转——tmpfiles 清理不再影响
 	// 引擎 preparing 与成功固化的重载；终态后由 janitor 按 30 天窗清理）。

@@ -32,6 +32,7 @@ var serviceWriteWhitelist = map[string]string{
 	"engine.go":      "scaleToZero 保留现场写通道（D-REL-5：首发失败/取消的无条件副本清零，非缺失/漂移对账，不适用收敛语义）",
 	"autoscaling.go": "伸缩写通道（按评估结果无条件写副本 + 归属/哈希 label 同形重锚；事件性调容非收敛对账）",
 	"initjobs.go":    "一次性 init job 相位的缺失即建（inspect-skip 相位幂等；运行中 job 永不重申——生命周期归 init 相位，与对账原语的保全语义不同）",
+	"suspend.go":     "挂起排水写通道（app Stop/Start 00028：状态驱动渲染的无条件副本清零保持器，DB paused 同型——非缺失/漂移对账，不适用收敛语义；scaleToZero 同族）",
 }
 
 // TestNoConvergenceOutsidePrimitive 扫描 internal/engine 非测试 .go 文件中

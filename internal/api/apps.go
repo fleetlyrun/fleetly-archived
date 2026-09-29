@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
+	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/engine"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -100,7 +101,7 @@ func (s *AppsService) ListApps(ctx context.Context, req *serverv1.ListAppsReques
 	for _, app := range apps {
 		// 批量 map 缺席键 = 零值 Placement（State 空串 = 无绑定记录，
 		// 与 per-app 路径的 ErrPlacementNotFound 分支同派生语义）。
-		derived := engine.DeriveAppState(factsFromWindow(placements[app.ID], deployments[app.ID]))
+		derived := engine.DeriveAppState(factsFromWindow(placements[app.ID], deployments[app.ID], app.Suspended))
 		projectNetwork, attached := appProjectNetworkProjection(app)
 		out = append(out, &serverv1.AppView{
 			Id:                     app.ID,
@@ -114,6 +115,7 @@ func (s *AppsService) ListApps(ctx context.Context, req *serverv1.ListAppsReques
 			ProjectId:              app.ProjectID,
 			ProjectNetworkAttached: attached,
 			ProjectNetwork:         projectNetwork,
+			Suspended:              app.Suspended,
 		})
 	}
 	return &serverv1.ListAppsResponse{Apps: out}, nil
@@ -129,7 +131,7 @@ func (s *AppsService) GetApp(ctx context.Context, req *serverv1.GetAppRequest) (
 	if err := requireAppAccess(ctx, s.st, app); err != nil {
 		return nil, err
 	}
-	derived, err := s.derivedState(ctx, app.ID)
+	derived, err := s.derivedState(ctx, app)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +148,7 @@ func (s *AppsService) GetApp(ctx context.Context, req *serverv1.GetAppRequest) (
 		ProjectId:              app.ProjectID,
 		ProjectNetworkAttached: attached,
 		ProjectNetwork:         projectNetwork,
+		Suspended:              app.Suspended,
 	}
 	if p, err := s.st.GetPlacement(ctx, app.ID); err == nil {
 		resp.Placement = placementView(p)
@@ -201,6 +204,115 @@ func (s *AppsService) DeleteApp(ctx context.Context, req *serverv1.DeleteAppRequ
 		}
 	}
 	return &serverv1.DeleteAppResponse{Name: app.Name, Lifecycle: string(state.LifecycleDeleting)}, nil
+}
+
+// SuspendApp 挂起应用（app Stop；admin scope 拦截器门 + requireAppAccess
+// 所有权门）：权威位翻转（state CAS）+ app.suspended 事件 + 审计同事务
+// fail-closed。本 RPC 不触底座——副本排水与派生投影由引擎周期对账按位
+// 执行（与 SuspendDatabase「API 只转状态」同型；引擎 PollInterval 缺省 2s，
+// 排水一拍内落地）。墓碑（deleting/deleted）与并发翻转按哨兵表映射 409。
+func (s *AppsService) SuspendApp(ctx context.Context, req *serverv1.SuspendAppRequest) (*serverv1.SuspendAppResponse, error) {
+	app, err := resolveApp(ctx, s.st, req.GetName())
+	if err != nil {
+		return nil, err
+	}
+	// 角色门（W2-S4 第 2 门）：方法所需层级由拦截器注入的 scope 登记映射。
+	if err := requireAppAccess(ctx, s.st, app); err != nil {
+		return nil, err
+	}
+	updated, err := suspendAppTx(ctx, s.st, app, true)
+	if err != nil {
+		return nil, err
+	}
+	derived, err := s.derivedState(ctx, updated)
+	if err != nil {
+		return nil, err
+	}
+	return &serverv1.SuspendAppResponse{App: appView(updated, derived)}, nil
+}
+
+// ResumeApp 恢复应用（app Start；admin 门）：清挂起位并入队 active
+// revision 的重部署（engine.EnqueueRollback 与行内回滚/Console Redeploy 同
+// 管线恢复副本；挂起门以清位后的行状态判定，本路径不被拦）。无成功部署
+//（保留窗空 → E_ROLLBACK_NO_TARGET）如实吞掉：无物可恢复，清位照常生效，
+// deployment_id 留空（响应字段语义见 proto 注释）。事件/审计与清位同事务。
+func (s *AppsService) ResumeApp(ctx context.Context, req *serverv1.ResumeAppRequest) (*serverv1.ResumeAppResponse, error) {
+	app, err := resolveApp(ctx, s.st, req.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := requireAppAccess(ctx, s.st, app); err != nil {
+		return nil, err
+	}
+	updated, err := suspendAppTx(ctx, s.st, app, false)
+	if err != nil {
+		return nil, err
+	}
+	// 重部署载荷限定形（RollbackDeployment 同款纪律）：引擎按 GetAppByName
+	// 重解析，传三段限定形免疫跨项目同名歧义与平台 id 死文案。
+	deploymentID := ""
+	if rec, rerr := engine.EnqueueRollback(ctx, s.st, engine.RollbackInput{
+		AppName: updated.QualifiedName(),
+		Actor:   "human",
+	}); rerr == nil {
+		deploymentID = rec.ID
+	} else if e, ok := apperr.FromError(rerr); !ok || e.Code() != "E_ROLLBACK_NO_TARGET" {
+		return nil, rerr // 队列/基座类失败原样上抛；无目标（从未成功部署）= 清位即终局
+	}
+	derived, err := s.derivedState(ctx, updated)
+	if err != nil {
+		return nil, err
+	}
+	return &serverv1.ResumeAppResponse{App: appView(updated, derived), DeploymentId: deploymentID}, nil
+}
+
+// suspendAppTx 是 suspend/resume 共用的位翻转事务（CAS + 事件 + 审计同
+// 事务 fail-closed——位写与披露原子，审计失败整体回滚）。
+func suspendAppTx(ctx context.Context, st *state.Store, app state.App, suspended bool) (state.App, error) {
+	eventName := "app.resumed"
+	if suspended {
+		eventName = "app.suspended"
+	}
+	var updated state.App
+	err := st.InTx(ctx, func(tx *state.Tx) error {
+		a, err := tx.SetAppSuspended(ctx, app.ID, suspended, state.Event{
+			Name:    eventName,
+			Subject: "app:" + app.ID,
+			Payload: state.DiffSummary("app", app.Name),
+		})
+		if err != nil {
+			return err
+		}
+		if err := tx.WriteAudit(ctx, auditEntry(ctx, "app:"+app.ID, state.DiffSummary("suspended", suspended))); err != nil {
+			return err
+		}
+		updated = a
+		return nil
+	})
+	if err != nil {
+		return state.App{}, mapStoreErr(err, app.Name)
+	}
+	return updated, nil
+}
+
+// appView 构造应用视图（suspend/resume 响应载体；与 ListApps/GetApp 的内联
+// 投影同字段集——派生状态由调用方按行现算）。
+func appView(a state.App, derived string) *serverv1.AppView {
+	projectNetwork, attached := appProjectNetworkProjection(a)
+	return &serverv1.AppView{
+		Id:                     a.ID,
+		Name:                   a.Name,
+		Lifecycle:              string(a.Lifecycle),
+		DerivedState:           derived,
+		CreatedAt:              timestamppb.New(a.CreatedAt),
+		UpdatedAt:              timestamppb.New(a.UpdatedAt),
+		TeamSlug:               a.TeamSlug,
+		ProjectSlug:            a.ProjectSlug,
+		ProjectId:              a.ProjectID,
+		ProjectNetworkAttached: attached,
+		ProjectNetwork:         projectNetwork,
+		Suspended:              a.Suspended,
+	}
 }
 
 // SetAppWebhookSecret 设置 per-app webhook 签名密钥（admin；T2.19）：值经
@@ -413,9 +525,10 @@ func (s *AppsService) RemoveScalingPolicy(ctx context.Context, req *serverv1.Rem
 
 // derivedState 读面即时派生应用状态（state-model §2.10 纯函数，与引擎/CLI
 // 共用 engine.DeriveAppState 同一实现）。单 app 读面（GetApp 等）沿用
-// per-app 查询；ListApps 走 S18-A4 批量形态（factsFromWindow）。
-func (s *AppsService) derivedState(ctx context.Context, appID string) (string, error) {
-	facts, err := appFacts(ctx, s.st, appID)
+// per-app 查询；ListApps 走 S18-A4 批量形态（factsFromWindow）。挂起位随
+// app 行入 facts（suspended 直投影，第一判短路）。
+func (s *AppsService) derivedState(ctx context.Context, app state.App) (string, error) {
+	facts, err := appFacts(ctx, s.st, app)
 	if err != nil {
 		return "", err
 	}
@@ -426,27 +539,27 @@ func (s *AppsService) derivedState(ctx context.Context, appID string) (string, e
 // 25 条内找最近一次 succeeded）。
 const derivedWindow = 25
 
-// appFacts 读取派生输入事实（placement + 部署窗口）——单 app 形态。
-func appFacts(ctx context.Context, st *state.Store, appID string) (engine.AppFacts, error) {
+// appFacts 读取派生输入事实（挂起位 + placement + 部署窗口）——单 app 形态。
+func appFacts(ctx context.Context, st *state.Store, app state.App) (engine.AppFacts, error) {
 	var placement state.Placement
-	if p, err := st.GetPlacement(ctx, appID); err == nil {
+	if p, err := st.GetPlacement(ctx, app.ID); err == nil {
 		placement = p
 	} else if !errors.Is(err, state.ErrPlacementNotFound) {
 		return engine.AppFacts{}, err
 	}
-	rows, err := st.ListAppDeployments(ctx, appID, derivedWindow)
+	rows, err := st.ListAppDeployments(ctx, app.ID, derivedWindow)
 	if err != nil {
 		return engine.AppFacts{}, err
 	}
-	return factsFromWindow(placement, rows), nil
+	return factsFromWindow(placement, rows, app.Suspended), nil
 }
 
-// factsFromWindow 从「绑定 + 最近部署窗口（created_at 倒序）」构造派生输入
-// 事实——per-app 与批量（S18-A4）两种读路径共用同一装配逻辑，杜绝两形态
-// 的派生口径漂移。placement 零值（State 空串）= 无绑定记录的合法运行态，
-// DeriveAppState 对空串与缺席同判（自由调度非 blocked）。
-func factsFromWindow(placement state.Placement, rows []state.DeployRecord) engine.AppFacts {
-	facts := engine.AppFacts{PlacementState: string(placement.State)}
+// factsFromWindow 从「挂起位 + 绑定 + 最近部署窗口（created_at 倒序）」构造
+// 派生输入事实——per-app 与批量（S18-A4）两种读路径共用同一装配逻辑，杜绝
+// 两形态的派生口径漂移。placement 零值（State 空串）= 无绑定记录的合法运行
+// 态，DeriveAppState 对空串与缺席同判（自由调度非 blocked）。
+func factsFromWindow(placement state.Placement, rows []state.DeployRecord, suspended bool) engine.AppFacts {
+	facts := engine.AppFacts{PlacementState: string(placement.State), Suspended: suspended}
 	if len(rows) > 0 {
 		facts.Latest = rows[0]
 	}

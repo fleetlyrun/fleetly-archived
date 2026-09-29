@@ -1,10 +1,10 @@
 // 概览页（2026-09-29 IA 重构，设计 docs/design/2026-09-29-console-ia-
-// redesign.md §4.2/§4.7）：顶部运营摘要 StatCard 条（派生状态 / 服务水位
+// redesign.md §4.2/§4.7/§5）：顶部运营摘要 StatCard 条（派生状态 / 服务水位
 //〔声明 vs 实况成对，runtime 面缺位时降级为声明值并如实标注〕/ 运行任务
-// 数）+ 部署入口区（§4.7 三轮重设计，对齐 dokploy General 页签：Deploy
-// settings 快捷动作卡〔Redeploy=重放当前 active revision 走正常发布管线 /
-// Open terminal〕+ 单方式 Deploy 卡自 Deployments 页上移随迁）+ 分区卡
-//（运营真相 → 配置面 → 危险面）：Application / 项目网 / Placement /
+// 数）+ 部署入口区（对齐 dokploy General 页签：Deploy settings 卡〔Open
+// terminal/挂起说明/P0-3 说明——Redeploy/Stop/Start 动作在详情标题栏
+// AppHeaderActions，§5〕+ 单方式 Deploy 卡自 Deployments 页上移随迁）+
+// 分区卡（运营真相 → 配置面 → 危险面）：Application / 项目网 / Placement /
 // Services / Volumes / Compose（实际生效快照）/ Cron（运行台账 + 手动
 // 触发）/ Metrics / Scaling / Danger Zone。Drift 卡迁至 Containers 页
 //（对账域同页）；cron 服务标注 scheduled——compose 声明但非 long-running，
@@ -15,10 +15,8 @@ import {
   AlertTriangle,
   Boxes,
   Layers,
-  Loader2,
   MapPin,
   PackageOpen,
-  RefreshCw,
   Rocket,
   TerminalSquare,
 } from "lucide-react";
@@ -32,7 +30,6 @@ import {
   getPlacement,
   getRevisionSpec,
   listRevisions,
-  rollbackDeployment,
 } from "@/api/endpoints";
 import { errorEnvelopeFrom } from "@/api/errors";
 import { timeAgo } from "@/lib/utils";
@@ -209,38 +206,13 @@ function DangerZoneCard({ name, displayName }: { name: string; displayName: stri
 }
 
 // Deploy settings 卡（2026-09-29 §4.7，dokploy General 页签 Deploy Settings
-// 同构）：应用级快捷动作常驻首页签——Redeploy = 重放当前 active revision
-// 的快照（POST /rollbacks 带 target_revision_id，与历史行内回滚同管线，
-// 历史里落一条 kind=rollback 行——服务端把重放统一建模为 rollback，如实
-// 呈现不另造语义）；Open terminal = 详情 Terminal 页签直达。无 active
-// revision 时按钮禁用并指路 Deploy 卡（不静默禁用）。平台管理员资源面
-// 只读（P0-3 双门）——只读说明由本卡承载（Deploy 卡随之不渲染，见下）；
-// viewer 整卡不渲染（资源写卡惯例）。
-function DeploySettingsCard({
-  app,
-  activeRevisionId,
-  revisionsReady,
-}: {
-  app: string;
-  activeRevisionId: string;
-  revisionsReady: boolean;
-}) {
-  const queryClient = useQueryClient();
+// 同构；§5 起动作行上移详情标题栏——Redeploy/Stop/Start 在 AppHeaderActions，
+// 本卡收敛为次级入口）：Open terminal 直达 Terminal 页签；挂起态说明（标题
+// 栏 Start 恢复）；平台管理员资源面只读（P0-3 双门）——只读说明由本卡承载
+// （Deploy 卡随能力门关门退场，不双份）；viewer 整卡不渲染（资源写卡惯例）。
+function DeploySettingsCard({ app, suspended }: { app: string; suspended: boolean }) {
   const { canDeploy } = useTeamCapabilities();
   const isPlatformAdmin = useIsPlatformAdmin();
-  const [enqueuedId, setEnqueuedId] = useState("");
-  const [error, setError] = useState<ReturnType<typeof errorEnvelopeFrom> | null>(null);
-
-  const redeploy = useMutation({
-    mutationFn: () => rollbackDeployment(app, activeRevisionId),
-    onSuccess: (resp) => {
-      setEnqueuedId(resp.deployment_id ?? "");
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["deployments", app] });
-      void queryClient.invalidateQueries({ queryKey: ["app", app] });
-    },
-    onError: (err) => setError(errorEnvelopeFrom(err)),
-  });
 
   if (!canDeploy && !isPlatformAdmin) return null;
 
@@ -253,34 +225,19 @@ function DeploySettingsCard({
       contentClassName="space-y-3 pt-4"
       actions={
         canDeploy ? (
-          <>
-            <Button
-              size="sm"
-              data-testid="redeploy-button"
-              title="Replay the currently deployed revision as a new deployment (goes through the normal release pipeline)"
-              disabled={activeRevisionId === "" || redeploy.isPending}
-              onClick={() => redeploy.mutate()}
-            >
-              {redeploy.isPending ? (
-                <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw aria-hidden className="h-4 w-4" />
-              )}
-              Redeploy
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link to={`/apps/${encodeURIComponent(app)}/terminal`} data-testid="open-terminal-link">
-                <TerminalSquare aria-hidden className="h-4 w-4" />
-                Open terminal
-              </Link>
-            </Button>
-          </>
+          <Button asChild size="sm" variant="outline">
+            <Link to={`/apps/${encodeURIComponent(app)}/terminal`} data-testid="open-terminal-link">
+              <TerminalSquare aria-hidden className="h-4 w-4" />
+              Open terminal
+            </Link>
+          </Button>
         ) : null
       }
     >
-      {canDeploy && revisionsReady && activeRevisionId === "" ? (
-        <p className="text-xs text-muted-foreground" data-testid="redeploy-no-revision">
-          No deployment yet — deploy a compose file from the Deploy card below.
+      {canDeploy && suspended ? (
+        <p className="text-xs text-amber-800 dark:text-amber-300" data-testid="app-suspended-note">
+          This app is suspended — services are drained to zero replicas. Start
+          it from the header to redeploy and bring them back.
         </p>
       ) : null}
       {isPlatformAdmin ? (
@@ -289,32 +246,8 @@ function DeploySettingsCard({
           data-testid="platform-readonly-note"
         >
           Platform administrators have read-only access to resources
-          (separation of duties). Deploy and roll back from the CLI with a
+          (separation of duties). Deploy, stop and start from the CLI with a
           machine token, or ask a team owner for a member role.
-        </p>
-      ) : null}
-      {error ? (
-        <EnvelopeAlert
-          code={error.code}
-          message={error.message}
-          suggestion={error.suggestion}
-          docs={error.docs}
-        />
-      ) : null}
-      {enqueuedId ? (
-        <p
-          className="text-sm text-emerald-600 dark:text-emerald-400"
-          data-testid="redeploy-status"
-        >
-          Redeploy enqueued (<code className="font-mono text-xs">{enqueuedId}</code>
-          ) — track it in the{" "}
-          <Link
-            to={`/apps/${encodeURIComponent(app)}/deployments`}
-            className="font-medium underline underline-offset-2"
-          >
-            Deployments
-          </Link>{" "}
-          tab.
         </p>
       ) : null}
     </SectionCard>
@@ -439,15 +372,12 @@ export function AppOverviewPage() {
       {app?.derived_state === "degraded" ? (
         <DegradedExplanationCardLive app={name} />
       ) : null}
-      {/* 部署入口区（§4.7，dokploy General 同构）：快捷动作卡 + 单方式
-          Deploy 卡（自 Deployments 页上移随迁）。DeployCard 内部按角色门
-          投影方式集，平台管理员/viewer 集空整卡不渲染——平台管理员的
+      {/* 部署入口区（§4.7/§5）：Deploy settings 卡（Open terminal/挂起说明/
+          P0-3 说明——Redeploy/Stop/Start 上移详情标题栏 AppHeaderActions）+
+          单方式 Deploy 卡（自 Deployments 页上移随迁）。DeployCard 内部按
+          角色门投影方式集，平台管理员/viewer 集空整卡不渲染——平台管理员的
           P0-3 只读说明由 Deploy settings 卡承载（不双份）。 */}
-      <DeploySettingsCard
-        app={name}
-        activeRevisionId={active?.id ?? ""}
-        revisionsReady={revisionsQuery.isSuccess}
-      />
+      <DeploySettingsCard app={name} suspended={app?.suspended === true} />
       <DeployCard app={name} />
       {/* 摘要卡之后的分区回归两列网格（运营真相半宽卡 ×2 并排；全宽卡
           md:col-span-2）。 */}

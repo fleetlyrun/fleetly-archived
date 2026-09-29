@@ -191,3 +191,91 @@ describe("AppsPage ownership projection and id navigation (2026-09-25 walkthroug
     localStorage.removeItem("fleetly.console.context");
   });
 });
+
+// ── §5 统一骨架（2026-09-29）：统计卡行 + Create application 钮（deploy
+// 面，developer+）+ 平台管理员 P0-3 说明卡——与 Databases 页同款形态。
+describe("AppsPage unified skeleton (§5)", () => {
+  const APPS = {
+    apps: [
+      { id: "a1", name: "web", lifecycle: "active", derived_state: "running" },
+      { id: "a2", name: "api", lifecycle: "active", derived_state: "suspended" },
+      { id: "a3", name: "jobs", lifecycle: "active", derived_state: "down" },
+    ],
+  };
+
+  function stubMe(role: string, isPlatformAdmin: boolean) {
+    return vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.endsWith("/auth/me")) {
+        return Promise.resolve({
+          ok: true, status: 200, statusText: "",
+          json: () =>
+            Promise.resolve({
+              user: { id: "01U1", email: "f@t.test", is_platform_admin: isPlatformAdmin },
+              teams: [{ team_id: "01TEAM", team_slug: "acme", team_name: "Acme", role }],
+              project_overrides: [],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, statusText: "", json: () => Promise.resolve(APPS) });
+    });
+  }
+
+  function renderInTeamContext() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <MemoryRouter initialEntries={["/apps"]}>
+        <QueryClientProvider client={client}>
+          <TeamProjectProvider>
+            <Routes>
+              <Route path="/apps" element={<AppsPage />} />
+            </Routes>
+          </TeamProjectProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it("owner sees the stat row (suspended counted) and the Create application button", async () => {
+    setToken("flt_test");
+    vi.stubGlobal("fetch", stubMe("owner", false));
+    renderInTeamContext();
+
+    await waitFor(() => expect(screen.getByTestId("app-create-button")).toBeInTheDocument());
+    // 统计卡（label + 大数字 + sub 三段结构）：Suspended 卡计数 1（挂起是
+    // 权威位直投影态，一等计数）。等统计卡本体而非创建钮——页头在 pending
+    // 分支也有创建钮，等它会踩到未就绪渲染；「Applications」文本页头与统计
+    // 卡同名，不作断言锚。
+    await screen.findByText("Suspended");
+    const suspendedCard = screen.getByText("Suspended").parentElement;
+    expect(suspendedCard?.textContent).toContain("1");
+    expect(screen.getByText("stopped by request")).toBeInTheDocument();
+    expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
+  });
+
+  it("platform admin: create button hidden, readonly note in its place (P0-3, same shape as Databases)", async () => {
+    setToken("flt_test");
+    vi.stubGlobal("fetch", stubMe("owner", true));
+    renderInTeamContext();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("platform-readonly-note")).toHaveTextContent(
+        "Platform administrators have read-only access",
+      );
+    });
+    expect(screen.queryByTestId("app-create-button")).not.toBeInTheDocument();
+  });
+
+  it("viewer: no create button and no note (plain member without the deploy face)", async () => {
+    setToken("flt_test");
+    vi.stubGlobal("fetch", stubMe("viewer", false));
+    renderInTeamContext();
+
+    await waitFor(() => expect(screen.getByText("Applications")).toBeInTheDocument());
+    // Me 落地后（fail-open 窗口关闭）创建钮消失；viewer 非平台管理员，无说明卡。
+    await waitFor(() =>
+      expect(screen.queryByTestId("app-create-button")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("platform-readonly-note")).not.toBeInTheDocument();
+  });
+});

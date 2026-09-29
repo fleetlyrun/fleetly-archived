@@ -331,3 +331,32 @@ describe("DatabasesPage create dialog", () => {
     });
   });
 });
+
+// ── §5 统一骨架（2026-09-29）：工具栏（搜索/状态筛选/排序——客户端投影，
+// 与 Applications 页同款）。开 Select 的用例按惯例不落本文件（radix Select
+// 跨用例毒化）；搜索走 type，无 Select 打开。
+describe("DatabasesPage toolbar (§5)", () => {
+  it("search narrows rows client-side; the no-match empty state discloses honestly", async () => {
+    setToken("flt_test");
+    vi.stubGlobal("fetch", stubFetchWith(DBS));
+    const user = userEvent.setup();
+
+    renderAt("/databases");
+    await waitFor(() => {
+      expect(screen.getAllByTestId("database-row")).toHaveLength(2);
+    });
+
+    await user.type(screen.getByLabelText("Filter databases"), "pg");
+    await waitFor(() => {
+      expect(screen.getAllByTestId("database-row")).toHaveLength(1);
+    });
+    expect(screen.getByText("pg-prod")).toBeInTheDocument();
+    expect(screen.queryByText("cache")).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Filter databases"));
+    await user.type(screen.getByLabelText("Filter databases"), "zzz");
+    await waitFor(() =>
+      expect(screen.getByText("No database instances match the current filters.")).toBeInTheDocument(),
+    );
+  });
+});

@@ -121,6 +121,16 @@ var builtins = []Code{
 		Summary:    "deploy contains destructive changes (service removal/volume unbind) without the confirmation flag; rejected from queueing",
 		Suggestion: "This deploy will remove services or unbind volumes relative to the latest revision: confirm the intent and retry with --confirm-destructive."},
 
+	// ── 应用挂起（app Stop/Start，2026-09-29 Console dokploy 对齐四轮）──
+	{ID: "E_APP_SUSPENDED", HTTP: 409,
+		Source:     "2026-09-29-console-ia-redesign.md §4.8 (deploy/rollback enqueue gate while suspended) added during implementation",
+		Summary:    "app is suspended by request (managed services drain to replica 0; new deploys are refused while suspended)",
+		Suggestion: "Resume the app first (Console: Start on the app header; resume clears the suspend bit and redeploys the active revision), then deploy again."},
+	{ID: "E_APP_SUSPEND_CONFLICT", HTTP: 409,
+		Source:     "2026-09-29-console-ia-redesign.md §4.8 (suspend-bit CAS mismatch — concurrent suspend/resume) added during implementation",
+		Summary:    "app suspend state changed concurrently (duplicate suspend or resume raced another actor)",
+		Suggestion: "Re-read the app — the current projection is the truth; repeat the action only if it still shows the opposite state."},
+
 	// ── 有状态放置（stateful-placement §2.8/§2.5/§2.6）──
 	{ID: "E_PLACEMENT_NODE_INVALID", HTTP: 422,
 		Source:     "stateful-placement §2.8",
