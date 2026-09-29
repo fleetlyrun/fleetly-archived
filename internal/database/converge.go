@@ -23,6 +23,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/naming"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -70,7 +71,7 @@ func (m *Manager) convergeProvisioning(ctx context.Context, inst *state.Database
 		m.log.Warn("database: provision deferred", "instance", inst.Name, "error", err)
 		return
 	}
-	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, netName, true); err != nil {
 		m.log.Warn("database: provision deferred (network)", "instance", inst.Name, "error", err)
 		return
 	}
@@ -260,6 +261,13 @@ func (m *Manager) ensureService(ctx context.Context, name string, spec serviceSp
 	return nil
 }
 
+// taskRunning 报告任务是否期望 running（当前代——旧代任务 desired=shutdown
+// 不计；共享观测 dutydocker.TaskObservation 无方法面，判定以小函数内聚——
+// 原本包 TaskObservation.running 的语义逐字迁址）。
+func taskRunning(t dutydocker.TaskObservation) bool {
+	return t.DesiredState == string(swarm.TaskStateRunning)
+}
+
 // healthVerdict 是任务健康判定（健康门与在役观察共用的唯一真值源）。判定
 // 信号 = 目标镜像的任务状态——本 API 代的 swarm 任务对象不携带容器健康位，
 // 模板 healthcheck 的引擎级判定经 swarm 原生闭环落到任务：探测连续失败耗
@@ -276,7 +284,7 @@ func (m *Manager) healthVerdict(ctx context.Context, service, image string) (hea
 		return healthPending, ""
 	}
 	for _, t := range tasks {
-		if !t.running() || (image != "" && t.Image != image) {
+		if !taskRunning(t) || (image != "" && t.Image != image) {
 			continue
 		}
 		switch t.State {

@@ -81,8 +81,8 @@ func TestVMAlertConvergesOnAlertsMode(t *testing.T) {
 	if len(cur.ConfigNames) != 1 || !strings.HasPrefix(cur.ConfigNames[0], rulesConfigPrefix) {
 		t.Fatalf("config names = %v, want one %s* entry", cur.ConfigNames, rulesConfigPrefix)
 	}
-	if len(cur.MountSources) != 1 || !strings.HasSuffix(cur.MountSources[0], "fleetly-ingress.token") {
-		t.Fatalf("mounts = %v/%v, want the token file bind", cur.MountSources, cur.MountTargets)
+	if len(cur.Mounts) != 1 || !strings.HasSuffix(cur.Mounts[0].Source, "fleetly-ingress.token") {
+		t.Fatalf("mounts = %+v, want the token file bind", cur.Mounts)
 	}
 	// 规则 config 内容含渲染面事实（for/severity/channels annotation）。
 	var rulesData string

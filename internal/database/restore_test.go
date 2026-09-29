@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -20,7 +21,7 @@ import (
 func seedReadyWithLedger(t *testing.T, h *harness, name, template, snapshot string) state.DatabaseInstance {
 	t.Helper()
 	inst := h.createInstance(name, template)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	if _, err := h.st.InsertDatabaseBackup(context.Background(), state.DatabaseBackup{
 		DatabaseID:     inst.ID,

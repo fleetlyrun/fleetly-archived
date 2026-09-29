@@ -42,6 +42,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -322,7 +323,7 @@ func (m *Manager) EnsureRegistry(ctx context.Context) error {
 		return err
 	}
 	// ② 平台 overlay（label fleetly.managed=true；Traefik 与 zot 的共享面）。
-	if err := m.docker.NetworkEnsure(ctx, RegistryNetworkName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, RegistryNetworkName, false); err != nil {
 		return err
 	}
 	netID, err := m.docker.NetworkID(ctx, RegistryNetworkName)
@@ -406,7 +407,7 @@ func (m *Manager) buildRegistrySpec(creds *registryCredentials, netID, platformI
 
 // registrySpecEqual 幂等比对（镜像/挂载/网络/约束/副本数——registry 的全
 // 部执行面都由期望 spec 权威表达；label 不参与比对，服务名即身份）。
-func registrySpecEqual(cur ingressServiceState, desired swarm.ServiceSpec) bool {
+func registrySpecEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

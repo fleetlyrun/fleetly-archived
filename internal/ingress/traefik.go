@@ -13,8 +13,10 @@ package ingress
 // 是一次 service update（任务重建一次，v0.1 接受；配置视图在控制面，
 // Traefik 重启即重新拉取，入口不丢配置）。
 //
-// 本文件是第三方适配面：moby/swarm 类型不出本文件（出口只有 error、
-// Status 投影与部署器接口）。
+// Docker 消费面收编进 internal/dutydocker（2026-09-29 架构评审 C1）：连接
+// 构造/服务写原语/实况投影由共享适配层唯一承载——本文件只保留消费方窄
+// 端口与包内哨兵。本文件是第三方适配面：moby/swarm 类型不出本文件（出口
+// 只有 error、Status 投影与部署器接口）。
 
 import (
 	"context"
@@ -24,12 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
-	mobyclient "github.com/moby/moby/client"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -49,15 +49,28 @@ const legacyCertSeedContainerName = "fleetly-ingress-cert-seeder"
 // ping 端点；静态配置同步开 --ping）。
 var traefikHealthcheckArgs = []string{"CMD", "traefik", "healthcheck", "--ping"}
 
-// dockerClient 是部署器对 Docker API 的最小消费面（moby client 形态；
-// 假实现注入单测——真实形态在 newRealDockerClient）。swarm.ServiceSpec
-// 是第三方构造载荷，只进不出（消费方为本包 Manager）。
+// dockerClient 是部署器对 Docker API 的最小消费面（2026-09-29 架构评审 C1
+// 起 Docker 适配面收编进 internal/dutydocker：连接构造/服务写原语/实况
+// 投影由共享适配层唯一承载——此前本包自持一份逐字拷贝的 realDockerClient；
+// *dutydocker.Client 以方法集超集满足，测试假件在本包注入）。端口面按入
+// 口部署器需要裁剪：无 secret/config、无任务 IP 直达。第三方（moby/swarm）
+// 类型不出消费面——swarm.ServiceSpec 是第三方构造载荷，只进不出（出口只
+// 有投影与 error）；实况投影与 Info 投影是共享类型（dutydocker.
+// ServiceSnapshot / InfoSnapshot）——消费方只读自己比对用到的字段。
 type dockerClient interface {
-	Info(ctx context.Context) (swarmInfo, error)
-	ServiceInspect(ctx context.Context, name string) (ingressServiceState, error)
+	// Info 报告 swarm 状态投影（active 位由部署器判定并映射包内哨兵）。
+	Info(ctx context.Context) (dutydocker.InfoSnapshot, error)
+	// ServiceInspect 按名取服务实况；缺失返回 Exists=false（不是错误——
+	// 「不存在」是收敛的正常输入）。
+	ServiceInspect(ctx context.Context, name string) (dutydocker.ServiceSnapshot, error)
+	// ServiceCreate 创建服务（收敛保证仅缺失时调用）。
 	ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error
+	// ServiceUpdate 以乐观令牌推进服务（version 取自先前的 ServiceInspect）。
 	ServiceUpdate(ctx context.Context, name string, version uint64, spec swarm.ServiceSpec) error
-	NetworkEnsure(ctx context.Context, name string) error
+	// NetworkEnsure 确认 overlay 网络存在（attach 的前置对象；幂等：已有
+	// 即 no-op、缺失创建、并发竞态已存在即成功。attachable=true 时一次性
+	// 容器可挂接——入口代建的是普通 overlay，恒 false）。
+	NetworkEnsure(ctx context.Context, name string, attachable bool) error
 	// NetworkID 解析网络名 → 底座 ID（attach 幂等判据：服务实况里的
 	// 网络目标是 ID 形态）。
 	NetworkID(ctx context.Context, name string) (string, error)
@@ -67,195 +80,9 @@ type dockerClient interface {
 	// VolumeEnsure 确认命名卷存在（幂等；E1-4 registry 数据卷的前置对象
 	// ——swarm 对 task 卷挂载亦有按节点创建语义，显式收敛使部署器自证）。
 	VolumeEnsure(ctx context.Context, name string) error
-	// LegacySeedContainerRemove 移除 v0.1 证书 seed 容器（E1-2 迁移收敛；
-	// 不存在返回 false，幂等）。
-	LegacySeedContainerRemove(ctx context.Context, name string) (bool, error)
-}
-
-// swarmInfo 是部署器关心的 Info 投影（advertise addr + swarm active）。
-type swarmInfo struct {
-	SwarmActive bool
-	NodeAddr    string
-}
-
-// ingressServiceState 是入口服务实况投影（幂等比对 + Status 面）。
-type ingressServiceState struct {
-	Exists     bool
-	Version    uint64
-	Image      string
-	Args       []string
-	Ports      []swarm.PortConfig
-	Networks   []string
-	Mounts     []mount.Mount
-	HealthTest []string
-	// Constraints / Replicas 是 registry 部署器的收敛比对位（E1-4）：
-	// manager 钉定约束与 replicated 副本数（0 = global/未设——traefik 是
-	// global，本字段不参与其比对）。
-	Constraints []string
-	Replicas    uint64
-	// Hosts 是容器 /etc/hosts 注入（F9 修正，2026-09-21：provider 面走
-	// VPC——ctrl.<base> 钉到 advertise 地址，公网 8423 零暴露）。
-	Hosts []string
-}
-
-// realDockerClient 是 dockerClient 的 moby 实现。
-type realDockerClient struct {
-	cli *mobyclient.Client
-}
-
-func newRealDockerClient(host string) (*realDockerClient, error) {
-	opts := []mobyclient.Opt{mobyclient.FromEnv}
-	if host != "" {
-		opts = []mobyclient.Opt{mobyclient.WithHost(host), mobyclient.FromEnv}
-	}
-	cli, err := mobyclient.New(opts...)
-	if err != nil {
-		return nil, fmt.Errorf("ingress: construct docker client: %w", err)
-	}
-	return &realDockerClient{cli: cli}, nil
-}
-
-func (c *realDockerClient) Close() error { return c.cli.Close() }
-
-func (c *realDockerClient) Info(ctx context.Context) (swarmInfo, error) {
-	res, err := c.cli.Info(ctx, mobyclient.InfoOptions{})
-	if err != nil {
-		return swarmInfo{}, fmt.Errorf("ingress: docker info: %w", err)
-	}
-	return swarmInfo{
-		SwarmActive: res.Info.Swarm.NodeID != "" &&
-			res.Info.Swarm.LocalNodeState == swarm.LocalNodeStateActive,
-		NodeAddr: res.Info.Swarm.NodeAddr,
-	}, nil
-}
-
-func (c *realDockerClient) ServiceInspect(ctx context.Context, name string) (ingressServiceState, error) {
-	res, err := c.cli.ServiceInspect(ctx, name, mobyclient.ServiceInspectOptions{})
-	if err != nil {
-		if errdefs.IsNotFound(err) {
-			return ingressServiceState{}, nil
-		}
-		return ingressServiceState{}, fmt.Errorf("ingress: service inspect %s: %w", name, err)
-	}
-	svc := res.Service
-	out := ingressServiceState{
-		Exists:   true,
-		Version:  svc.Version.Index,
-		Networks: []string{},
-	}
-	if cs := svc.Spec.TaskTemplate.ContainerSpec; cs != nil {
-		out.Image = cs.Image
-		out.Args = append([]string{}, cs.Args...)
-		out.Hosts = append([]string{}, cs.Hosts...)
-		if cs.Healthcheck != nil {
-			out.HealthTest = append([]string{}, cs.Healthcheck.Test...)
-		}
-		out.Mounts = append([]mount.Mount{}, cs.Mounts...)
-	}
-	if pl := svc.Spec.TaskTemplate.Placement; pl != nil {
-		out.Constraints = append([]string{}, pl.Constraints...)
-	}
-	if svc.Spec.Mode.Replicated != nil && svc.Spec.Mode.Replicated.Replicas != nil {
-		out.Replicas = *svc.Spec.Mode.Replicated.Replicas
-	}
-	if svc.Spec.EndpointSpec != nil {
-		out.Ports = append([]swarm.PortConfig{}, svc.Spec.EndpointSpec.Ports...)
-	}
-	for _, n := range svc.Spec.TaskTemplate.Networks {
-		out.Networks = append(out.Networks, n.Target)
-	}
-	return out, nil
-}
-
-func (c *realDockerClient) ServiceCreate(ctx context.Context, spec swarm.ServiceSpec) error {
-	if _, err := c.cli.ServiceCreate(ctx, mobyclient.ServiceCreateOptions{Spec: spec}); err != nil {
-		return fmt.Errorf("ingress: service create %s: %w", spec.Name, err)
-	}
-	return nil
-}
-
-func (c *realDockerClient) ServiceUpdate(ctx context.Context, name string, version uint64, spec swarm.ServiceSpec) error {
-	if _, err := c.cli.ServiceUpdate(ctx, name, mobyclient.ServiceUpdateOptions{
-		Version: swarm.Version{Index: version},
-		Spec:    spec,
-	}); err != nil {
-		return fmt.Errorf("ingress: service update %s: %w", name, err)
-	}
-	return nil
-}
-
-// NetworkEnsure 确认 overlay 网络存在（attach 的前置对象；与 substrate
-// 同语义：已有即 no-op、缺失创建、并发竞态已存在即成功）。
-func (c *realDockerClient) NetworkEnsure(ctx context.Context, name string) error {
-	if _, err := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{}); err == nil {
-		return nil
-	} else if !errdefs.IsNotFound(err) {
-		return fmt.Errorf("ingress: network inspect %s: %w", name, err)
-	}
-	if _, err := c.cli.NetworkCreate(ctx, name, mobyclient.NetworkCreateOptions{
-		Driver: "overlay",
-		Labels: map[string]string{state.LabelManaged: state.ManagedLabelValue},
-	}); err != nil {
-		if _, ierr := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{}); ierr == nil {
-			return nil
-		}
-		return fmt.Errorf("ingress: network create %s: %w", name, err)
-	}
-	return nil
-}
-
-// NetworkID 解析网络名 → 底座 ID（未找到走 errdefs NotFound 语义包一层）。
-func (c *realDockerClient) NetworkID(ctx context.Context, name string) (string, error) {
-	res, err := c.cli.NetworkInspect(ctx, name, mobyclient.NetworkInspectOptions{})
-	if err != nil {
-		return "", fmt.Errorf("ingress: network inspect %s: %w", name, err)
-	}
-	return res.Network.ID, nil
-}
-
-// NetworkRemove 删除网络（MoveApp 摘旧网；幂等：缺失视为成功；仍有端点
-// 挂接返回错误——调用方 best-effort 消化，引用方清场后可重试）。
-func (c *realDockerClient) NetworkRemove(ctx context.Context, name string) error {
-	if _, err := c.cli.NetworkRemove(ctx, name, mobyclient.NetworkRemoveOptions{}); err != nil {
-		if errdefs.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("ingress: network remove %s: %w", name, err)
-	}
-	return nil
-}
-
-// VolumeEnsure 确认命名卷存在（幂等；E1-4 registry 数据卷前置对象——已有
-// 即 no-op、缺失创建、并发竞态已存在即成功；与 substrate 同语义）。
-func (c *realDockerClient) VolumeEnsure(ctx context.Context, name string) error {
-	if _, err := c.cli.VolumeInspect(ctx, name, mobyclient.VolumeInspectOptions{}); err == nil {
-		return nil
-	} else if !errdefs.IsNotFound(err) {
-		return fmt.Errorf("ingress: volume inspect %s: %w", name, err)
-	}
-	if _, err := c.cli.VolumeCreate(ctx, mobyclient.VolumeCreateOptions{
-		Driver: "local",
-		Name:   name,
-		Labels: map[string]string{state.LabelManaged: state.ManagedLabelValue},
-	}); err != nil {
-		if _, ierr := c.cli.VolumeInspect(ctx, name, mobyclient.VolumeInspectOptions{}); ierr == nil {
-			return nil // 并发创建竞态：已存在即成功
-		}
-		return fmt.Errorf("ingress: volume create %s: %w", name, err)
-	}
-	return nil
-}
-
-// LegacySeedContainerRemove 移除 v0.1 证书 seed 容器（E1-2 迁移收敛：
-// 分发面退役——容器是平台自建物，移除只动分发面；不存在即 no-op，幂等）。
-func (c *realDockerClient) LegacySeedContainerRemove(ctx context.Context, name string) (bool, error) {
-	if _, err := c.cli.ContainerRemove(ctx, name, mobyclient.ContainerRemoveOptions{Force: true}); err != nil {
-		if errdefs.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("ingress: legacy seed container remove %s: %w", name, err)
-	}
-	return true, nil
+	// ContainerRemoveForce 强制移除容器（E1-2 迁移收敛：v0.1 证书 seed
+	// 容器退役；不存在返回 false，幂等——removed=false 即本无残留）。
+	ContainerRemoveForce(ctx context.Context, name string) (bool, error)
 }
 
 // EnsureTraefik 幂等收敛入口服务（不存在创建；存在比对差异更新）。
@@ -340,7 +167,7 @@ func (m *Manager) EnsureTraefik(ctx context.Context) error {
 // attachNetwork 确保 Traefik 接入 app 专属 overlay 网络（幂等：已接入
 // no-op；新增网络一次 service update——任务重建一次，入口配置即回）。
 // 网络目标集以服务实况（cur.Networks）为基准追加——不能用 lastSpec 重建
-//（lastSpec 不含历史 attach，会互相覆盖丢失其他 app 的网络，实机验证
+// （lastSpec 不含历史 attach，会互相覆盖丢失其他 app 的网络，实机验证
 // 发现的多 app 回归）。幂等判据用网络 ID（swarm 把 attach 目标归一为
 // ID——名字比对永不命中，产生重复 attach，实机验证发现的第二处）。
 func (m *Manager) attachNetwork(ctx context.Context, team, prj, app string) error {
@@ -358,7 +185,7 @@ func (m *Manager) attachNetwork(ctx context.Context, team, prj, app string) erro
 // 仅限允许代建的平台网络；attachable 语义的网络走
 // attachPlatformNetworkIfPresent，s3public.go）。
 func (m *Manager) attachNetworkByName(ctx context.Context, netName string) error {
-	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, netName, false); err != nil {
 		return err
 	}
 	netID, err := m.docker.NetworkID(ctx, netName)
@@ -431,7 +258,7 @@ func specWithNetworks(base swarm.ServiceSpec, netIDs []string) swarm.ServiceSpec
 // 更新）；证书命名卷本体保留（卷内是证书副本，移除属数据面动作——「迁移
 // 只动分发面不动证书数据」，由操作者按指引自行清理）。
 func (m *Manager) retireLegacyCertDistribution(ctx context.Context) error {
-	removed, err := m.docker.LegacySeedContainerRemove(ctx, legacyCertSeedContainerName)
+	removed, err := m.docker.ContainerRemoveForce(ctx, legacyCertSeedContainerName)
 	if err != nil {
 		return err
 	}
@@ -576,7 +403,7 @@ func portUint(port int) uint32 {
 
 // traefikSpecEqual 幂等比对（镜像/参数/端口/挂载/健康检查；网络集由
 // attachNetwork 增量管理，不参与本比对）。
-func traefikSpecEqual(cur ingressServiceState, desired swarm.ServiceSpec) bool {
+func traefikSpecEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false

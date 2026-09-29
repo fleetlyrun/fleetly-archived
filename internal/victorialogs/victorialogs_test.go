@@ -17,6 +17,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -26,7 +27,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]ServiceState
+	services map[string]dutydocker.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -37,16 +38,18 @@ type fakeDocker struct {
 }
 
 func newFakeDocker() *fakeDocker {
-	return &fakeDocker{services: map[string]ServiceState{}}
+	return &fakeDocker{services: map[string]dutydocker.ServiceSnapshot{}}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (bool, error) { return f.swarmActive, nil }
+func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
+	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+}
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ServiceState, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return ServiceState{}, f.inspectErr
+		return dutydocker.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -55,9 +58,9 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, spec.Name)
-	cur := ServiceState{Exists: true, Version: 1}
-	cur.fillFrom(spec)
-	cur.normalizeNetworkIDs()
+	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	fillSnapshotFrom(&cur, spec)
+	normalizeNetworkIDs(&cur)
 	f.services[spec.Name] = cur
 	return nil
 }
@@ -68,8 +71,8 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 	f.updated = append(f.updated, name)
 	cur := f.services[name]
 	cur.Version++
-	cur.fillFrom(spec)
-	cur.normalizeNetworkIDs()
+	fillSnapshotFrom(&cur, spec)
+	normalizeNetworkIDs(&cur)
 	f.services[name] = cur
 	return nil
 }
@@ -77,7 +80,7 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 // normalizeNetworkIDs 模拟 engine 创建期行为：网络挂载目标按名归一为网络
 // ID 存储（"host" 亦然——W5-S3 真机/dind 实证）。duty 的幂等比对必须经
 // NetworkName 解析回名同锚比较（见 converge 注记）。
-func (s *ServiceState) normalizeNetworkIDs() {
+func normalizeNetworkIDs(s *dutydocker.ServiceSnapshot) {
 	for i, t := range s.Networks {
 		s.Networks[i] = "netid:" + t
 	}

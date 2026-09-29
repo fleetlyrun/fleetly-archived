@@ -24,6 +24,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -107,32 +108,10 @@ func buildSpec(controlAddr, tlsName, secretID string) swarm.ServiceSpec {
 	return spec
 }
 
-// DutyServiceState 是 relay 服务的实况投影（收敛比对的实况侧）。
-type DutyServiceState struct {
-	Exists  bool
-	Version uint64
-	Image   string
-	Env     []string
-	// Networks 是任务网络挂载目标（host 网络任务创建后存 ID 形态——比对前
-	// 经 NetworkName 解析回名）。
-	Networks []string
-	// MountSources / MountTargets 是挂载对（sock bind）。
-	MountSources []string
-	MountTargets []string
-	// SecretIDs / SecretNames 是 secret 引用（ID 参与比对——token 轮换即
-	// 触发服务更新）。
-	SecretIDs   []string
-	SecretNames []string
-	// Global 是 global 形态标记。
-	Global bool
-	// MemoryBytes 是内存限额（0 = 未设）。
-	MemoryBytes int64
-}
-
 // specEqual 幂等比对（镜像/env/挂载/secret/网络/global/限额——服务的全部
 // 执行面都由期望 spec 权威表达；label 不参与，服务名即身份。env 含
 // FLEETLY_CONTROL_ADDR/TLS_NAME——relay 拨号面的漂移必被本比对捕获）。
-func specEqual(cur DutyServiceState, desired swarm.ServiceSpec) bool {
+func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -140,11 +119,12 @@ func specEqual(cur DutyServiceState, desired swarm.ServiceSpec) bool {
 	if !sameStrings(cur.Env, cs.Env) {
 		return false
 	}
-	if len(cur.MountSources) != len(cs.Mounts) {
+	if len(cur.Mounts) != len(cs.Mounts) {
 		return false
 	}
 	for i, wm := range cs.Mounts {
-		if cur.MountSources[i] != wm.Source || cur.MountTargets[i] != wm.Target {
+		cm := cur.Mounts[i]
+		if cm.Source != wm.Source || cm.Target != wm.Target {
 			return false
 		}
 	}

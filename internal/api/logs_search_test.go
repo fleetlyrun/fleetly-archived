@@ -24,6 +24,7 @@ import (
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/victorialogs"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
@@ -69,10 +70,12 @@ type fakeVLManager struct {
 	exists bool
 }
 
-func (f *fakeVLManager) Info(_ context.Context) (bool, error) { return true, nil }
+func (f *fakeVLManager) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
+	return dutydocker.InfoSnapshot{SwarmActive: true}, nil
+}
 
-func (f *fakeVLManager) ServiceInspect(_ context.Context, _ string) (victorialogs.ServiceState, error) {
-	return victorialogs.ServiceState{Exists: f.exists, Image: "pinned"}, nil
+func (f *fakeVLManager) ServiceInspect(_ context.Context, _ string) (dutydocker.ServiceSnapshot, error) {
+	return dutydocker.ServiceSnapshot{Exists: f.exists, Image: "pinned"}, nil
 }
 
 func (f *fakeVLManager) ServiceCreate(_ context.Context, _ swarm.ServiceSpec) error {

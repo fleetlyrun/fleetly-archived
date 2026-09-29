@@ -10,6 +10,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -126,23 +127,21 @@ func TestSpecEqualDriftMatrix(t *testing.T) {
 	mutate(func(d *swarm.ServiceSpec) { d.TaskTemplate.Resources.Limits.MemoryBytes = mem })
 }
 
-// stateOf 把 spec 投影为实况形态（与 realDockerClient.ServiceInspect 的
-// 投影同构——fake 注入用）。
-func stateOf(spec swarm.ServiceSpec) ServiceState {
-	out := ServiceState{Exists: true, Version: 1}
-	out.fillFrom(spec)
+// stateOf 把 spec 投影为实况形态（与 dutydocker.snapshotOf 的投影同构——
+// fake 注入用）。
+func stateOf(spec swarm.ServiceSpec) dutydocker.ServiceSnapshot {
+	out := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	fillSnapshotFrom(&out, spec)
 	return out
 }
 
-// fillFrom 用期望 spec 填充实况投影（realDockerClient 投影同构）。
-func (s *ServiceState) fillFrom(spec swarm.ServiceSpec) {
+// fillSnapshotFrom 用期望 spec 填充实况投影（dutydocker.snapshotOf 同构——
+// 消费面子集：fake 只填本包比对用到的字段）。
+func fillSnapshotFrom(s *dutydocker.ServiceSnapshot, spec swarm.ServiceSpec) {
 	if cs := spec.TaskTemplate.ContainerSpec; cs != nil {
 		s.Image = cs.Image
 		s.Args = append([]string{}, cs.Args...)
-		for _, m := range cs.Mounts {
-			s.MountSources = append(s.MountSources, m.Source)
-			s.MountTargets = append(s.MountTargets, m.Target)
-		}
+		s.Mounts = append(s.Mounts, cs.Mounts...)
 	}
 	if pl := spec.TaskTemplate.Placement; pl != nil {
 		s.Constraints = append([]string{}, pl.Constraints...)

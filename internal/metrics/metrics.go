@@ -35,6 +35,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -83,9 +84,9 @@ type Manager struct {
 	notifier notifierConfig
 }
 
-// NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放）。
+// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, retentionDays int, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := newRealDockerClient("")
+	dc, err := dutydocker.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,11 +182,11 @@ func (m *Manager) Ensure(ctx context.Context) (outcome, error) {
 // host 网络回环监听 + retention 参数 + 抓取配置引用；cAdvisor/node_exporter
 // global、0.0.0.0 绑定）→ inspect 缺失创建/漂移更新 → 旧抓取 config GC。
 func (m *Manager) converge(ctx context.Context) error {
-	active, err := m.docker.Info(ctx)
+	info, err := m.docker.Info(ctx)
 	if err != nil {
 		return err
 	}
-	if !active {
+	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
 	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
@@ -385,7 +386,7 @@ func serviceImage(name string) string {
 // gcScrapeConfigs 清场失引用的旧抓取 config（带自描述 label 的对象里，
 // 除当前版之外的全部；best-effort——失败只日志，不阻断收敛）。
 func (m *Manager) gcScrapeConfigs(ctx context.Context, current string) {
-	names, err := m.docker.ConfigListNames(ctx)
+	names, err := m.docker.ConfigListNamesByLabel(ctx, scrapeLabel, "true")
 	if err != nil {
 		m.log.Warn("metrics: scrape config gc list failed", "error", err)
 		return
@@ -403,7 +404,7 @@ func (m *Manager) gcScrapeConfigs(ctx context.Context, current string) {
 // gcRulesConfigs 清场失引用的旧规则 config（rulesConfigLabel 选择器；
 // current 为空 = 全族清场——alerts.mode 离开 on 的清场形态；best-effort）。
 func (m *Manager) gcRulesConfigs(ctx context.Context, current string) {
-	names, err := m.docker.RulesConfigListNames(ctx)
+	names, err := m.docker.ConfigListNamesByLabel(ctx, rulesConfigLabel, "true")
 	if err != nil {
 		m.log.Warn("metrics: rules config gc list failed", "error", err)
 		return
@@ -462,7 +463,7 @@ func (m *Manager) removeIfPresent(ctx context.Context) error {
 		removedAny = true
 	}
 	// 抓取 config 清场（服务已无引用；best-effort）。
-	if names, err := m.docker.ConfigListNames(ctx); err == nil {
+	if names, err := m.docker.ConfigListNamesByLabel(ctx, scrapeLabel, "true"); err == nil {
 		for _, n := range names {
 			if err := m.docker.ConfigRemove(ctx, n); err != nil {
 				m.log.Warn("metrics: scrape config cleanup failed", "config", n, "error", err)

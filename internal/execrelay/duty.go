@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -50,9 +51,9 @@ type Manager struct {
 	advertiseOverride string
 }
 
-// NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放）。
+// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, enabled bool, httpPort, tlsName string, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := newDutyDocker("")
+	dc, err := dutydocker.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -187,21 +188,21 @@ func (m *Manager) ensureToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("execrelay: read cluster token hash: %w", err)
 	}
-	view, err := m.docker.SecretInspect(ctx, ExecRelaySecretName)
+	secretID, exists, err := m.docker.SecretInspect(ctx, ExecRelaySecretName)
 	if err != nil {
 		return "", err
 	}
-	if view.Exists && hash != "" {
-		return view.ID, nil
+	if exists && hash != "" {
+		return secretID, nil
 	}
-	if !view.Exists && hash != "" {
+	if !exists && hash != "" {
 		m.log.Warn("execrelay: cluster token secret missing from the swarm state (regenerating a new token; relay tasks restart with the new secret)")
 	}
 	token, err := newClusterToken()
 	if err != nil {
 		return "", err
 	}
-	id, err := m.docker.SecretCreate(ctx, ExecRelaySecretName, []byte(token),
+	id, err := m.docker.SecretEnsure(ctx, ExecRelaySecretName, []byte(token),
 		map[string]string{state.LabelManaged: state.ManagedLabelValue, relayLabel: "true"})
 	if err != nil {
 		return "", err

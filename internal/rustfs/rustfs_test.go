@@ -17,6 +17,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/statebackup"
@@ -52,10 +53,10 @@ func probeCommand(args []string) string {
 type fakeProbeRunner struct {
 	specs []statebackup.ResticSpec
 
-	initErr          error
-	backupOutput     string
-	snapshotsOutput  string
-	forgetErr        error
+	initErr         error
+	backupOutput    string
+	snapshotsOutput string
+	forgetErr       error
 }
 
 func (f *fakeProbeRunner) RunRestic(_ context.Context, spec statebackup.ResticSpec) (string, error) {
@@ -80,7 +81,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]ServiceState
+	services map[string]dutydocker.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -99,20 +100,22 @@ type fakeDocker struct {
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services:      map[string]ServiceState{},
+		services:      map[string]dutydocker.ServiceSnapshot{},
 		networks:      map[string]string{},
 		secrets:       map[string]bool{},
 		runningTaskIP: "10.66.0.9",
 	}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (bool, error) { return f.swarmActive, nil }
+func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
+	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+}
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ServiceState, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return ServiceState{}, f.inspectErr
+		return dutydocker.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -121,8 +124,8 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.created = append(f.created, spec.Name)
-	cur := ServiceState{Exists: true, Version: 1}
-	fillStateFromSpec(&cur, spec)
+	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	fillSnapshotFromSpec(&cur, spec)
 	f.services[spec.Name] = cur
 	return nil
 }
@@ -133,7 +136,7 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 	f.updated = append(f.updated, name)
 	cur := f.services[name]
 	cur.Version++
-	fillStateFromSpec(&cur, spec)
+	fillSnapshotFromSpec(&cur, spec)
 	f.services[name] = cur
 	return nil
 }
@@ -153,7 +156,7 @@ func (f *fakeDocker) VolumeEnsure(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *fakeDocker) NetworkEnsure(_ context.Context, name string) error {
+func (f *fakeDocker) NetworkEnsure(_ context.Context, name string, _ bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.networks[name]; !ok {
@@ -219,19 +222,16 @@ func (f *fakeDocker) TaskAddress(_ context.Context, service, _ string) (string, 
 	return "", false, nil
 }
 
-// fillStateFromSpec 把期望 spec 投影为实况形态（ServiceInspect 的 fake 侧
-// 镜像——收敛后 specEqual 必须为真，否则幂等收敛会死循环）。切片全量重置
-// ——update 路径不得残留旧 spec 字段（否则收敛比对永远不等）。
-func fillStateFromSpec(cur *ServiceState, spec swarm.ServiceSpec) {
+// fillSnapshotFromSpec 把期望 spec 投影为实况形态（dutydocker.snapshotOf
+// 同构的消费面子集——ServiceInspect 的 fake 侧镜像；收敛后 specEqual 必须
+// 为真，否则幂等收敛会死循环）。切片全量重置——update 路径不得残留旧
+// spec 字段（否则收敛比对永远不等）。
+func fillSnapshotFromSpec(cur *dutydocker.ServiceSnapshot, spec swarm.ServiceSpec) {
 	cs := spec.TaskTemplate.ContainerSpec
 	cur.Image = cs.Image
 	cur.Env = append([]string{}, cs.Env...)
-	cur.MountSources = nil
-	cur.MountTargets = nil
-	for _, m := range cs.Mounts {
-		cur.MountSources = append(cur.MountSources, m.Source)
-		cur.MountTargets = append(cur.MountTargets, m.Target)
-	}
+	cur.Mounts = nil
+	cur.Mounts = append(cur.Mounts, cs.Mounts...)
 	cur.SecretNames = nil
 	for _, s := range cs.Secrets {
 		cur.SecretNames = append(cur.SecretNames, s.SecretName)

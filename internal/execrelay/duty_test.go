@@ -12,22 +12,25 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
 // fakeDutyDocker 是 dutyDocker 假实现。
 type fakeDutyDocker struct {
-	mu         sync.Mutex
-	active     bool
-	nodeAddr   string
-	services   map[string]*DutyServiceState
-	specs      map[string]swarm.ServiceSpec
-	created    []string
-	updated    []string
-	removed    []string
-	secrets    map[string]SecretView
+	mu       sync.Mutex
+	active   bool
+	nodeAddr string
+	services map[string]dutydocker.ServiceSnapshot
+	specs    map[string]swarm.ServiceSpec
+	created  []string
+	updated  []string
+	removed  []string
+	secrets  map[string]string // name → ID（缺项 = 不在位）
+	// secretData 录制 secret 创建载荷（token 形态钉定面）。
 	secretData map[string][]byte
 }
 
@@ -35,26 +38,23 @@ func newFakeDutyDocker(active bool) *fakeDutyDocker {
 	return &fakeDutyDocker{
 		active:     active,
 		nodeAddr:   "10.99.0.10",
-		services:   map[string]*DutyServiceState{},
+		services:   map[string]dutydocker.ServiceSnapshot{},
 		specs:      map[string]swarm.ServiceSpec{},
-		secrets:    map[string]SecretView{},
+		secrets:    map[string]string{},
 		secretData: map[string][]byte{},
 	}
 }
 
-func (d *fakeDutyDocker) Info(_ context.Context) (DutyInfo, error) {
+func (d *fakeDutyDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return DutyInfo{SwarmActive: d.active, NodeAddr: d.nodeAddr}, nil
+	return dutydocker.InfoSnapshot{SwarmActive: d.active, NodeAddr: d.nodeAddr}, nil
 }
 
-func (d *fakeDutyDocker) ServiceInspect(_ context.Context, name string) (DutyServiceState, error) {
+func (d *fakeDutyDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if s := d.services[name]; s != nil {
-		return *s, nil
-	}
-	return DutyServiceState{}, nil
+	return d.services[name], nil
 }
 
 func (d *fakeDutyDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) error {
@@ -76,14 +76,11 @@ func (d *fakeDutyDocker) ServiceUpdate(_ context.Context, name string, _ uint64,
 // storeSpecLocked 把 spec 转成实况投影（模拟底座存储形态——host 网络目标
 // 归一为 "net-host-id" 以验证比对前的 NetworkName 反解路径）。
 func (d *fakeDutyDocker) storeSpecLocked(spec swarm.ServiceSpec) {
-	st := &DutyServiceState{Exists: true, Version: 7}
+	st := dutydocker.ServiceSnapshot{Exists: true, Version: 7}
 	if cs := spec.TaskTemplate.ContainerSpec; cs != nil {
 		st.Image = cs.Image
 		st.Env = append([]string{}, cs.Env...)
-		for _, m := range cs.Mounts {
-			st.MountSources = append(st.MountSources, m.Source)
-			st.MountTargets = append(st.MountTargets, m.Target)
-		}
+		st.Mounts = append(st.Mounts, cs.Mounts...)
 		for _, ref := range cs.Secrets {
 			st.SecretIDs = append(st.SecretIDs, ref.SecretID)
 			st.SecretNames = append(st.SecretNames, ref.SecretName)
@@ -112,18 +109,20 @@ func (d *fakeDutyDocker) ServiceRemove(_ context.Context, name string) error {
 	return nil
 }
 
-func (d *fakeDutyDocker) SecretInspect(_ context.Context, name string) (SecretView, error) {
+func (d *fakeDutyDocker) SecretInspect(_ context.Context, name string) (string, bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.secrets[name], nil
+	id, ok := d.secrets[name]
+	return id, ok, nil
 }
 
-func (d *fakeDutyDocker) SecretCreate(_ context.Context, name string, data []byte, _ map[string]string) (string, error) {
+func (d *fakeDutyDocker) SecretEnsure(_ context.Context, name string, data []byte, _ map[string]string) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.secrets[name] = SecretView{Exists: true, ID: "sec-" + name}
+	id := "sec-" + name
+	d.secrets[name] = id
 	d.secretData[name] = append([]byte(nil), data...)
-	return d.secrets[name].ID, nil
+	return id, nil
 }
 
 // NetworkName 把 ID 反解回名（比对同锚路径的模拟）。
@@ -214,7 +213,9 @@ func TestDutyEnsureDrift(t *testing.T) {
 	}
 	// 外部改动实况（env 漂移）→ 下一拍更新。
 	d.mu.Lock()
-	d.services[ExecRelayServiceName].Env = []string{EnvControlAddr + "=wrong:1"}
+	cur := d.services[ExecRelayServiceName]
+	cur.Env = []string{EnvControlAddr + "=wrong:1"}
+	d.services[ExecRelayServiceName] = cur
 	d.mu.Unlock()
 	if err := mgr.Ensure(ctx); err != nil {
 		t.Fatalf("Ensure after drift: %v", err)
@@ -299,23 +300,23 @@ func TestDutyTLSNameInjection(t *testing.T) {
 // ——任何执行面漂移都必须被捕获）。
 func TestDutySpecEqual(t *testing.T) {
 	desired := buildSpec("10.0.0.1:8420", "ctrl.example.com", "sec-1")
-	base := DutyServiceState{Exists: true, Image: DefaultExecRelayImage,
-		Env:          []string{EnvControlAddr + "=10.0.0.1:8420", EnvControlTLSName + "=ctrl.example.com"},
-		Networks:     []string{"host"},
-		MountSources: []string{"/var/run/docker.sock"}, MountTargets: []string{"/var/run/docker.sock"},
+	base := dutydocker.ServiceSnapshot{Exists: true, Image: DefaultExecRelayImage,
+		Env:       []string{EnvControlAddr + "=10.0.0.1:8420", EnvControlTLSName + "=ctrl.example.com"},
+		Networks:  []string{"host"},
+		Mounts:    []mount.Mount{{Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"}},
 		SecretIDs: []string{"sec-1"}, SecretNames: []string{ExecRelaySecretName},
 		Global: true, MemoryBytes: relayMemoryLimitBytes}
 	if !specEqual(base, desired) {
 		t.Fatal("identical spec must compare equal")
 	}
-	cases := map[string]func(*DutyServiceState){
-		"image drift":   func(s *DutyServiceState) { s.Image = "other:1" },
-		"env drift":     func(s *DutyServiceState) { s.Env = []string{EnvControlAddr + "=10.0.0.2:8420"} },
-		"mount drift":   func(s *DutyServiceState) { s.MountSources[0] = "/other.sock" },
-		"network drift": func(s *DutyServiceState) { s.Networks = []string{"bridge"} },
-		"secret drift":  func(s *DutyServiceState) { s.SecretIDs[0] = "sec-2" },
-		"mode drift":    func(s *DutyServiceState) { s.Global = false },
-		"limit drift":   func(s *DutyServiceState) { s.MemoryBytes = 1 },
+	cases := map[string]func(*dutydocker.ServiceSnapshot){
+		"image drift":   func(s *dutydocker.ServiceSnapshot) { s.Image = "other:1" },
+		"env drift":     func(s *dutydocker.ServiceSnapshot) { s.Env = []string{EnvControlAddr + "=10.0.0.2:8420"} },
+		"mount drift":   func(s *dutydocker.ServiceSnapshot) { s.Mounts[0].Source = "/other.sock" },
+		"network drift": func(s *dutydocker.ServiceSnapshot) { s.Networks = []string{"bridge"} },
+		"secret drift":  func(s *dutydocker.ServiceSnapshot) { s.SecretIDs[0] = "sec-2" },
+		"mode drift":    func(s *dutydocker.ServiceSnapshot) { s.Global = false },
+		"limit drift":   func(s *dutydocker.ServiceSnapshot) { s.MemoryBytes = 1 },
 	}
 	for name, mutate := range cases {
 		cur := base

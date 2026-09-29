@@ -29,6 +29,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -53,9 +54,9 @@ type Manager struct {
 	health func(ctx context.Context) error
 }
 
-// NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放）。
+// NewManager 构造 duty 管理器（共享 Docker 适配层自建连接；cleanup 释放）。
 func NewManager(store *state.Store, retentionDays int, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := newRealDockerClient("")
+	dc, err := dutydocker.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,11 +129,11 @@ func (m *Manager) Ensure(ctx context.Context) (outcome, error) {
 // 数据卷 → 期望 spec（钉 manager + 限额 + host 网络回环监听 + retention
 // 参数）→ inspect 缺失创建/漂移更新。
 func (m *Manager) converge(ctx context.Context) error {
-	active, err := m.docker.Info(ctx)
+	info, err := m.docker.Info(ctx)
 	if err != nil {
 		return err
 	}
-	if !active {
+	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
 	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败

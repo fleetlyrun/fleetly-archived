@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -26,7 +27,7 @@ import (
 func upgradeSeed(t *testing.T, h *harness, name string) (state.DatabaseInstance, string) {
 	t.Helper()
 	inst := h.createInstance(name, dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	if got := h.get(inst.ID); got.State != state.DatabaseReady {
 		t.Fatalf("seed: state = %s, want ready", got.State)
@@ -74,7 +75,7 @@ func TestUpgradeSuccessPath(t *testing.T) {
 	h := newHarness(t)
 	inst, newImage := upgradeSeed(t, h, "pg-up")
 	// 新版本任务健康（升级 applyDesiredService 后健康门首拍即绿）。
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: newImage})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: newImage})
 
 	oldDigest, newDigest, err := h.mgr.Upgrade(context.Background(), "pg-up")
 	if err != nil {
@@ -123,7 +124,7 @@ func TestUpgradeFailureRollbackDigest(t *testing.T) {
 	oldDigest := h.get(inst.ID).ImageDigest
 	// 新版本任务硬失败（健康门判败证据）。
 	tpl, _ := dbtemplate.Get(inst.Template)
-	h.setTasks(h.svcName(inst), TaskObservation{
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{
 		State: "failed", DesiredState: "running",
 		Err:   "new image task failed the health gate (simulated bad digest)",
 		Image: tpl.Image,
@@ -279,7 +280,7 @@ func TestUpgradeBackupGateAbortsOnBackupFailure(t *testing.T) {
 func TestUpgradeS3UnsetHonest(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-ups3", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	if got := h.get(inst.ID); got.State != state.DatabaseReady {
 		t.Fatalf("seed: state = %s, want ready", got.State)
@@ -309,7 +310,7 @@ func TestUpgradeS3UnsetHonest(t *testing.T) {
 func TestUpgradeAvailableAdvertisement(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-adv", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	// 实例 digest 置为过期值（模拟平台 release 携带新 digest 后的存量实例）。
 	if err := h.st.UpdateImageDigest(context.Background(), inst.ID, "postgres:16@sha256:2222222222222222222222222222222222222222222222222222222222222222"); err != nil {
 		t.Fatalf("seed stale digest: %v", err)

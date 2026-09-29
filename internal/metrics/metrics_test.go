@@ -19,6 +19,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -28,7 +29,7 @@ type fakeDocker struct {
 
 	swarmActive bool
 
-	services map[string]ServiceState
+	services map[string]dutydocker.ServiceSnapshot
 	created  []string
 	updated  []string
 	removed  []string
@@ -49,18 +50,20 @@ type fakeDocker struct {
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services: map[string]ServiceState{},
+		services: map[string]dutydocker.ServiceSnapshot{},
 		configs:  map[string]swarm.ConfigSpec{},
 	}
 }
 
-func (f *fakeDocker) Info(_ context.Context) (bool, error) { return f.swarmActive, nil }
+func (f *fakeDocker) Info(_ context.Context) (dutydocker.InfoSnapshot, error) {
+	return dutydocker.InfoSnapshot{SwarmActive: f.swarmActive}, nil
+}
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ServiceState, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inspectErr != nil {
-		return ServiceState{}, f.inspectErr
+		return dutydocker.ServiceSnapshot{}, f.inspectErr
 	}
 	return f.services[name], nil
 }
@@ -70,8 +73,8 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	defer f.mu.Unlock()
 	name := spec.Name
 	f.created = append(f.created, name)
-	cur := ServiceState{Exists: true, Version: 1}
-	cur.fillFrom(spec)
+	cur := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	fillSnapshotFrom(&cur, spec)
 	f.services[name] = cur
 	return nil
 }
@@ -82,7 +85,7 @@ func (f *fakeDocker) ServiceUpdate(_ context.Context, name string, _ uint64, spe
 	f.updated = append(f.updated, name)
 	cur := f.services[name]
 	cur.Version++
-	cur.fillFrom(spec)
+	fillSnapshotFrom(&cur, spec)
 	f.services[name] = cur
 	return nil
 }
@@ -127,28 +130,17 @@ func (f *fakeDocker) ReadyNodeAddresses(_ context.Context) ([]string, error) {
 	return append([]string{}, f.nodeAddrs...), nil
 }
 
-func (f *fakeDocker) ConfigListNames(_ context.Context) ([]string, error) {
+// ConfigListNamesByLabel 假读面（GC 面——与真实现同口径的按 label 过滤
+// 分族：各族 config 的自描述 label 在 ensure 时已登记在 spec 上）。
+func (f *fakeDocker) ConfigListNamesByLabel(_ context.Context, labelKey, labelValue string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]string, 0, len(f.configs))
-	for name := range f.configs {
-		if strings.HasPrefix(name, scrapeConfigPrefix) {
-			out = append(out, name)
+	var out []string
+	for name, spec := range f.configs {
+		if spec.Annotations.Labels[labelKey] != labelValue {
+			continue
 		}
-	}
-	return out, nil
-}
-
-// RulesConfigListNames 假读面（规则族 GC——按名前缀分族，与真实现按 label
-// 分族的语义对偶：本包两族 config 的名前缀与 label 一一对应）。
-func (f *fakeDocker) RulesConfigListNames(_ context.Context) ([]string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := make([]string, 0, len(f.configs))
-	for name := range f.configs {
-		if strings.HasPrefix(name, rulesConfigPrefix) {
-			out = append(out, name)
-		}
+		out = append(out, name)
 	}
 	return out, nil
 }
@@ -631,27 +623,23 @@ func TestEnsureNodeListReadFailureDefers(t *testing.T) {
 	}
 }
 
-// stateOf 把 spec 投影为实况形态（与 realDockerClient.ServiceInspect 的
-// 投影同构——fake 注入用）。
-func stateOf(spec swarm.ServiceSpec) ServiceState {
-	out := ServiceState{Exists: true, Version: 1}
-	out.fillFrom(spec)
+// stateOf 把 spec 投影为实况形态（与 dutydocker.snapshotOf 的投影同构——
+// fake 注入用）。
+func stateOf(spec swarm.ServiceSpec) dutydocker.ServiceSnapshot {
+	out := dutydocker.ServiceSnapshot{Exists: true, Version: 1}
+	fillSnapshotFrom(&out, spec)
 	return out
 }
 
-// fillFrom 用期望 spec 填充实况投影（realDockerClient 投影同构——每次
-// 填充重建切片，重复收敛拍不累积；投影面与 spec 逐字段对齐，残留即假
-// 漂移）。
-func (s *ServiceState) fillFrom(spec swarm.ServiceSpec) {
+// fillSnapshotFrom 用期望 spec 填充实况投影（dutydocker.snapshotOf 同构
+// ——消费面子集：fake 只填本包比对用到的字段；每次填充重建切片，重复
+// 收敛拍不累积，残留即假漂移）。
+func fillSnapshotFrom(s *dutydocker.ServiceSnapshot, spec swarm.ServiceSpec) {
 	if cs := spec.TaskTemplate.ContainerSpec; cs != nil {
 		s.Image = cs.Image
 		s.Args = append([]string{}, cs.Args...)
-		s.MountSources = nil
-		s.MountTargets = nil
-		for _, m := range cs.Mounts {
-			s.MountSources = append(s.MountSources, m.Source)
-			s.MountTargets = append(s.MountTargets, m.Target)
-		}
+		s.Mounts = nil
+		s.Mounts = append(s.Mounts, cs.Mounts...)
 		s.ConfigNames = nil
 		for _, c := range cs.Configs {
 			s.ConfigNames = append(s.ConfigNames, c.ConfigName)

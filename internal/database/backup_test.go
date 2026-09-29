@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -22,7 +23,7 @@ import (
 func TestBackupJobSpecAssertions(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-bk", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	h.saveS3Settings()
 	h.docker.jobOutFn = func(in JobRunInput) JobRunOutcome {
@@ -111,7 +112,7 @@ func TestBackupJobSpecAssertions(t *testing.T) {
 func TestRedisBackupJobSpec(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("rd-bk", dbtemplate.TemplateRedis7)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	// rustfs 模式：restic 目标 = 托管端点派生 + job 挂 fleetly-rustfs-net。
 	if err := h.st.SaveS3Settings(context.Background(), state.S3Settings{Mode: state.S3ModeRustfs}, state.S3SaveOptions{Actor: "human"}); err != nil {
@@ -180,7 +181,7 @@ func TestRedisBackupJobSpec(t *testing.T) {
 func TestBackupS3UnsetHonest(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-nos3", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 
 	err := h.mgr.TriggerBackup(context.Background(), "pg-nos3")
@@ -216,7 +217,7 @@ func TestBackupS3UnsetHonest(t *testing.T) {
 func TestBackupVerifyFailedHonesty(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-vf", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	h.saveS3Settings()
 	h.docker.jobOutFn = func(in JobRunInput) JobRunOutcome {
@@ -256,7 +257,7 @@ func TestBackupVerifyFailedHonesty(t *testing.T) {
 func TestBackupOperationMutex(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-mtx", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	h.saveS3Settings()
 	release := make(chan struct{})
@@ -288,7 +289,7 @@ func TestBackupOperationMutex(t *testing.T) {
 func TestBackupSchedulingWindowAndPrune(t *testing.T) {
 	h := newHarness(t)
 	inst := h.createInstance("pg-sched", dbtemplate.TemplatePostgres16)
-	h.setTasks(h.svcName(inst), TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
+	h.setTasks(h.svcName(inst), dutydocker.TaskObservation{State: "running", DesiredState: "running", Image: inst.ImageDigest})
 	h.beatRun()
 	h.saveS3Settings()
 	// now = 03:30 UTC（平台缺省窗 hour_utc=3 内）。钉定必须先于台账回拨——

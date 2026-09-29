@@ -33,6 +33,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -173,7 +174,7 @@ func listenArg() string {
 // specEqual 幂等比对（镜像/参数/挂载/网络/约束/副本/限额——服务的全部
 // 执行面都由期望 spec 权威表达；label 不参与，服务名即身份。参数含
 // -httpListenAddr 回环监听——零公网面不变量漂移必被本比对捕获）。
-func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
+func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -181,11 +182,12 @@ func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
 	if !sameStrings(cur.Args, cs.Args) {
 		return false
 	}
-	if len(cur.MountSources) != len(cs.Mounts) {
+	if len(cur.Mounts) != len(cs.Mounts) {
 		return false
 	}
 	for i, wm := range cs.Mounts {
-		if cur.MountSources[i] != wm.Source || cur.MountTargets[i] != wm.Target {
+		cm := cur.Mounts[i]
+		if cm.Source != wm.Source || cm.Target != wm.Target {
 			return false
 		}
 	}

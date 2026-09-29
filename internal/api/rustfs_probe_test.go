@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/rustfs"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
@@ -30,10 +31,12 @@ func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Disca
 // 由方法集隐式满足）：swarm 在位、凭据 secret 在位（探针只消费凭据面）。
 type fakeRustfsDocker struct{}
 
-func (fakeRustfsDocker) Info(context.Context) (bool, error) { return true, nil }
+func (fakeRustfsDocker) Info(context.Context) (dutydocker.InfoSnapshot, error) {
+	return dutydocker.InfoSnapshot{SwarmActive: true}, nil
+}
 
-func (fakeRustfsDocker) ServiceInspect(_ context.Context, _ string) (rustfs.ServiceState, error) {
-	return rustfs.ServiceState{Exists: true, Version: 1}, nil
+func (fakeRustfsDocker) ServiceInspect(_ context.Context, _ string) (dutydocker.ServiceSnapshot, error) {
+	return dutydocker.ServiceSnapshot{Exists: true, Version: 1}, nil
 }
 
 func (fakeRustfsDocker) ServiceCreate(context.Context, swarm.ServiceSpec) error { return nil }
@@ -43,9 +46,11 @@ func (fakeRustfsDocker) ServiceUpdate(_ context.Context, _ string, _ uint64, _ s
 	return nil
 }
 
-func (fakeRustfsDocker) VolumeEnsure(context.Context, string) error  { return nil }
-func (fakeRustfsDocker) NetworkEnsure(context.Context, string) error { return nil }
-func (fakeRustfsDocker) SecretRemove(context.Context, string) error  { return nil }
+func (fakeRustfsDocker) VolumeEnsure(context.Context, string) error { return nil }
+func (fakeRustfsDocker) NetworkEnsure(context.Context, string, bool) error {
+	return nil
+}
+func (fakeRustfsDocker) SecretRemove(context.Context, string) error { return nil }
 
 func (fakeRustfsDocker) NetworkID(_ context.Context, _ string) (string, error) {
 	return "net-fake", nil

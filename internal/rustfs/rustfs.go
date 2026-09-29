@@ -9,7 +9,7 @@
 // duty 形态：常驻收敛循环（ingress registry duty 同款——失败退避重试、
 // 收敛后按扫描周期复检漂移），由 fleetlyd 装配壳启动（runtime 服务壳，
 // 资源层，晚于 engine 停）。差分事件：s3.rustfs_deployed / s3.rustfs_removed
-//（注册表只增，node.* 同型；payload 不含任何凭据材料）。
+// （注册表只增，node.* 同型；payload 不含任何凭据材料）。
 //
 // 诚实口径（D-S3-8 裁决核心，Console/CLI/文档三面常驻）：本机 RustFS =
 // 便捷层（防误删/防单文件损坏），**非灾备**——主机整体损毁时该备份随
@@ -30,6 +30,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/statebackup"
@@ -60,7 +61,7 @@ type Manager struct {
 
 // NewManager 构造 duty 管理器（自建 Docker 连接；cleanup 释放）。
 func NewManager(store *state.Store, box *secrets.Box, log *slog.Logger) (*Manager, func(), error) {
-	dc, err := newRealDockerClient("")
+	dc, err := dutydocker.New("")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -132,11 +133,11 @@ func (m *Manager) Ensure(ctx context.Context) (outcome, error) {
 // 期望 spec（钉 manager + 限额 + alias）→ inspect 缺失创建/漂移更新 →
 // 旧 secret 清场 → 服务就绪后 EnsureBucket（幂等；桶在 = 全收敛）。
 func (m *Manager) converge(ctx context.Context) error {
-	active, err := m.docker.Info(ctx)
+	info, err := m.docker.Info(ctx)
 	if err != nil {
 		return err
 	}
-	if !active {
+	if !info.SwarmActive {
 		return ErrNotSwarmReady
 	}
 	// manager 平台 ID（meta 单值真源；identity duty 尚未铸造时显式失败
@@ -158,7 +159,7 @@ func (m *Manager) converge(ctx context.Context) error {
 		return err
 	}
 	// ② 内部 overlay（attachable；不发布任何 host 端口）。
-	if err := m.docker.NetworkEnsure(ctx, state.RustfsNetworkName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, state.RustfsNetworkName, true); err != nil {
 		return err
 	}
 	netID, err := m.docker.NetworkID(ctx, state.RustfsNetworkName)
@@ -229,7 +230,7 @@ func (m *Manager) converge(ctx context.Context) error {
 //     零绑定，官方口径：容器以新凭据重建、数据卷保持完好）。
 //
 // 数据卷**永不删除**（数据安全语义与 volume.detached 一致）；网络保留
-//（零成本，且已部署应用可能仍挂接直到下次重部署）。
+// （零成本，且已部署应用可能仍挂接直到下次重部署）。
 func (m *Manager) removeIfPresent(ctx context.Context) error {
 	cur, err := m.docker.ServiceInspect(ctx, ServiceName)
 	if err != nil {

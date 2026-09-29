@@ -206,7 +206,7 @@ func (m *Manager) rotatePostgresCredential(ctx context.Context, inst *state.Data
 		return err
 	}
 	// 前置：共享网络在位（幂等——paused 恢复窗口/外部清理后的自愈）。
-	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, netName, true); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
 	// 作业名走 dbjob 前缀族（fleetly-dbjob-<instance>-rotate-<ulid8>，
@@ -250,7 +250,7 @@ func (m *Manager) rotateMySQLCredential(ctx context.Context, inst *state.Databas
 		return err
 	}
 	// 前置：共享网络在位（幂等——paused 恢复窗口/外部清理后的自愈）。
-	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, netName, true); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
 	jobName, err := naming.DBJobName(inst.Name, "rotate", ulid.Make().String())
@@ -288,7 +288,7 @@ func (m *Manager) rotateMongoCredential(ctx context.Context, inst *state.Databas
 		return err
 	}
 	// 前置：共享网络在位（幂等——paused 恢复窗口/外部清理后的自愈）。
-	if err := m.docker.NetworkEnsure(ctx, netName); err != nil {
+	if err := m.docker.NetworkEnsure(ctx, netName, true); err != nil {
 		return fmt.Errorf("rotation network ensure: %w", err)
 	}
 	jobName, err := naming.DBJobName(inst.Name, "rotate", ulid.Make().String())

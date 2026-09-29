@@ -31,6 +31,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
 )
@@ -41,7 +42,7 @@ import (
 // duty 后台 goroutine 与测试轮询并发访问）。
 type fakeDocker struct {
 	mu          sync.Mutex
-	services    map[string]ingressServiceState
+	services    map[string]dutydocker.ServiceSnapshot
 	networks    map[string]bool
 	creates     []string
 	updates     []string
@@ -49,9 +50,9 @@ type fakeDocker struct {
 	netEns      []string
 	netRemoved  []string
 	volumeEns   []string
-	info        swarmInfo
-	// legacySeedPresent 模拟 v0.1 证书 seed 容器残留（LegacySeedContainer
-	// Remove 消费并清零——底座语义：移除后不复存在）。
+	info        dutydocker.InfoSnapshot
+	// legacySeedPresent 模拟 v0.1 证书 seed 容器残留（ContainerRemoveForce
+	// 消费并清零——底座语义：移除后不复存在）。
 	legacySeedPresent bool
 	seedRemoved       []string
 	// netMissing 模拟网络缺位（NetworkID 对名单内名字返回错误——E3-6：
@@ -61,27 +62,27 @@ type fakeDocker struct {
 
 func newFakeDocker() *fakeDocker {
 	return &fakeDocker{
-		services:   map[string]ingressServiceState{},
+		services:   map[string]dutydocker.ServiceSnapshot{},
 		networks:   map[string]bool{},
 		netMissing: map[string]bool{},
-		info:       swarmInfo{SwarmActive: true, NodeAddr: "127.0.0.1"},
+		info:       dutydocker.InfoSnapshot{SwarmActive: true, NodeAddr: "127.0.0.1"},
 	}
 }
 
 // serviceState 是服务实况的加锁读取出口（并发轮询场景的规范读法）。
-func (f *fakeDocker) serviceState(name string) ingressServiceState {
+func (f *fakeDocker) serviceState(name string) dutydocker.ServiceSnapshot {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.services[name]
 }
 
-func (f *fakeDocker) Info(context.Context) (swarmInfo, error) {
+func (f *fakeDocker) Info(context.Context) (dutydocker.InfoSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.info, nil
 }
 
-func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (ingressServiceState, error) {
+func (f *fakeDocker) ServiceInspect(_ context.Context, name string) (dutydocker.ServiceSnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.services[name], nil
@@ -91,7 +92,7 @@ func (f *fakeDocker) ServiceCreate(_ context.Context, spec swarm.ServiceSpec) er
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.creates = append(f.creates, spec.Name)
-	f.services[spec.Name] = ingressServiceState{
+	f.services[spec.Name] = dutydocker.ServiceSnapshot{
 		Exists:  true,
 		Version: 1,
 		Image:   spec.TaskTemplate.ContainerSpec.Image,
@@ -171,7 +172,7 @@ func netTargets(spec swarm.ServiceSpec) []string {
 	return out
 }
 
-func (f *fakeDocker) NetworkEnsure(_ context.Context, name string) error {
+func (f *fakeDocker) NetworkEnsure(_ context.Context, name string, _ bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.netEns = append(f.netEns, name)
@@ -210,9 +211,9 @@ func (f *fakeDocker) VolumeEnsure(_ context.Context, name string) error {
 	return nil
 }
 
-// LegacySeedContainerRemove 消费 legacySeedPresent（同构底座语义：容器
+// ContainerRemoveForce 消费 legacySeedPresent（同构底座语义：容器
 // 不存在 = false 且无副作用；存在 = 移除并记录）。
-func (f *fakeDocker) LegacySeedContainerRemove(_ context.Context, name string) (bool, error) {
+func (f *fakeDocker) ContainerRemoveForce(_ context.Context, name string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.legacySeedPresent {
@@ -826,7 +827,7 @@ func TestAttachNetworkKeepsPreviousApps(t *testing.T) {
 	if nerr != nil {
 		t.Fatalf("app2 net name: %v", nerr)
 	}
-	if !has("netid-" + n1) || !has("netid-" + n2) {
+	if !has("netid-"+n1) || !has("netid-"+n2) {
 		t.Fatalf("networks after two app attaches = %v, want both app nets present", nets)
 	}
 	// 幂等重发布（同一 app）：attach 以 ID 判等——不再产生更新/重复项。

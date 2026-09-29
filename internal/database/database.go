@@ -216,12 +216,12 @@ func (m *Manager) beat(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	active, err := m.docker.Info(ctx)
+	info, err := m.docker.Info(ctx)
 	if err != nil {
 		m.log.Warn("database: swarm probe failed (retrying)", "error", err)
 		return
 	}
-	if !active {
+	if !info.SwarmActive {
 		m.log.Warn("database: docker engine is not an active swarm manager (retrying)")
 		return
 	}

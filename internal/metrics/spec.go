@@ -62,6 +62,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -635,7 +636,7 @@ func anchorRulesConfig(spec *swarm.ServiceSpec, rulesName, rulesID string) {
 // 参数含 -httpListenAddr 回环监听（VM 查询面零公网面）与采集器
 // -listen_ip / --web.listen-address 的 0.0.0.0 绑定——绑定面漂移必被本
 // 比对捕获）。
-func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
+func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -643,11 +644,14 @@ func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
 	if !sameStrings(cur.Args, cs.Args) {
 		return false
 	}
-	if len(cur.MountSources) != len(cs.Mounts) {
+	// 挂载只比 Source/Target（volume/bind 类型与只读位不参与——与原
+	// source→target 并行数组比对同口径）。
+	if len(cur.Mounts) != len(cs.Mounts) {
 		return false
 	}
 	for i, wm := range cs.Mounts {
-		if cur.MountSources[i] != wm.Source || cur.MountTargets[i] != wm.Target {
+		cm := cur.Mounts[i]
+		if cm.Source != wm.Source || cm.Target != wm.Target {
 			return false
 		}
 	}

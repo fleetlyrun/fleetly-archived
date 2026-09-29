@@ -28,6 +28,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -218,7 +219,7 @@ func TestEnsureRegistryDriftConverges(t *testing.T) {
 	}
 	// 外部漂移（人改/版本遗留）：镜像、约束、挂载、网络、副本数全变。
 	dc.mu.Lock()
-	dc.services[RegistryServiceName] = ingressServiceState{
+	dc.services[RegistryServiceName] = dutydocker.ServiceSnapshot{
 		Exists:  true,
 		Version: 7,
 		Image:   "ghcr.io/project-zot/zot:v0.1.0",

@@ -23,6 +23,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/dutydocker"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -121,7 +122,7 @@ func randomString(alphabet string, n int) (string, error) {
 }
 
 // accessSecretName / secretSecretName 由凭据明文派生 swarm secret 名
-//（内容指纹内嵌：凭据再生成即新名，服务 spec 引用变化驱动收敛）。
+// （内容指纹内嵌：凭据再生成即新名，服务 spec 引用变化驱动收敛）。
 func accessSecretName(c credentials) string {
 	return "fleetly-rustfs-access-key-" + fingerprint(c.AccessKey)
 }
@@ -141,8 +142,8 @@ func constraintFor(platformNodeID string) string {
 // ID——swarm service create 要求 secret 引用携带 ID，仅名字是 malformed
 // reference；Target 是容器内挂载路径）。
 type secretRef struct {
-	Name  string
-	ID    string
+	Name   string
+	ID     string
 	Target string
 }
 
@@ -216,7 +217,7 @@ func buildSpec(netID, platformID string, c credentials, refs []secretRef) swarm.
 // specEqual 幂等比对（镜像/env/挂载/网络/约束/副本/限额/凭据 secret 引用
 // ——服务的全部执行面都由期望 spec 权威表达；label 不参与，服务名即身份；
 // secret 名内嵌凭据指纹 → 凭据轮换必被本比对捕获）。
-func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
+func specEqual(cur dutydocker.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	cs := desired.TaskTemplate.ContainerSpec
 	if cur.Image != cs.Image {
 		return false
@@ -224,11 +225,11 @@ func specEqual(cur ServiceState, desired swarm.ServiceSpec) bool {
 	if !sameStrings(cur.Env, cs.Env) {
 		return false
 	}
-	if len(cur.MountSources) != len(cs.Mounts) {
+	if len(cur.Mounts) != len(cs.Mounts) {
 		return false
 	}
 	for i, wm := range cs.Mounts {
-		if cur.MountSources[i] != wm.Source || cur.MountTargets[i] != wm.Target {
+		if cur.Mounts[i].Source != wm.Source || cur.Mounts[i].Target != wm.Target {
 			return false
 		}
 	}
