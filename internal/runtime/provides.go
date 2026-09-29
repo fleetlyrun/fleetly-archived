@@ -440,7 +440,28 @@ func (p ingressPublisher) PublishRoutes(ctx context.Context, in engine.RoutePubl
 // ——经 WithMetricsQuerier 注入 engine.MetricsQuerier 端口；nil = 扩缩
 // duty 空转，装配形态诚实空转不冒充运行态）。
 func NewEngine(app lynx.App, cfg *AppConfig, st *state.Store, sc *substrate.Client, pl *placement.Resolver, box *secrets.Box, m *ingress.Manager, bm *statebackup.Manager, lm *logs.Manager, mb *metrics.Backend) *engine.Engine {
-	return engine.NewEngine(cfg.EngineSettings(), st, sc, sc, pl, box, app.Logger()).
+	settings := cfg.EngineSettings()
+	// 控制面地址注入（ctrlinject.go：集群内工作负载回拨控制面的零配置
+	// 通路）——值三要素：advertise（swarm NodeAddr，VPC 内网）、gRPC 端口
+	// （grpc.addr 配置段）、TLS 校验名（platform TLS 模式的 ctrl.<base>，
+	// 与 exec relay 的 FLEETLY_CONTROL_TLS_NAME 同源）。advertise 探测失败
+	// 容忍为空（注入面不接线——显式 endpoint 配置的消费者不受影响），warn
+	// 落日志。
+	controlGRPCAddr := ""
+	if advertise, err := sc.AdvertiseAddr(context.Background()); err != nil {
+		app.Logger().Warn("engine: control-plane address injection disabled (swarm advertise unavailable)", "error", err.Error())
+	} else if advertise != "" {
+		controlGRPCAddr = advertise + ":" + portOfAddr(cfg.GRPCAddr(), "127.0.0.1:8421")
+	}
+	controlTLSName := ""
+	if cfg.TLSMode() == ControlPlaneTLSPlatform {
+		if name, err := m.PlatformTLSName(); err == nil {
+			controlTLSName = name
+		}
+	}
+	settings.ControlGRPCAddr = controlGRPCAddr
+	settings.ControlTLSName = controlTLSName
+	return engine.NewEngine(settings, st, sc, sc, pl, box, app.Logger()).
 		WithRoutePublisher(ingressPublisher{m: m}).
 		// 备份挂钩（T2.22）：每次部署成功后异步触发一次热备快照
 		// （kind=post_deploy；失败只落台账/审计/组件三面红，不影响部署）。

@@ -19,6 +19,23 @@ import (
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
+// AdvertiseAddr 返回本节点（manager）的 swarm advertise 地址（docker info
+// Swarm.NodeAddr；控制面地址注入 ctrlinject 的值源—— advertise 是 VPC 内网
+// 地址，集群内工作负载经它回拨控制面不出集群）。未启用 Swarm 返回
+// state.ErrNotSwarmManager。
+func (c *Client) AdvertiseAddr(ctx context.Context) (string, error) {
+	ictx, icancel := withCallTimeout(ctx)
+	info, ierr := c.cli.Info(ictx, mobyclient.InfoOptions{})
+	icancel()
+	if ierr != nil {
+		return "", fmt.Errorf("substrate: info: %w", ierr)
+	}
+	if info.Info.Swarm.NodeID == "" || info.Info.Swarm.LocalNodeState != swarm.LocalNodeStateActive {
+		return "", state.ErrNotSwarmManager
+	}
+	return info.Info.Swarm.NodeAddr, nil
+}
+
 // SwarmJoinInfo 返回 join 向导材料：manager advertise addr 与 worker join
 // token。未启用 Swarm（非 active manager）返回 state.ErrNotSwarmManager。
 func (c *Client) SwarmJoinInfo(ctx context.Context) (string, string, error) {

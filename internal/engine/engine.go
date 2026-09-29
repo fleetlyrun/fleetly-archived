@@ -598,6 +598,20 @@ func (e *Engine) prepareInputs(ctx context.Context, rec state.DeployRecord) (*pr
 		}
 		return nil, err
 	}
+	// 控制面地址注入面（ctrlinject.go）：无条件向每个服务注入
+	// FLEETLY_CONTROL_GRPC_ADDR/TLS_NAME（集群内工作负载回拨控制面的平台
+	// 能力；值 = 装配层解析的 advertise+gRPC 端口与 TLS 校验名）。并入
+	// system env lane（与 S3 同合并序，键集不相交）。
+	ctrlEnv := e.resolveControlPlaneInjection(spec)
+	if len(ctrlEnv) > 0 {
+		if s3Env == nil {
+			s3Env = ctrlEnv
+		} else {
+			for svc, vars := range ctrlEnv {
+				s3Env[svc] = append(s3Env[svc], vars...)
+			}
+		}
+	}
 	// 库引用面（E4 managed-databases §2.4/§2.5）：label fleetly.databases
 	// 的服务解析引用（存在性/前缀冲突哨兵 + 未就绪警告）、物化 system env
 	// 连接串（upsert → pending——必须先于 platformEnvForMerge 读取，物化行

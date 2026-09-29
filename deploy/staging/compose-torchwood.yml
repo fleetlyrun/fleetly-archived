@@ -12,10 +12,11 @@
 #    config-<name>-<hash8> 公式无长度守卫,原键名 71~73 字符必撞);
 #    挂载目标路径保持原文件名不变。
 # 4. dispatcher 直连 TLS 控制面(无桥,2026-09-29 用户裁决移除 grpcbridge):
-#    endpoint = tls-insecure://10.124.0.3:8421(按 IP 直连无 SAN,跳过校验;
-#    fleetlyd TLS 要求 ALPN h2,grpc-go 客户端原生协商——外置桥反而做不到,
-#    socat 无 ALPN 已实证)。dispatcher 镜像 = sha-78ea1a4 基座叠加
-#    TLS 客户端版 dispatcher 二进制(staging 叠加 tag,生产等 CI sha tag)。
+#    endpoint 经平台 env 注入(TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT,compose
+#    留空——环境相关值不进定义;staging 值=控制面 advertise 地址,控制面是
+#    host 网络容器无内网服务名,同 exec relay 的 FLEETLY_CONTROL_ADDR 先例)。
+#    dispatcher 镜像 = sha-78ea1a4 基座叠加 TLS 客户端版 dispatcher 二进制
+#    (staging 叠加 tag,生产等 CI sha tag)。
 
 name: torchwood
 
@@ -126,7 +127,8 @@ services:
       TORCHWOOD_FUNCTIONS_DISPATCHER_ADDR: ":9070"
       TORCHWOOD_FUNCTIONS_DISPATCHER_MAX_RESIDENT_INSTANCES: "16"
       TORCHWOOD_FUNCTIONS_DOCKER_REGISTRY: "torchwood-funcs"
-      TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT: "tls-insecure://10.124.0.3:8421"
+      # 平台 env 必填注入(值=控制面 gRPC 地址,如 tls-insecure://<advertise>:8421)
+      TORCHWOOD_FUNCTIONS_FLEETLY_ENDPOINT: ""
       TORCHWOOD_FUNCTIONS_FLEETLY_TOKEN: ""
       TORCHWOOD_FUNCTIONS_FLEETLY_APP: "torchwood"
       TORCHWOOD_FUNCTIONS_FLEETLY_NETWORK_MEMBERS: "dispatcher,server"

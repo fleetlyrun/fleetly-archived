@@ -386,6 +386,16 @@ type Config struct {
 	// DriftInterval 是运行域漂移检测扫描周期（默认 30s，可配
 	// engine.drift_interval_seconds；D11：检测默认开）。
 	DriftInterval time.Duration
+	// ControlGRPCAddr 是控制面 gRPC 对集群内工作负载的可达地址
+	// （`<swarm advertise>:<gRPC 端口>`；装配层解析，见 provides.NewEngine）。
+	// 非空时引擎向每个任务 spec 注入 FLEETLY_CONTROL_GRPC_ADDR
+	// （ctrlinject.go：集群内程序化工作负载回拨控制面的零配置通路，torchwood
+	// dispatcher 为首个消费者）；空 = 不注入（装配未接线，行为零变更）。
+	ControlGRPCAddr string
+	// ControlTLSName 是控制面 TLS 证书校验名（platform TLS 模式的
+	// ctrl.<base>；TLS off 为空）。随 FLEETLY_CONTROL_TLS_NAME 注入——消费方
+	// 以它决定 TLS + ServerName 校验还是明文。
+	ControlTLSName string
 }
 
 // Normalize 回落文档默认值。
