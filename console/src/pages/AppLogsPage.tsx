@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTime } from "@/lib/utils";
+import { extractServiceNames } from "@/lib/compose-cron";
 import { useProjectContext } from "@/lib/context";
 
 const LIVE_CAP = 2000;
@@ -68,7 +69,10 @@ function entryKey(e: StampedLogEntry): string {
   return `${e.at ?? ""}|${e.service}|${e.source}|${e.line}|${e.__seq ?? ""}`;
 }
 
-/** 服务名清单：从最近 active revision 的 canonical JSON compose 提取。 */
+/** 服务名清单：从最近 active revision 的 canonical JSON compose 提取。
+ *  快照同构 compose.Spec（services 是数组、name 在元素上），解析复用
+ *  compose-cron 单点——此前本地 Object.keys 按 map 解析，拿到的是数组
+ *  下标「0/1」（2026-09-29 用户报告）。 */
 function useServiceNames(app: string) {
   const revisionsQuery = useQuery({
     queryKey: ["revisions", app],
@@ -83,15 +87,8 @@ function useServiceNames(app: string) {
     enabled: active !== undefined,
   });
   return useMemo(() => {
-    if (!specQuery.data?.compose) return [];
-    try {
-      const spec = JSON.parse(specQuery.data.compose) as {
-        services?: Record<string, unknown>;
-      };
-      return Object.keys(spec.services ?? {});
-    } catch {
-      return [];
-    }
+    const services = extractServiceNames(specQuery.data?.compose);
+    return services ? services.map((s) => s.name) : [];
   }, [specQuery.data]);
 }
 
