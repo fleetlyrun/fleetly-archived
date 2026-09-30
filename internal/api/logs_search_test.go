@@ -25,6 +25,8 @@ import (
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
 	"github.com/fleetlyrun/fleetly/internal/apperr"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
+	"github.com/fleetlyrun/fleetly/internal/logs"
+	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/victorialogs"
 	testsupport "github.com/fleetlyrun/fleetly/internal/testsupport"
@@ -126,6 +128,64 @@ func TestSearchLogsFaceNotAssembled(t *testing.T) {
 	svc := newLogsSvc(st, nil, nil)
 	_, err := svc.SearchLogs(directCtx(ctx), &serverv1.SearchLogsRequest{App: "app"})
 	assertApperrCode(t, err, "E_LOGS_BACKEND_UNAVAILABLE")
+}
+
+// TestListHistoryLogsVictorialogsBoundary 历史面的对称诚实边界（B4 根因
+// 修复：victorialogs 模式停 JSONL 落盘而 History 只扫落盘——此前 container
+// 来源恒静默 0 行，违反「不返回空列表冒充」纪律）：container/缺省来源 →
+// E_LOGS_BACKEND_UNAVAILABLE 指路 search；build 来源不受影响照常服务；
+// jsonl 模式不受影响。
+func TestListHistoryLogsVictorialogsBoundary(t *testing.T) {
+	st := openLogsStore(t)
+	ctx := context.Background()
+	if err := st.SaveLogsSettings(ctx, state.LogsBackendVictorialogs, state.LogsSaveOptions{Actor: "human"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if _, err := testsupport.SeedAppE(t, st, "app"); err != nil {
+		t.Fatalf("CreateApp: %v", err)
+	}
+	mg := newLogsManagerFor(t, st)
+	svc := NewLogsService(st, mg)
+	for _, src := range []string{"", logs.SourceContainer} {
+		_, err := svc.ListHistoryLogs(directCtx(ctx), &serverv1.ListHistoryLogsRequest{App: "app", Source: src})
+		assertApperrCode(t, err, "E_LOGS_BACKEND_UNAVAILABLE")
+	}
+	// build 来源照常服务（200 空集合法——builds 表产物与 backend 无关）。
+	resp, err := svc.ListHistoryLogs(directCtx(ctx), &serverv1.ListHistoryLogsRequest{App: "app", Source: logs.SourceBuild})
+	if err != nil {
+		t.Fatalf("build source in victorialogs mode: %v", err)
+	}
+	if got := len(resp.GetEntries()); got != 0 {
+		t.Fatalf("entries = %d, want 0 (no builds seeded)", got)
+	}
+	// jsonl 模式（显式切回——缺省 backend 即 victorialogs，V2-1 默认捆绑）
+	// 不受影响：container 来源照常走落盘腿。
+	st2 := openLogsStore(t)
+	if err := st2.SaveLogsSettings(ctx, state.LogsBackendJSONL, state.LogsSaveOptions{Actor: "human"}); err != nil {
+		t.Fatalf("save jsonl: %v", err)
+	}
+	if _, err := testsupport.SeedAppE(t, st2, "app"); err != nil {
+		t.Fatalf("CreateApp: %v", err)
+	}
+	resp, err = NewLogsService(st2, newLogsManagerFor(t, st2)).ListHistoryLogs(directCtx(ctx), &serverv1.ListHistoryLogsRequest{App: "app"})
+	if err != nil {
+		t.Fatalf("jsonl mode container history: %v", err)
+	}
+	if got := len(resp.GetEntries()); got != 0 {
+		t.Fatalf("entries = %d, want 0 (no disk files seeded)", got)
+	}
+}
+
+// newLogsManagerFor 起真实 logs.Manager（落盘腿可达；无底座/入湖端口——
+// 本测面只触达 History 的路由门）。
+func newLogsManagerFor(t *testing.T, st *state.Store) *logs.Manager {
+	t.Helper()
+	dir := t.TempDir()
+	box, _, err := secrets.EnsureKey(filepath.Join(dir, "test.key"))
+	if err != nil {
+		t.Fatalf("EnsureKey: %v", err)
+	}
+	return logs.NewManager(logs.Config{Dir: filepath.Join(dir, "logs")}, st, nil, box, nil)
 }
 
 // TestSearchLogsVLUnreachableSameCode VL 不可达 → 同码（检索降级分支）。

@@ -82,6 +82,21 @@ func (s *LogsService) ListHistoryLogs(ctx context.Context, req *serverv1.ListHis
 	if err := requireAppAccess(ctx, s.st, app); err != nil {
 		return nil, err
 	}
+	// 诚实边界（observability 设计 §2.3「JSONL 边界」：victorialogs 模式
+	// 停 JSONL 落盘、检索不跨界——CLI 与 Console 文案同口径，与 SearchLogs
+	// 的 jsonl 分支对称）：container 来源的历史面在 victorialogs 模式为空
+	//（落盘从未发生），不返回空列表冒充有数——指路 search；build 来源仍
+	// 可检索（builds 表产物与 backend 无关）。
+	if src := req.GetSource(); src == "" || src == logs.SourceContainer {
+		in, err := s.st.LoadLogsSettings(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if in.Backend == state.LogsBackendVictorialogs {
+			return nil, apperrLogsBackendUnavailable(
+				"log history is unavailable: logs.backend=victorialogs does not write the JSONL store (use 'fleetly logs search' or the Console search face, which covers the VictoriaLogs window); build logs remain queryable with --source build")
+		}
+	}
 	q := logs.HistoryQuery{
 		// 解析后的三段限定形下发（logs.Manager.History 内部按 GetAppByName
 		// 重解析并换算三段限定形流键；本面的可见域解析 + 角色门已先行收口
