@@ -23,19 +23,15 @@ package victorialogs
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
-
-// settingsLoadTimeout 是 status/健康检查面的设置读取预算（CheckHealth
-// 无 ctx 形态的自有预算，rustfs 同款）。
-const settingsLoadTimeout = 3 * time.Second
 
 // Manager 是托管 VictoriaLogs 收敛管理器。
 type Manager struct {
@@ -99,7 +95,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			converged = true
 			m.log.Info("victorialogs: quiesced (logs.backend != victorialogs; no managed deployment owed)")
 		}
-		if !sleepCtx(ctx, retryOrScan(retry, scan, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, scan, converged)) {
 			return nil
 		}
 	}
@@ -159,12 +155,8 @@ func (m *Manager) converge(ctx context.Context) error {
 	// 回名后同锚比对；解析失败显式退避重试，不误判漂移（W5-S3 门上移植自
 	// internal/metrics——此前每拍 ID≠名恒判漂移：ServiceUpdate 空转 + deployed
 	// 事件每拍重发）。
-	for i, t := range cur.Networks {
-		n, err := m.docker.NetworkName(ctx, t)
-		if err != nil {
-			return err
-		}
-		cur.Networks[i] = n
+	if err := componentloop.ResolveNetworkNames(ctx, cur.Networks, m.docker.NetworkName); err != nil {
+		return err
 	}
 	switch {
 	case !cur.Exists:
@@ -215,18 +207,9 @@ func (m *Manager) removeIfPresent(ctx context.Context) error {
 }
 
 // emitEvent 追加平台事件（Outbox 单写；失败只日志——事件披露不阻断收敛）。
+// 骨架唯一实现见 internal/componentloop（本方法只绑 store/log/前缀）。
 func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload map[string]string) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		raw = []byte("{}")
-	}
-	err = m.store.InTx(ctx, func(tx *state.Tx) error {
-		_, err := tx.AppendEvent(ctx, state.Event{Name: name, Subject: subject, Payload: string(raw)})
-		return err
-	})
-	if err != nil {
-		m.log.Warn("victorialogs: event append failed", "event", name, "error", err)
-	}
+	componentloop.EmitEvent(ctx, m.store, m.log, "victorialogs", name, subject, payload)
 }
 
 // DeploymentStatus 是 backend 视图面（CLI logs backend show / RPC 投影）的
@@ -255,7 +238,7 @@ func (m *Manager) DeploymentStatus(ctx context.Context) (DeploymentStatus, error
 // 预期且 streak 无降级）。健康检查是热路径：拨测预算 2s，不可达即红
 //（检索降级，直播面不受影响——诚实口径）。
 func (m *Manager) CheckHealth() error {
-	ctx, cancel := context.WithTimeout(context.Background(), settingsLoadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), componentloop.SettingsLoadTimeout)
 	defer cancel()
 	in, err := m.store.LoadLogsSettings(ctx)
 	if err != nil {
@@ -279,32 +262,4 @@ func (m *Manager) CheckHealth() error {
 		}
 	}
 	return nil
-}
-
-// sleepCtx 睡眠直到 d 到期或 ctx 取消（返回 false = ctx 已取消）。
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
-}
-
-// retryOrScan 收敛失败/未收敛走短退避，已收敛走扫描周期（漂移复检节奏）。
-func retryOrScan(retry, scan time.Duration, converged bool) time.Duration {
-	if converged && scan > 0 {
-		return scan
-	}
-	return retry
 }

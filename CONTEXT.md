@@ -40,6 +40,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | **归属（ownership）** | 三段限定形 `fleetly-<team>-<prj>-<app>` 的过滤单点；手写 label 过滤被守卫禁止 | `internal/engine/ownership.go` + `internal/naming` |
 | **受管组件（managed component）** | 平台自部署的平台级服务（ingress/zot/VictoriaLogs/vmalert/rustfs/metrics/exec-relay），各自有部署与收敛循环 | `internal/{ingress,imageregistry,victorialogs,rustfs,metrics,execrelay}` |
 | **dockerapi** | 受管组件部署器/收敛循环对 Docker API 的共享消费面：`ServiceSnapshot` 投影超集 + 幂等 ensure/remove 原语的唯一实现（2026-09-29 架构评审 C1 收编——此前六包各持一份逐字拷贝的 realDockerClient；各包保留窄端口与哨兵，moby client 连接面止步于此与 substrate 等白名单四包，mobyscan 扫描守卫强制；原名 dutydocker，2026-09-29 更名） | `internal/dockerapi` |
+| **componentloop（组件循环骨架）** | 受管组件 Manager 循环骨架件的唯一一份：取消休眠/退避节拍/同序比对/设置读取预算/平台事件发射/网络挂载回解析（2026-09-30 架构评审 C7 收编——六件在 metrics/rustfs/victorialogs/execrelay/ingress/database 逐字拷贝且复制链仍活〔execrelay 入族整段复制实证〕；收敛决策/spec 比对面/窄端口/哨兵留属主，与 dockerapi 的 Docker 消费面分工） | `internal/componentloop` |
 | **守卫（guard test）** | 枚举/源码扫描/AST/docs 扫描型红线测试；「穷尽性从提交者记性搬进 CI 枚举守卫」 | 各包 `*_test.go`（清单见 §5） |
 | **task-group 网** | Tasks 函数实例的租户项目长活网络；per-task 动态 attach 明令禁止 | `internal/engine/projectnetwork.go`（ADR-0010） |
 | **Outbox** | 事件与业务写同事务落 `events` 表；通知投递器经游标轮询，不建进程内总线 | `internal/state/events.go` |
@@ -52,6 +53,7 @@ torchwood/messageloop 迁移线（T 线）是立项原因与最高优先级输�
 | `engine` | 发布引擎：状态机/收敛原语/健康门/观察窗/漂移/伸缩/回滚 | `Engine` 构造器+`With*` 可选端口（engine.go / ports.go） |
 | `substrate` | Swarm/Docker 适配器 | 隐式实现 engine 端口（services.go / networks.go） |
 | `dockerapi` | 受管组件部署器/收敛循环的 Docker API 共享消费面（六包适配拷贝的收编单点，2026-09-29 C1；原名 dutydocker） | `Client` + `ServiceSnapshot`（dockerapi.go / service.go / objects.go） |
+| `componentloop` | 受管组件 Manager 循环骨架共享件唯一一份（六包逐字拷贝收编，2026-09-30 C7；与 dockerapi 分工=循环骨架 vs Docker 消费面） | `SleepCtx`/`RetryOrScan`/`SameStrings`/`SettingsLoadTimeout`/`EmitEvent`/`ResolveNetworkNames`（componentloop.go） |
 | `api` | gRPC + grpc-gateway 服务面：proto→state/engine 编排 | genproto 契约 + 包内消费端口 15 个 |
 | `runtime` | composition root：Bootstrap + Wire 装配全部服务 | provides.go（api 端口绑定/跨模块桥的内联 adapter 属装配本职；engine 端口的适配已归属主包——substrate/ingress.RoutePublisher/dbtemplate.EngineTemplatePort/metrics，2026-09-29 C6） |
 | `placement` | 有状态放置解析/绑定生命周期 | `Resolver.Resolve/Apply/Preflight` |

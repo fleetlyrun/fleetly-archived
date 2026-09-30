@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 )
 
 // platformCertApp 是平台证书在证书库中的保留名（cert_dir 文件名前缀）。
@@ -168,7 +170,7 @@ func (m *Manager) runPlatformCertController(ctx context.Context) {
 		if err != nil {
 			m.log.Warn("ingress: platform certificate domain set unreadable (retrying)",
 				"error", err, "retry_in", retry.String())
-			if !sleepCtx(ctx, retry) {
+			if !componentloop.SleepCtx(ctx, retry) {
 				return
 			}
 			continue
@@ -180,7 +182,7 @@ func (m *Manager) runPlatformCertController(ctx context.Context) {
 			pair = nil
 		default:
 			m.log.Warn("ingress: platform certificate load failed", "error", err)
-			if !sleepCtx(ctx, retry) {
+			if !componentloop.SleepCtx(ctx, retry) {
 				return
 			}
 			continue
@@ -189,7 +191,7 @@ func (m *Manager) runPlatformCertController(ctx context.Context) {
 			if _, err := m.ensurePlatformCertificate(ctx, pair != nil); err != nil {
 				m.log.Warn("ingress: platform certificate issue deferred (retrying)",
 					"error", err, "retry_in", retry.String())
-				if !sleepCtx(ctx, retry) {
+				if !componentloop.SleepCtx(ctx, retry) {
 					return
 				}
 				continue
@@ -206,7 +208,7 @@ func (m *Manager) runPlatformCertController(ctx context.Context) {
 			if err := m.EnsureTraefik(ctx); err != nil {
 				m.log.Warn("ingress: traefik endpoint TLS convergence deferred (retrying)",
 					"error", err, "retry_in", retry.String())
-				if !sleepCtx(ctx, retry) {
+				if !componentloop.SleepCtx(ctx, retry) {
 					return
 				}
 				continue
@@ -225,7 +227,7 @@ func (m *Manager) runPlatformCertController(ctx context.Context) {
 				"endpoint", m.providerEndpoint(m.advertiseIP)+"/configs")
 		}
 		// 健康守望：睡一个续期扫描周期后复查续期窗口。
-		if !sleepCtx(ctx, m.cfg.RenewScanInterval) {
+		if !componentloop.SleepCtx(ctx, m.cfg.RenewScanInterval) {
 			return
 		}
 	}
@@ -255,16 +257,4 @@ func (m *Manager) obtainOnce(ctx context.Context, app string, domains []string) 
 		return nil, nil, err
 	}
 	return m.obtainFn(ctx, app, user, domains)
-}
-
-// sleepCtx 可取消休眠（控制器循环的退避/守望载体；ctx 取消返回 false）。
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
 }

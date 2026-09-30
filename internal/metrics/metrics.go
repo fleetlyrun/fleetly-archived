@@ -27,7 +27,6 @@ package metrics
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,13 +34,10 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
-
-// settingsLoadTimeout 是 status/健康检查面的设置读取预算（CheckHealth
-// 无 ctx 形态的自有预算，victorialogs 同款）。
-const settingsLoadTimeout = 3 * time.Second
 
 // DefaultRetentionDays 是 metrics.retention_days 的缺省值（设计 §4.1：
 // 14d；internal/runtime/config.go 的 MetricsConfig 缺省回落指向本常量
@@ -138,7 +134,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			converged = true
 			m.log.Info("metrics: quiesced (metrics.mode != on; no managed deployment owed)")
 		}
-		if !sleepCtx(ctx, retryOrScan(retry, scan, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, scan, converged)) {
 			return nil
 		}
 	}
@@ -244,12 +240,8 @@ func (m *Manager) converge(ctx context.Context) error {
 		if cur.Exists {
 			// 实况网络目标（ID 形态）解析回名后再比对（见 dockerPort.
 			// NetworkName 注记）；解析失败显式退避重试，不误判漂移。
-			for i, t := range cur.Networks {
-				n, err := m.docker.NetworkName(ctx, t)
-				if err != nil {
-					return err
-				}
-				cur.Networks[i] = n
+			if err := componentloop.ResolveNetworkNames(ctx, cur.Networks, m.docker.NetworkName); err != nil {
+				return err
 			}
 		}
 		reason := ""
@@ -309,12 +301,8 @@ func (m *Manager) converge(ctx context.Context) error {
 			return err
 		}
 		if cur.Exists {
-			for i, t := range cur.Networks {
-				n, err := m.docker.NetworkName(ctx, t)
-				if err != nil {
-					return err
-				}
-				cur.Networks[i] = n
+			if err := componentloop.ResolveNetworkNames(ctx, cur.Networks, m.docker.NetworkName); err != nil {
+				return err
 			}
 		}
 		reason := ""
@@ -485,18 +473,9 @@ func (m *Manager) removeIfPresent(ctx context.Context) error {
 }
 
 // emitEvent 追加平台事件（Outbox 单写；失败只日志——事件披露不阻断收敛）。
+// 骨架唯一实现见 internal/componentloop（本方法只绑 store/log/前缀）。
 func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload map[string]string) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		raw = []byte("{}")
-	}
-	err = m.store.InTx(ctx, func(tx *state.Tx) error {
-		_, err := tx.AppendEvent(ctx, state.Event{Name: name, Subject: subject, Payload: string(raw)})
-		return err
-	})
-	if err != nil {
-		m.log.Warn("metrics: event append failed", "event", name, "error", err)
-	}
+	componentloop.EmitEvent(ctx, m.store, m.log, "metrics", name, subject, payload)
 }
 
 // ComponentStatus 是单件托管服务的部署态投影（status 面消费）。
@@ -551,7 +530,7 @@ func (m *Manager) VMAlertStatus(ctx context.Context) (ComponentStatus, error) {
 // W5-S2：alerts.mode=on 时 vmalert 亦应在位（同收敛循环收敛，缺失=过渡红）；
 // alerts off 时 vmalert 无所欠。
 func (m *Manager) CheckHealth() error {
-	ctx, cancel := context.WithTimeout(context.Background(), settingsLoadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), componentloop.SettingsLoadTimeout)
 	defer cancel()
 	in, err := m.store.LoadMetricsSettings(ctx)
 	if err != nil {
@@ -585,32 +564,4 @@ func (m *Manager) CheckHealth() error {
 		}
 	}
 	return nil
-}
-
-// sleepCtx 睡眠直到 d 到期或 ctx 取消（返回 false = ctx 已取消）。
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
-}
-
-// retryOrScan 收敛失败/未收敛走短退避，已收敛走扫描周期（漂移复检节奏）。
-func retryOrScan(retry, scan time.Duration, converged bool) time.Duration {
-	if converged && scan > 0 {
-		return scan
-	}
-	return retry
 }

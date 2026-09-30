@@ -24,6 +24,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -116,7 +117,7 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	if cur.Image != cs.Image {
 		return false
 	}
-	if !sameStrings(cur.Env, cs.Env) {
+	if !componentloop.SameStrings(cur.Env, cs.Env) {
 		return false
 	}
 	if len(cur.Mounts) != len(cs.Mounts) {
@@ -132,7 +133,7 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	for _, n := range desired.TaskTemplate.Networks {
 		wantNets = append(wantNets, n.Target)
 	}
-	if !sameStrings(cur.Networks, wantNets) {
+	if !componentloop.SameStrings(cur.Networks, wantNets) {
 		return false
 	}
 	// secret 引用比对（ID + 名成对）。
@@ -152,19 +153,6 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 		wantMem = res.Limits.MemoryBytes
 	}
 	return cur.MemoryBytes == wantMem
-}
-
-// sameStrings 序列相等（顺序敏感——spec 各面以期望序权威表达）。
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // fmtControlAddr 拼 advertise:port（部署 spec 的 FLEETLY_CONTROL_ADDR 值）。

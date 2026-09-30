@@ -62,6 +62,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -641,7 +642,7 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	if cur.Image != cs.Image {
 		return false
 	}
-	if !sameStrings(cur.Args, cs.Args) {
+	if !componentloop.SameStrings(cur.Args, cs.Args) {
 		return false
 	}
 	// 挂载只比 Source/Target（volume/bind 类型与只读位不参与——与原
@@ -659,14 +660,14 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	for _, n := range desired.TaskTemplate.Networks {
 		wantNets = append(wantNets, n.Target)
 	}
-	if !sameStrings(cur.Networks, wantNets) {
+	if !componentloop.SameStrings(cur.Networks, wantNets) {
 		return false
 	}
 	wantConstraints := []string{}
 	if pl := desired.TaskTemplate.Placement; pl != nil {
 		wantConstraints = pl.Constraints
 	}
-	if !sameStrings(cur.Constraints, wantConstraints) {
+	if !componentloop.SameStrings(cur.Constraints, wantConstraints) {
 		return false
 	}
 	// 抓取配置引用（内容寻址名——scrape 配置漂移经服务 spec 比对收敛）。
@@ -674,7 +675,7 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	for _, c := range cs.Configs {
 		wantConfigs = append(wantConfigs, c.ConfigName)
 	}
-	if !sameStrings(cur.ConfigNames, wantConfigs) {
+	if !componentloop.SameStrings(cur.ConfigNames, wantConfigs) {
 		return false
 	}
 	// 健康检查（执行面——探针序列漂移必捕获；nil 与空序列视为同形）。
@@ -682,7 +683,7 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 	if cs.Healthcheck != nil {
 		wantHealth = cs.Healthcheck.Test
 	}
-	if !sameStrings(cur.HealthTest, wantHealth) {
+	if !componentloop.SameStrings(cur.HealthTest, wantHealth) {
 		return false
 	}
 	// 副本形态：replicated 比数值；global 比形态（Replicas=0 且 global）。
@@ -704,17 +705,4 @@ func specEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) bool {
 		wantMem = res.Limits.MemoryBytes
 	}
 	return cur.MemoryBytes == wantMem
-}
-
-// sameStrings 序列相等（顺序敏感——spec 各面以期望序权威表达）。
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

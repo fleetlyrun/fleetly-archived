@@ -121,6 +121,7 @@
 | **ingress configRevision** | ingress 配置代次（内部计数），与平台 revision 严格分开 | 仅 internal/ingress |
 | **converge（收敛）** | 一拍把实况推向期望态的动作（`Ensure`/`converge`）；承载它的常驻循环叫收敛循环（受管组件侧的 Manager / ingress 的 controller），拍尾附属动作叫「步」（备份调度/公告/扩缩） | 英文标识符 converge/Ensure，中文文档「收敛」 |
 | **duty（已退役）** | 2026-09-29 前对「常驻收敛职责循环」的旧称；代码与活文档已全面改写（管理器/controller/步），带日期设计文档与 plan 保留旧称属历史记录 | 读旧文档时对照：duty ≈ 收敛循环/管理器；共享包 dutydocker 已更名 dockerapi |
+| **componentloop（组件循环骨架）** | 受管组件收敛循环共享骨架件的唯一一份（SleepCtx/RetryOrScan/SameStrings/SettingsLoadTimeout/EmitEvent/ResolveNetworkNames），2026-09-30 架构评审 C7 从六包逐字拷贝收编；与 dockerapi 分工——那是 Docker 消费面，本包是循环骨架（各包收敛决策/spec 比对面/窄端口/哨兵留属主） | internal/componentloop |
 
 ### 命名规则补遗
 

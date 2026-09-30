@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -73,7 +74,7 @@ func TestVMAlertConvergesOnAlertsMode(t *testing.T) {
 		"-evaluationInterval=30s",
 		"-httpListenAddr=127.0.0.1:8880",
 	}
-	if !sameStrings(cur.Args, wantArgs) {
+	if !componentloop.SameStrings(cur.Args, wantArgs) {
 		t.Fatalf("vmalert args:\n got %v\nwant %v", cur.Args, wantArgs)
 	}
 	// 规则 config 引用 + token 文件只读挂载（凭据材料不进 spec——挂载源是

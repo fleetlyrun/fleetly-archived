@@ -22,7 +22,6 @@ package rustfs
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -30,15 +29,12 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/secrets"
 	"github.com/fleetlyrun/fleetly/internal/state"
 	"github.com/fleetlyrun/fleetly/internal/statebackup"
 )
-
-// s3SettingsLoadTimeout 是 status/健康检查面的设置读取预算（CheckHealth
-// 无 ctx 形态的自有预算）。
-const s3SettingsLoadTimeout = 3 * time.Second
 
 // Manager 是托管 RustFS 收敛管理器。
 type Manager struct {
@@ -101,7 +97,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			converged = true
 			m.log.Info("rustfs: quiesced (s3.mode != rustfs; no managed deployment owed)")
 		}
-		if !sleepCtx(ctx, retryOrScan(retry, scanInterval, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, scanInterval, converged)) {
 			return nil
 		}
 	}
@@ -370,19 +366,10 @@ func (m *Manager) removeStaleSecrets(ctx context.Context, keep ...string) error 
 }
 
 // emitEvent 追加平台事件（Outbox 单写；失败只日志——事件披露不阻断收敛）。
-// payload 只带服务/镜像/原因等非敏感形态，凭据材料零出现。
+// payload 只带服务/镜像/原因等非敏感形态，凭据材料零出现。骨架唯一实现见
+// internal/componentloop（本方法只绑 store/log/前缀）。
 func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload map[string]string) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		raw = []byte("{}")
-	}
-	err = m.store.InTx(ctx, func(tx *state.Tx) error {
-		_, err := tx.AppendEvent(ctx, state.Event{Name: name, Subject: subject, Payload: string(raw)})
-		return err
-	})
-	if err != nil {
-		m.log.Warn("rustfs: event append failed", "event", name, "error", err)
-	}
+	componentloop.EmitEvent(ctx, m.store, m.log, "rustfs", name, subject, payload)
 }
 
 // CheckHealth 是 system status 组件检查器（objectstore.rustfs）：mode 非
@@ -391,7 +378,7 @@ func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload m
 // TestConnection 探针（容器内执行）承载（本检查不做网络往返——健康检查
 // 是热路径）。
 func (m *Manager) CheckHealth() error {
-	ctx, cancel := context.WithTimeout(context.Background(), s3SettingsLoadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), componentloop.SettingsLoadTimeout)
 	defer cancel()
 	in, err := m.store.LoadS3Settings(ctx)
 	if err != nil {
@@ -411,33 +398,4 @@ func (m *Manager) CheckHealth() error {
 		return fmt.Errorf("rustfs: managed credentials not provisioned yet (convergence in progress)")
 	}
 	return nil
-}
-
-// sleepCtx 睡眠直到 d 到期或 ctx 取消（返回 false = ctx 已取消）。
-func sleepCtx(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
-}
-
-// retryOrScan 收敛失败/未收敛走短退避，已收敛走扫描周期（漂移复检节奏；
-// ingress 同款公式）。
-func retryOrScan(retry, scan time.Duration, converged bool) time.Duration {
-	if converged && scan > 0 {
-		return scan
-	}
-	return retry
 }

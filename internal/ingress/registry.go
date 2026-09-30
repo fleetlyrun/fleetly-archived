@@ -42,6 +42,7 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -425,14 +426,14 @@ func registrySpecEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec)
 	for _, n := range desired.TaskTemplate.Networks {
 		wantNets = append(wantNets, n.Target)
 	}
-	if !sameStrings(cur.Networks, wantNets) {
+	if !componentloop.SameStrings(cur.Networks, wantNets) {
 		return false
 	}
 	wantConstraints := []string{}
 	if pl := desired.TaskTemplate.Placement; pl != nil {
 		wantConstraints = pl.Constraints
 	}
-	if !sameStrings(cur.Constraints, wantConstraints) {
+	if !componentloop.SameStrings(cur.Constraints, wantConstraints) {
 		return false
 	}
 	wantReplicas := uint64(0)
@@ -489,16 +490,8 @@ func (m *Manager) runRegistryController(ctx context.Context) {
 			m.log.Warn("ingress: registry converge deferred (retrying)",
 				"error", err, "retry_in", retry.String())
 		}
-		if !sleepCtx(ctx, retryOrScan(retry, m.cfg.RenewScanInterval, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, m.cfg.RenewScanInterval, converged)) {
 			return
 		}
 	}
-}
-
-// retryOrScan 收敛失败/未收敛走短退避，已收敛走扫描周期（漂移复检节奏）。
-func retryOrScan(retry, scan time.Duration, converged bool) time.Duration {
-	if converged && scan > 0 {
-		return scan
-	}
-	return retry
 }

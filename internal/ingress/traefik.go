@@ -29,6 +29,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/swarm"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
@@ -408,13 +409,13 @@ func traefikSpecEqual(cur dockerapi.ServiceSnapshot, desired swarm.ServiceSpec) 
 	if cur.Image != cs.Image {
 		return false
 	}
-	if !sameStrings(cur.Args, cs.Args) {
+	if !componentloop.SameStrings(cur.Args, cs.Args) {
 		return false
 	}
-	if !sameStrings(cur.Hosts, cs.Hosts) {
+	if !componentloop.SameStrings(cur.Hosts, cs.Hosts) {
 		return false
 	}
-	if !sameStrings(cur.HealthTest, cs.Healthcheck.Test) {
+	if !componentloop.SameStrings(cur.HealthTest, cs.Healthcheck.Test) {
 		return false
 	}
 	want := desired.EndpointSpec.Ports
@@ -469,17 +470,4 @@ func appNetworkName(team, prj, app string) (string, error) {
 		}
 	}
 	return "fleetly-" + team + "-" + prj + "-" + app + "-net", nil
-}
-
-// sameStrings 切片相等（同序）。
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

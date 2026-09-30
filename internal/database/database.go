@@ -13,13 +13,13 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dbtemplate"
 	"github.com/fleetlyrun/fleetly/internal/engine"
 	"github.com/fleetlyrun/fleetly/internal/placement"
@@ -290,19 +290,10 @@ func (m *Manager) gcProvisioningTimers(rows []state.DatabaseInstance) {
 }
 
 // emitEvent 追加平台事件（rustfs 同款：Outbox 单写、失败只日志——事件披
-// 露不阻断收敛）。payload 只带事实字段，凭据材料零出现。
+// 露不阻断收敛）。payload 只带事实字段，凭据材料零出现。骨架唯一实现见
+// internal/componentloop（本方法只绑 store/log/前缀）。
 func (m *Manager) emitEvent(ctx context.Context, name, subject string, payload map[string]string) {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		raw = []byte("{}")
-	}
-	err = m.store.InTx(ctx, func(tx *state.Tx) error {
-		_, err := tx.AppendEvent(ctx, state.Event{Name: name, Subject: subject, Payload: string(raw)})
-		return err
-	})
-	if err != nil {
-		m.log.Warn("database: event append failed", "event", name, "error", err)
-	}
+	componentloop.EmitEvent(ctx, m.store, m.log, "database", name, subject, payload)
 }
 
 // writeAudit 系统自动动作的审计（reap 等——「自动动作必入审计」纪律；

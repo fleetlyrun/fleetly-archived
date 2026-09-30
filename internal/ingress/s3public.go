@@ -31,6 +31,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
 
@@ -388,7 +389,7 @@ func (m *Manager) runS3PublicController(ctx context.Context) {
 				converged = true
 			}
 		}
-		if !sleepCtx(ctx, retryOrScan(retry, scan, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, scan, converged)) {
 			return
 		}
 	}

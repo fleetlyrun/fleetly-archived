@@ -32,6 +32,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 )
 
 // 生产时限常量（设计 §2.4 原文：空闲 10min / 硬上限 30min）。
@@ -218,7 +220,7 @@ func (r *Relay) Run(ctx context.Context) error {
 		conn, err := dial(ctx, r.cfg, token)
 		if err != nil {
 			r.log.Warn("execrelay: connect deferred (retrying with backoff)", "error", err, "retry_in", backoff.String())
-			if !sleepFor(ctx, backoff) {
+			if !componentloop.SleepCtx(ctx, backoff) {
 				return nil
 			}
 			backoff = minDur(backoff*2, maxBackoff)
@@ -228,7 +230,7 @@ func (r *Relay) Run(ctx context.Context) error {
 		if err := r.serveConn(ctx, conn, hostname, ping, limits); err != nil {
 			r.log.Warn("execrelay: connection lost (reconnecting)", "error", err)
 		}
-		if !sleepFor(ctx, backoff) {
+		if !componentloop.SleepCtx(ctx, backoff) {
 			return nil
 		}
 	}
@@ -684,24 +686,4 @@ func minDur(a, b time.Duration) time.Duration {
 		return a
 	}
 	return b
-}
-
-// sleepFor 睡到 d 到期或 ctx 取消（false = ctx 已取消）。
-func sleepFor(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		select {
-		case <-ctx.Done():
-			return false
-		default:
-			return true
-		}
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
 }

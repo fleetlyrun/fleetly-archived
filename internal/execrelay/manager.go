@@ -23,13 +23,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/fleetlyrun/fleetly/internal/componentloop"
 	"github.com/fleetlyrun/fleetly/internal/dockerapi"
 	"github.com/fleetlyrun/fleetly/internal/state"
 )
-
-// settingsLoadTimeout 是健康检查面的 meta 读取预算（CheckHealth 无 ctx 形
-// 态的自有预算，victorialogs 同款）。
-const settingsLoadTimeout = 3 * time.Second
 
 // Manager 是 relay 部署收敛管理器。
 type Manager struct {
@@ -102,7 +99,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			converged = true
 			m.log.Info("execrelay: quiesced (terminal.enabled=false; no managed deployment owed)")
 		}
-		if !sleepFor(ctx, retryOrScan(retry, scan, converged)) {
+		if !componentloop.SleepCtx(ctx, componentloop.RetryOrScan(retry, scan, converged)) {
 			return nil
 		}
 	}
@@ -145,12 +142,8 @@ func (m *Manager) Ensure(ctx context.Context) error {
 	// 实况网络挂载目标（创建期 "host" 被归一为网络 ID）解析回名后同锚比对
 	//（victorialogs/metrics 同款——解析失败显式退避重试，不误判漂移）。
 	if cur.Exists {
-		for i, t := range cur.Networks {
-			n, err := m.docker.NetworkName(ctx, t)
-			if err != nil {
-				return err
-			}
-			cur.Networks[i] = n
+		if err := componentloop.ResolveNetworkNames(ctx, cur.Networks, m.docker.NetworkName); err != nil {
+			return err
 		}
 	}
 	switch {
@@ -250,7 +243,7 @@ func (m *Manager) CheckHealth() error {
 	if !m.enabled {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), settingsLoadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), componentloop.SettingsLoadTimeout)
 	defer cancel()
 	cur, err := m.docker.ServiceInspect(ctx, ExecRelayServiceName)
 	if err != nil {
@@ -275,12 +268,4 @@ func (m *Manager) DeploymentStatus(ctx context.Context) (DeploymentStatus, error
 		return DeploymentStatus{}, err
 	}
 	return DeploymentStatus{Exists: cur.Exists, Image: cur.Image}, nil
-}
-
-// retryOrScan 收敛失败/未收敛走短退避，已收敛走扫描周期。
-func retryOrScan(retry, scan time.Duration, converged bool) time.Duration {
-	if converged && scan > 0 {
-		return scan
-	}
-	return retry
 }
