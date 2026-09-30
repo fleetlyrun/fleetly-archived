@@ -265,27 +265,37 @@ amd64 运行验证即覆盖门禁主路径；arm64 交叉编译产物存在性�
 
 `Dockerfile.fleetlyd`：多阶段（golang:1.26-alpine 构建层，`CGO_ENABLED=0`
 + `-trimpath` + `-X main.version=<tag>`）→ alpine:3.22 运行层，入口
-`fleetlyd`，数据卷 `/var/lib/fleetly`。缺省不传配置文件（回落内置默认；
-F3/S20——镜像内并无 `/etc/fleetly/config.yaml`，固定 `-c` 会让容器开箱
-crash-loop）；需要显式配置时挂配置卷并覆写参数：
+`fleetlyd`，数据根 `/var/lib/fleetly`（**host bind，非命名卷**——三适配
+之一，见下）。缺省不传配置文件（回落内置默认；F3/S20——镜像内并无
+`/etc/fleetly/config.yaml`，固定 `-c` 会让容器开箱 crash-loop）；需要显式
+配置时挂配置卷并覆写参数：
 
 ```sh
 docker build -f deploy/Dockerfile.fleetlyd \
   --build-arg FLEETLY_VERSION=v0.1.0 -t ghcr.io/fleetlyrun/fleetlyd:v0.1.0 .
-# 缺省形态（内置默认配置）：
+# 缺省形态（内置默认配置；三适配缺一即坏——staging 2026-09-29 实证）：
 docker run -d --name fleetlyd \
+  --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v fleetly-data:/var/lib/fleetly \
-  -p 8420:8420 -p 8424:8424 \
+  -v /var/lib/fleetly:/var/lib/fleetly \
   ghcr.io/fleetlyrun/fleetlyd:v0.1.0
 # 可选：挂配置卷（键集见仓库根 config-example.yaml）：
 docker run -d --name fleetlyd \
+  --network host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v fleetly-data:/var/lib/fleetly \
+  -v /var/lib/fleetly:/var/lib/fleetly \
   -v /path/to/config.yaml:/etc/fleetly/config.yaml:ro \
-  -p 8420:8420 -p 8424:8424 \
   ghcr.io/fleetlyrun/fleetlyd:v0.1.0 -c /etc/fleetly/config.yaml
 ```
+
+三适配（ADR-0013，staging 实证）：**① `--network host`**——VL/VM 消费面
+拨宿主回环 127.0.0.1:9428/8428（桥接容器里 127.0.0.1 是自己），8420-8424
+随 host 网络直听无需 `-p`；**② 数据根 host bind**——平台把数据根下的
+文件 bind 挂载进 swarm 任务（任务在宿主解析路径），命名卷宿主路径不存在
+→ zot 任务 Rejected；**③ docker.sock 挂载**——管理面（root 等价权限的
+明示取舍）。已知缺口（挂账）：buildkit 构建链要 exec docker，镜像刻意
+不带 docker CLI → 容器形态构建面不可用，带 CLI 的变体产物（`<tag>-staging`
+后缀）未落；部署既有镜像/其余功能面不受影响。
 
 边界：**主形态仍是宿主二进制 + systemd**（install.sh）；容器形态挂宿主
 docker.socket（容器内进程获得宿主 dockerd root 等价权限——与主形态同权限

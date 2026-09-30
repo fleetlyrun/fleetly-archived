@@ -13,16 +13,29 @@
 #   docker build -f deploy/Dockerfile.fleetlyd \
 #     --build-arg FLEETLY_VERSION=v0.1.0 -t ghcr.io/fleetlyrun/fleetlyd:v0.1.0 .
 #
-# 运行形态口径（v0.1）：容器是「可选运行形态」，主形态 = 宿主二进制 +
-# systemd（deploy/install.sh）。fleetlyd 经本地 docker.sock 管理单节点
-# Swarm，容器化运行必须把宿主 dockerd socket 挂进来：
+# 运行形态口径（2026-09-29 staging 真机三适配回写，ADR-0013）：容器是
+# 「可选运行形态」，主形态 = 宿主二进制 + systemd（deploy/install.sh）。
+# 三适配缺一即坏（staging 实证，详见 CONTEXT.md「容器形态」/ADR-0013）：
+#   ① --network host 必选——VL/VM 消费面 = daemon 拨宿主回环
+#      127.0.0.1:9428/8428（桥接容器里 127.0.0.1 是自己 → logs/metrics
+#      全瞎）；8420-8424 随 host 网络直听，无需 -p。
+#   ② 数据根必须 host bind（/var/lib/fleetly:/var/lib/fleetly），不能用
+#      命名卷——平台把数据根下的文件（registry 凭据/ingress token 等）
+#      bind 挂载进 swarm 任务，任务在宿主解析路径；命名卷里的文件宿主
+#      路径不存在 → zot 任务 Rejected "invalid mount config"。
+#   ③ docker.sock 挂载（管理面）：fleetlyd 经宿主 dockerd 管理 Swarm
+#      （挂 socket = 容器内进程获得宿主 dockerd 的 root 等价权限——与
+#      主形态一致的明示取舍，socket 收紧属后续安全阶段）。
 #   docker run -d --name fleetlyd \
+#     --network host \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
-#     -v fleetly-data:/var/lib/fleetly \
-#     -p 8420:8420 \
+#     -v /var/lib/fleetly:/var/lib/fleetly \
 #     ghcr.io/fleetlyrun/fleetlyd:<tag>
-# （挂宿主 socket = 容器内进程获得宿主 dockerd 的 root 等价权限——v0.1
-# 众所周知的取舍，与主形态一致；socket 收紧属后续安全阶段。）
+#
+# 已知缺口（staging 实证，挂账）：buildkit 构建链（docker-container://
+# driver 建连）要 exec docker——本镜像刻意不带 docker CLI（攻击面收窄，
+# 见下方 apk 注），即容器形态下构建任务面不可用，直到带 CLI 的正式变体
+# 产物（<tag>-staging 后缀形态）落地；部署既有镜像/其余功能面不受影响。
 #
 # Console（2026-09-29 起）：产物烤在镜像内 /opt/fleetly/console，未配置
 # console.static_dir 即自动启用 /ui/。宿主 bind 挂载同路径可遮蔽烤入副本
@@ -32,10 +45,10 @@
 # 显式 -c 且工作目录无 config.yaml」容忍启动）。需要显式配置时挂配置卷并
 # 覆写 CMD（可选形态，键集见仓库根 config-example.yaml）：
 #   docker run -d --name fleetlyd \
+#     --network host \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
-#     -v fleetly-data:/var/lib/fleetly \
+#     -v /var/lib/fleetly:/var/lib/fleetly \
 #     -v /path/to/config.yaml:/etc/fleetly/config.yaml:ro \
-#     -p 8420:8420 \
 #     ghcr.io/fleetlyrun/fleetlyd:<tag> -c /etc/fleetly/config.yaml
 
 # 基镜像钉 digest（T0-V2.3 供应链）：tag 保留作可读性，digest 为准；
@@ -69,8 +82,10 @@ COPY console/ ./
 RUN rm -rf node_modules && pnpm install --frozen-lockfile && pnpm build
 
 FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
-# 排障依赖（swarm/daemon 自检需要的基础工具；docker CLI 不进容器——平台经
-# socket 由 dockerd 服务端执行，容器内不装 docker 客户端以收窄攻击面）。
+# 排障依赖（swarm/daemon 自检需要的基础工具）。docker CLI 不进容器——
+# 平台经 socket 由 dockerd 服务端执行，收窄攻击面；代价见文件头「已知
+# 缺口」：buildkit 构建链需 exec docker，容器形态构建面因此不可用（带
+# CLI 的正式变体产物挂账）。
 RUN apk add --no-cache ca-certificates wget
 COPY --from=build /out/fleetlyd /usr/local/bin/fleetlyd
 # Console 构建产物烤入（consoleDirOrDefault 回落目标；原生形态不安装此
