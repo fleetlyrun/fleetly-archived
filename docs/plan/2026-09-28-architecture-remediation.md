@@ -138,15 +138,15 @@
 | 候选/项 | 内容 | 状态 |
 |---|---|---|
 | 9 外发 | tag push(genproto/v0.1.0、sdk/go/v0.1.0,本地已建)+ torchwood 改 import 删 vendored + 根 go.mod 对 sdk/go 旧伪版本 pin 择机升 | 待用户执行/跨仓 pass |
-| E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 挂账,需跨包 helper 形态裁决 |
+| E 尾 | state/janitor.go 的 staleSeen/reportStale(披露骨架同款跨包拷贝) | 已关账(2026-09-30 评审 C8 裁决不抽取,见 ADR-0018——重叠面经逐构件取证仅约 10 行,差异面全部刻意) |
 | F 尾 | eventcode 头注计数叙事停在 95、实注册 105(既有注释漂移) | 挂账,随下次事件增补重算 |
-| F 尾 | database/move.go:67 手工复述三段限定形,疑似查询值与写入值不同形 | 挂账,需独立小票核查 |
+| F 尾 | database/move.go:67 手工复述三段限定形,疑似查询值与写入值不同形 | 已核查非 bug(查询值与写入值同形,2026-09-30 评审);已裁决收口为 `state.DatabaseInstance{…}.QualifiedName()` 构造,入实现批 |
 | G 尾 | ErrTaskNotFound 无 handler 级查无 404 直打(仅表测试钉住) | 挂账,小票补测 |
 | H 尾 | evictStaleStreamState 误收 task 游标(app="" 不在 active 集,幂等无害) | 挂账,小票豁免 |
 | I 尾 | ownership.go:480 reachableScopeList 自持 scope 序清单 | 挂账,小票收编进 scopeWords 派生(注意是可达面子集,需过滤语义) |
 | K 尾 | deploy.go 的部署等待环与旧 build wait 同构 | 挂账,可同样收编 SDK(另开小票) |
 | L 尾 | 库族 E_APP_AMBIGUOUS 无候选列(state 无按名列库实例原语;errcode Suggestion 声称候选列在 error context) | 挂账,加 state 原语后一处接入 |
-| L 尾 | resolveAppRefForMove/resolveDatabaseRefForMove 限定形解析同构 + resolveDatabaseRef 注释表述漂移 | 挂账,另票收编 |
+| L 尾 | resolveAppRefForMove/resolveDatabaseRefForMove 限定形解析同构 + resolveDatabaseRef 注释表述漂移 | 同构部分已裁决不收编(2026-09-30 评审:错误文案面刻意分叉,抽前半段 deletion test 偏负);注释表述漂移仍记账随下次触碰修 |
 | M 尾 | impldocscan 跳过规则是约定驱动:档案演化出新「非现行主张」写法需同步扩规则;勘误行上新幻影名会被放过(有意漏报,已声明) | 机制注记,非待办 |
 
 ## 5. 验证

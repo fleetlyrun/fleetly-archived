@@ -22,6 +22,7 @@
 | [0015](0015-compose-controlled-subset.md) | Compose 受控子集：白名单只增不减、受管字段拒绝不静默覆盖 | 已接受（v0.1 落地） | remediation C3、compose golden |
 | [0016](0016-no-transition-write-point-constructor.md) | 状态机写点不抽统一构造器（四线零命中语义刻意相异） | 已接受（裁决：不抽象） | 2026-09-29 评审 C2 调查 |
 | [0017](0017-move-orchestration-stays-in-api.md) | move 跨模块编排留在 api 服务面（事务/机制已各归其位） | 已接受（裁决：不迁移） | 2026-09-29 评审 C5 调查 |
+| [0018](0018-no-cross-package-disclosure-helper.md) | 披露骨架不做跨包抽取（janitor 拷贝经取证为刻意分叉，重叠面仅约 10 行） | 已接受（裁决：不抽象） | 2026-09-30 评审 C8/整改批 E 尾调查 |
 
 ## 状态语义
 
