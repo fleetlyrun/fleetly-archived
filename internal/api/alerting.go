@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	serverv1 "github.com/fleetlyrun/fleetly/genproto/fleetly/server/v1"
@@ -189,25 +188,10 @@ func (s *AlertingService) TestAlertRule(ctx context.Context, req *serverv1.TestA
 	}
 	series, err := s.mb.InstantSeries(ctx, strings.TrimSpace(req.GetExpr()), defaultMetricsLimit)
 	if err != nil {
-		switch {
-		case errors.Is(err, metrics.ErrBadQuery):
-			return nil, statusInvalidArgument(strings.TrimSpace(err.Error()))
-		case errors.Is(err, metrics.ErrBackendUnavailable):
-			return nil, apperrMetricsBackendUnavailable(
-				"alert rule test is unavailable: VictoriaMetrics did not answer on the loopback face (query face degraded; the scrape face is unaffected)")
-		default:
-			return nil, err
-		}
+		return nil, errMetricsSearchEnvelope(err,
+			"alert rule test is unavailable: VictoriaMetrics did not answer on the loopback face (query face degraded; the scrape face is unaffected)")
 	}
-	out := make([]*serverv1.MetricsSeries, 0, len(series))
-	for _, sr := range series {
-		ps := make([]*serverv1.MetricsPoint, 0, len(sr.Points))
-		for _, p := range sr.Points {
-			ps = append(ps, &serverv1.MetricsPoint{T: p.T, V: p.V})
-		}
-		out = append(out, &serverv1.MetricsSeries{Metric: sr.Metric, Points: ps})
-	}
-	return &serverv1.TestAlertRuleResponse{Series: out}, nil
+	return &serverv1.TestAlertRuleResponse{Series: metricsSeriesViews(series)}, nil
 }
 
 // alertRuleView 是规则行的 proto 投影。

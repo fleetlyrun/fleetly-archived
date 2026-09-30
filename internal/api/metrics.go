@@ -94,16 +94,15 @@ func (s *MetricsService) SearchMetrics(ctx context.Context, req *serverv1.Search
 	}
 	series, err := s.mb.Search(ctx, q)
 	if err != nil {
-		switch {
-		case errors.Is(err, metrics.ErrBadQuery):
-			return nil, statusInvalidArgument(strings.TrimSpace(err.Error()))
-		case errors.Is(err, metrics.ErrBackendUnavailable):
-			return nil, apperrMetricsBackendUnavailable(
-				"metrics query is unavailable: VictoriaMetrics did not answer on the loopback face (query face degraded; the scrape face is unaffected)")
-		default:
-			return nil, err
-		}
+		return nil, errMetricsSearchEnvelope(err,
+			"metrics query is unavailable: VictoriaMetrics did not answer on the loopback face (query face degraded; the scrape face is unaffected)")
 	}
+	return &serverv1.SearchMetricsResponse{Series: metricsSeriesViews(series)}, nil
+}
+
+// metricsSeriesViews 是 metrics.Series → proto MetricsSeries 的投影单点
+// （SearchMetrics 与 TestAlertRule 共用——序列/点位双层翻译唯一一份）。
+func metricsSeriesViews(series []metrics.Series) []*serverv1.MetricsSeries {
 	out := make([]*serverv1.MetricsSeries, 0, len(series))
 	for _, sr := range series {
 		ps := make([]*serverv1.MetricsPoint, 0, len(sr.Points))
@@ -112,7 +111,22 @@ func (s *MetricsService) SearchMetrics(ctx context.Context, req *serverv1.Search
 		}
 		out = append(out, &serverv1.MetricsSeries{Metric: sr.Metric, Points: ps})
 	}
-	return &serverv1.SearchMetricsResponse{Series: out}, nil
+	return out
+}
+
+// errMetricsSearchEnvelope 把 VM 查询错误族分流入信封（坏查询→
+// InvalidArgument 透传原文；后端不可达→E_METRICS_BACKEND_UNAVAILABLE；
+// 其余透传）——SearchMetrics 与 TestAlertRule 共用，unavailableMsg 承载
+// 各自面的具体不可用文案。
+func errMetricsSearchEnvelope(err error, unavailableMsg string) error {
+	switch {
+	case errors.Is(err, metrics.ErrBadQuery):
+		return statusInvalidArgument(strings.TrimSpace(err.Error()))
+	case errors.Is(err, metrics.ErrBackendUnavailable):
+		return apperrMetricsBackendUnavailable(unavailableMsg)
+	default:
+		return err
+	}
 }
 
 // requireEnabled 是查询面的 opt-in 门（E_METRICS_NOT_ENABLED 409——不返回

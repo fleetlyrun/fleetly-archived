@@ -62,8 +62,9 @@ func (m *Manager) MoveDatabaseRedeploy(ctx context.Context, inst state.DatabaseI
 		m.log.Info("database: move removed old-name service", "instance", inst.Name, "service", oldSvcName)
 	}
 	// 旧名凭据 secret 清场（fleetly.db label 选择器 = 旧限定形；best-effort
-	// ——单条失败不阻塞改派：材料无引用后无害，删除 reap 兜底）。
-	oldQualified := oldTeamSlug + "/" + oldPrjSlug + "/" + inst.Name
+	// ——单条失败不阻塞改派：材料无引用后无害，删除 reap 兜底）。限定形
+	// 经 QualifiedName 构造（公式唯一真源，F-2 同裁决——不手工拼接）。
+	oldQualified := state.DatabaseInstance{TeamSlug: oldTeamSlug, ProjectSlug: oldPrjSlug, Name: inst.Name}.QualifiedName()
 	if names, serr := m.docker.SecretList(ctx, map[string]string{state.LabelDatabase: oldQualified}); serr == nil {
 		for _, name := range names {
 			if rerr := m.docker.SecretRemove(ctx, name); rerr != nil {
